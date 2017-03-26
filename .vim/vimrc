@@ -1,3 +1,7 @@
+" Pathogen
+execute pathogen#infect()
+call pathogen#helptags() " generate helptags for everything in 'runtimepath'
+
 " Vim5 and later versions support syntax highlighting. Uncommenting the
 " following enables syntax highlighting by default.
 if has("syntax")
@@ -38,7 +42,12 @@ map <f5> :w<CR>:!python %<CR>
 " #commenti python
 map # :s/^/#/<CR>
 map - :s/^#//<CR>
-"if filereadable("/var/lib/vim/addons/plugin/powerline.vim")
-"  source /var/lib/vim/addons/plugin/powerline.vim
-"endif
 set laststatus=2
+let g:airline_powerline_fonts = 1
+if !exists('g:airline_symbols')
+      let g:airline_symbols = {}
+endif
+let g:airline_symbols.space = "\ua0"
+  let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#tabline#show_buffers = 0
+
