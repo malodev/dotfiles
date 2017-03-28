@@ -4,9 +4,3 @@
 [submodule ".vim/bundle/vim-airline-themes"]
 	path = .vim/bundle/vim-airline-themes
 	url = https://github.com/vim-airline/vim-airline-themes
-[submodule ".oh-my-zsh"]
-	path = .oh-my-zsh
-	url = https://github.com/robbyrussell/oh-my-zsh.git
-[submodule "/home/mauro/.zsh_custom/themes/powerlevel9k"]
-	path = /home/mauro/.zsh_custom/themes/powerlevel9k
-	url = https://github.com/bhilburn/powerlevel9k.git
