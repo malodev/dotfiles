@@ -1,5 +1,12 @@
+if [[ `uname` == 'Darwin' ]]
+then
+        export OSX=1
+else
+        export OSX=
+fi
+
 alias passwd_gen='LC_ALL=C tr -dc "[:alpha:][:alnum:]" < /dev/urandom | head -c 20 | pbcopy'
-alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
+[[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
 
 gitlab_group_members_id() { [[ $1 != "" ]] && gitlab group_members $1|awk -F "|" '{print $5}'|grep -E '\d+' }
 gitlab_users() {
@@ -27,8 +34,13 @@ gitlab_users_match() {
 export GITLAB_API_PRIVATE_TOKEN=Q7oVX1DkeLBsfCRJX1qr
 export GITLAB_API_ENDPOINT=http://gitlab.marconirovereto.it/api/v3
 alias git_for_cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
-if [ "$TERM" != "dumb" ]; then
-    eval "`dircolors -b`"
-    alias ls='ls --color=auto'
+
+if [[ "$OSX" == "1" ]]; then
+   export CLICOLOR=1
+   export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
+else 
+  eval "`dircolors -b`"
+  alias ls='ls --color=auto'
 fi
-alias l='ls -alF'
+
+alias l='ls -al'
