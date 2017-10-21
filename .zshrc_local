@@ -1,3 +1,11 @@
+[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
+source ~/.fonts/*.sh
+export POWERLEVEL9K_SHORTEN_DIR_LENGTH=1
+export POWERLEVEL9K_SHORTEN_DELIMITER=""
+export POWERLEVEL9K_SHORTEN_STRATEGY="truncate_from_right"
+export POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(context public_ip dir rbenv vcs)
+export POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status root_indicator background_jobs load time)
+
 if [[ `uname` == 'Darwin' ]]
 then
         export OSX=1
@@ -34,6 +42,7 @@ gitlab_users_match() {
 export GITLAB_API_PRIVATE_TOKEN=Q7oVX1DkeLBsfCRJX1qr
 export GITLAB_API_ENDPOINT=http://gitlab.marconirovereto.it/api/v3
 alias git_for_cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 
 if [[ "$OSX" == "1" ]]; then
    export CLICOLOR=1
