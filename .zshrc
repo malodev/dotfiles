@@ -23,6 +23,8 @@ zplug "djui/alias-tips"
 zplug "b4b4r07/enhancd", use:enhancd.sh
 
 zplug "zsh-users/zsh-syntax-highlighting", defer:2
+
+POWERLEVEL9K_MODE='awesome-fontconfig'
 zplug "bhilburn/powerlevel9k", as:theme, use:powerlevel9k.zsh-theme
 
 zplug "plugins/git",   from:oh-my-zsh

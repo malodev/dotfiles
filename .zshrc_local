@@ -1,17 +1,86 @@
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
-source ~/.fonts/*.sh
-export POWERLEVEL9K_SHORTEN_DIR_LENGTH=1
-export POWERLEVEL9K_SHORTEN_DELIMITER=""
-export POWERLEVEL9K_SHORTEN_STRATEGY="truncate_from_right"
-export POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(context public_ip dir rbenv vcs)
-export POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status root_indicator background_jobs load time)
+#source ~/.fonts/*.sh to put in .zshrc_malo
+POWERLEVEL9K_SHORTEN_DIR_LENGTH=3
+POWERLEVEL9K_SHORTEN_DELIMITER=""
+#export POWERLEVEL9K_SHORTEN_STRATEGY="truncate_from_right"
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(context public_ip dir rbenv vcs )
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status battery root_indicator background_jobs load time)
+POWERLEVEL9K_PROMPT_ON_NEWLINE=true
+POWERLEVEL9K_RPROMPT_ON_NEWLINE=true
 
 if [[ `uname` == 'Darwin' ]]
 then
-        export OSX=1
+    export OSX=1
+    alias airport='/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport'
+	zsh_wifi_level() {
+		airport -I | grep CtlRSSI |awk '{print $2}'|sed s/-//
+	}
 else
-        export OSX=
+    export OSX=
+    alias airport='echo'
+    zsh_wifi_level(){}
 fi
+
+zsh_internet_signal(){
+  #source on quality levels - http://www.wireless-nets.com/resources/tutorials/define_SNR_values.html
+  #source on signal levels  - http://www.speedguide.net/faq/how-to-read-rssisignal-and-snrnoise-ratings-440
+  local signal=$(airport -I | grep agrCtlRSSI | awk '{print $2}' | sed 's/-//g')
+  local noise=$(airport -I | grep agrCtlNoise | awk '{print $2}' | sed 's/-//g')
+  local SNR=$(bc <<<"scale=2; $signal / $noise")
+  local net=$(curl -D- -o /dev/null -s http://www.google.it | grep HTTP/1.1 | awk '{print $2}')
+  local color='%F{yellow}'
+  local symbol="\uf197"
+
+  # Excellent Signal (5 bars)
+  if [[ ! -z "${signal// }" ]] && [[ $SNR -gt .40 ]] ;
+    then color='%F{blue}' ; symbol="\uf1eb" ;
+  fi
+
+  # Good Signal (3-4 bars)
+  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .40 ]] && [[ $SNR -gt .25 ]] ;
+    then color='%F{green}' ; symbol="\uf1eb" ;
+  fi
+
+  # Low Signal (2 bars)
+  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .25 ]] && [[ $SNR -gt .15 ]] ;
+    then color='%F{yellow}' ; symbol="\uf1eb" ;
+  fi
+
+  # Very Low Signal (1 bar)
+  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .15 ]] && [[ $SNR -gt .10 ]] ;
+    then color='%F{red}' ; symbol="\uf1eb" ;
+  fi
+
+  # No Signal - No Internet
+  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .10 ]] ;
+    then color='%F{red}' ; symbol="\uf011";
+  fi
+
+  if [[ -z "${signal// }" ]] && [[ "$net" -ne 200 ]] ;
+    then color='%F{red}' ; symbol="\uf011" ;
+  fi
+
+  # Ethernet Connection (no wifi, hardline)
+  if [[ -z "${signal// }" ]] && [[ "$net" -eq 200 ]] ;
+    then color='%F{blue}' ; symbol="\uf197" ;
+  fi
+
+  echo -n "%{$color%}$symbol " # \f1eb is wifi bars
+}
+
+zsh_wifi_signal(){
+	local signal=$(zsh_wifi_level)
+	local color='%F{yellow}'
+	[[ $signal -gt 70 ]] && color='%F{green}'
+	[[ $signal -lt 50 ]] && color='%F{red}'
+	echo -n "%{$color%}\uf1eb  $signal%{%f%}" # \uf230 is 
+}
+
+POWERLEVEL9K_CUSTOM_WIFI_SIGNAL="zsh_wifi_signal"
+POWERLEVEL9K_CUSTOM_WIFI_SIGNAL_BACKGROUND="black"
+POWERLEVEL9K_CUSTOM_INTERNET_SIGNAL="zsh_internet_signal"
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(os_icon context custom_wifi_signal dir vcs virtualenv )
+
 
 alias passwd_gen='LC_ALL=C tr -dc "[:alpha:][:alnum:]" < /dev/urandom | head -c 20 | pbcopy'
 [[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
@@ -47,7 +116,7 @@ alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 if [[ "$OSX" == "1" ]]; then
    export CLICOLOR=1
    export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
-else 
+else
   eval "`dircolors -b`"
   alias ls='ls --color=auto'
 fi
