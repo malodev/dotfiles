@@ -13,8 +13,12 @@ then
 	}
 else
     export OSX=
-    alias airport='echo'
-    zsh_wifi_level(){}
+    alias airport=''
+    zsh_wifi_level() {
+      local connected=$(nmcli -t|grep "connected to eth0")
+      [[ ! -z connected ]] && echo 200 && exit
+      echo 0
+    }
 fi
 
 zsh_internet_signal(){
@@ -67,9 +71,11 @@ zsh_internet_signal(){
 zsh_wifi_signal(){
 	local signal=$(zsh_wifi_level)
 	local color='%F{yellow}'
+	local symbol="\uf1eb"
 	[[ $signal -gt 70 ]] && color='%F{green}'
 	[[ $signal -lt 50 ]] && color='%F{red}'
-	echo -n "%{$color%}\uf1eb  $signal%{%f%}" # \uf230 is 
+	[[ $signal -gt 100 ]] && symbol="\uf301" && echo -n "%{$color%}$symbol" && exit
+	echo -n "%{$color%}$symbol  $signal%{%f%}" 
 }
 
 #Download jq do convert json
