@@ -5,4 +5,4 @@
 * http://gitlab.marconirovereto.it/snippets/11
 
 Get submodules:
-`git_for_cfg submodule update --init --recursive`
+`config submodule update --init --recursive`
