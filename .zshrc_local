@@ -166,3 +166,32 @@ else
 fi
 
 alias l='ls -al'
+
+# Radicle is a peer-to-peer stack for code collaboration https://docs.radicle.xyz/ 
+export PATH="$HOME/.radicle/bin:$PATH"
+
+
+# history setting
+export HISTFILE=~/.zsh_history
+
+# In bash, Setting the HISTFILESIZE and HISTSIZE variables to an empty string
+# makes the bash history size unlimited. However, it’s not possible to set the
+# history to an unlimited size in zsh(theoretically, at least). From an zsh
+# mailing list, it appears the max history size can be LONG_MAX from limits.h
+# header file. That has a (really huge) value of 9223372036854775807, which
+# should be enough to store trillions of commands. 
+export HISTFILESIZE=9223372036854775807
+export HISTSIZE=9223372036854775807
+export SAVEHIST=9223372036854775807
+
+setopt APPEND_HISTORY
+setopt INC_APPEND_HISTORY
+setopt SHARE_HISTORY
+
+# records the timestamp of each command. To view time: history -E
+export HISTTIMEFORMAT="[%F %T] "
+setopt EXTENDED_HISTORY
+
+setopt HIST_FIND_NO_DUPS
+setopt HIST_IGNORE_ALL_DUPS
+
