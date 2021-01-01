@@ -1,6 +1,5 @@
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
-eval $(thefuck --alias)
 
 # Zplug
 # Check if zplug is installed
@@ -44,3 +43,13 @@ source "$HOME/.zshrc_local"
 # tabtab source for sls package
 # uninstall by removing these lines or running `tabtab uninstall sls`
 [[ -f /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh ]] && . /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh
+
+#gam() { "/home/mauro/bin/gam/gam" "$@" ; }
+
+function gam() { "/home/mauro/bin/gam/gam" "$@" ; }
+
+alias gam3="/home/mauro/bin/gamadv-xtd3/gam"
+export GAMCFGDIR="/home/mauro/GAMConfig"
+
+
+alias gam="/home/mauro/bin/gamadv-xtd3/gam"
