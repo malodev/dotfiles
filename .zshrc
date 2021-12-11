@@ -1,13 +1,14 @@
+export LC_ALL=it_IT.UTF-8 && export LANG=it_IT.UTF-8
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
 eval $(thefuck --alias)
 
 # Zplug
 # Check if zplug is installed
-if [[ ! -d ~/.zplug ]]; then
-    git clone https://github.com/zplug/zplug ~/.zplug
-    source ~/.zplug/init.zsh && zplug update --self
-fi
+#if [[ ! -d ~/.zplug ]]; then
+#    git clone https://github.com/zplug/zplug ~/.zplug
+#    source ~/.zplug/init.zsh && zplug update --self
+#fi
 
 # Essential
 source ~/.zplug/init.zsh
@@ -26,6 +27,8 @@ zplug "b4b4r07/enhancd", use:enhancd.sh
 zplug "zsh-users/zsh-syntax-highlighting", defer:2
 
 POWERLEVEL9K_MODE='awesome-fontconfig'
+#POWERLEVEL9K_MODE='nerdfont-complete'
+
 zplug "bhilburn/powerlevel9k", as:theme, use:powerlevel9k.zsh-theme
 
 zplug "plugins/git",   from:oh-my-zsh
@@ -44,3 +47,8 @@ source "$HOME/.zshrc_local"
 # tabtab source for sls package
 # uninstall by removing these lines or running `tabtab uninstall sls`
 [[ -f /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh ]] && . /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh
+
+test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+fpath=(/usr/local/share/zsh-completions $fpath)
+
+gam() { "/Users/mauro/bin/gam/gam" "$@" ; }
