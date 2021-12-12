@@ -50,13 +50,6 @@ source "$HOME/.zshrc_local"
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 fpath=(/usr/local/share/zsh-completions $fpath)
 
-gam() { "/Users/mauro/bin/gam/gam" "$@" ; }
-#gam() { "/home/mauro/bin/gam/gam" "$@" ; }
-
-function gam() { "/home/mauro/bin/gam/gam" "$@" ; }
-
-alias gam3="/home/mauro/bin/gamadv-xtd3/gam"
-export GAMCFGDIR="/home/mauro/GAMConfig"
-
-
-alias gam="/home/mauro/bin/gamadv-xtd3/gam"
+alias gam3="$HOME/bin/gamadv-xtd3/gam"
+alias gam="$HOME/bin/gamadv-xtd3/gam"
+export GAMCFGDIR="$HOME/GAMConfig"
