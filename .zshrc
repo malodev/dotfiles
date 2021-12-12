@@ -1,7 +1,6 @@
 export LC_ALL=it_IT.UTF-8 && export LANG=it_IT.UTF-8
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
-eval $(thefuck --alias)
 
 # Zplug
 # Check if zplug is installed
@@ -37,7 +36,7 @@ zplug "plugins/tmux",   from:oh-my-zsh
 zplug check || zplug install
 
 # Then, source plugins and add commands to $PATH
-zplug load 
+zplug load
 # END Zplug
 source "$HOME/.zshrc_local"
 
@@ -52,3 +51,12 @@ test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell
 fpath=(/usr/local/share/zsh-completions $fpath)
 
 gam() { "/Users/mauro/bin/gam/gam" "$@" ; }
+#gam() { "/home/mauro/bin/gam/gam" "$@" ; }
+
+function gam() { "/home/mauro/bin/gam/gam" "$@" ; }
+
+alias gam3="/home/mauro/bin/gamadv-xtd3/gam"
+export GAMCFGDIR="/home/mauro/GAMConfig"
+
+
+alias gam="/home/mauro/bin/gamadv-xtd3/gam"

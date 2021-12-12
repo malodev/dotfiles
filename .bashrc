@@ -62,3 +62,6 @@ export HISTSIZE=
 # Force prompt to write history after every command. See 'help history'
 PROMPT_COMMAND="history -a; history -c; history -r; ${PROMPT_COMMAND}"
 export HISTFILE=$HOME/.bash_eternal_history
+
+# added by Anaconda3 installer
+export PATH="/opt/anaconda3/bin:$PATH"
