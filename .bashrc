@@ -46,10 +46,11 @@ fi
 [ -d $HOME/.virtualenvs ] && export WORKON_HOME="$HOME/.virtualenvs"
 [ -f $HOME/bin/virtualenvwrapper_bashrc ] && source $HOME/bin/virtualenvwrapper_bashrc
 
-which powerline-daemon >/dev/null && powerline-daemon -q 
+which powerline-daemon >/dev/null && powerline-daemon -q
 POWERLINE_BASH_CONTINUATION=1
 POWERLINE_BASH_SELECT=1
 [ -f /usr/share/powerline/bindings/bash/powerline.sh ] && . /usr/share/powerline/bindings/bash/powerline.sh
+[ -f /usr/share/powerline/bash/powerline.sh ] && . /usr/share/powerline/bash/powerline.sh
 
 # added by Miniconda3 3.18.3 installer
 [ -d /opt/miniconda/bin ] && export PATH="$PATH:/opt/miniconda/bin"
@@ -65,3 +66,4 @@ export HISTSIZE=
 PROMPT_COMMAND="history -a; history -c; history -r; ${PROMPT_COMMAND}"
 export HISTFILE=$HOME/.bash_eternal_history
 [ -f ~/.bash_macair ] && . ~/.bash_macair
+[ -f ~/.bashrc_malo ] && . ~/.bashrc_malo
