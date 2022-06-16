@@ -1,3 +1,5 @@
+# Fig pre block. Keep at the top of this file.
+[[ -f $HOME/.fig/shell/zshrc.pre.zsh ]] && source "$HOME/.fig/shell/zshrc.pre.zsh"
 export LC_ALL=it_IT.UTF-8 && export LANG=it_IT.UTF-8
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
@@ -38,7 +40,6 @@ zplug check || zplug install
 # Then, source plugins and add commands to $PATH
 zplug load
 # END Zplug
-source "$HOME/.zshrc_local"
 
 # tabtab source for serverless package
 # uninstall by removing these lines or running `tabtab uninstall serverless`
@@ -47,9 +48,4 @@ source "$HOME/.zshrc_local"
 # uninstall by removing these lines or running `tabtab uninstall sls`
 [[ -f /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh ]] && . /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh
 
-test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
-fpath=(/usr/local/share/zsh-completions $fpath)
-
-alias gam3="$HOME/bin/gamadv-xtd3/gam"
-alias gam="$HOME/bin/gamadv-xtd3/gam"
-export GAMCFGDIR="$HOME/GAMConfig"
+source "$HOME/.zshrc_local"

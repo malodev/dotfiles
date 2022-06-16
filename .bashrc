@@ -1,3 +1,5 @@
+# Fig pre block. Keep at the top of this file.
+[[ -f "$HOME/.fig/shell/bashrc.pre.bash" ]] && source "$HOME/.fig/shell/bashrc.pre.bash"
 # don't put duplicate lines in the history. See bash(1) for more options
 export HISTCONTROL=ignoredups
 
@@ -62,6 +64,4 @@ export HISTSIZE=
 # Force prompt to write history after every command. See 'help history'
 PROMPT_COMMAND="history -a; history -c; history -r; ${PROMPT_COMMAND}"
 export HISTFILE=$HOME/.bash_eternal_history
-
-# added by Anaconda3 installer
-export PATH="/opt/anaconda3/bin:$PATH"
+[ -f ~/.bash_macair ] && . ~/.bash_macair

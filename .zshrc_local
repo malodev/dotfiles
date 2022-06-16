@@ -1,4 +1,3 @@
-[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 #source ~/.fonts/*.sh to put in .zshrc_malo
 POWERLEVEL9K_SHORTEN_DIR_LENGTH=3
 POWERLEVEL9K_SHORTEN_DELIMITER=""
@@ -195,3 +194,5 @@ setopt EXTENDED_HISTORY
 setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_ALL_DUPS
 
+[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
+[[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
