@@ -17,6 +17,9 @@ local sources = {
 
   -- cpp
   b.formatting.clang_format,
+
+  --php
+  b.formatting.phpcbf,
 }
 
 null_ls.setup {

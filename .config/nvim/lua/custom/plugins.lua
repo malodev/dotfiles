@@ -60,6 +60,41 @@ local plugins = {
   --   "mg979/vim-visual-multi",
   --   lazy = false,
   -- }
+
+  -- Copilot plugin
+  {
+    "zbirenbaum/copilot.lua",
+    -- Lazy load when event occurs. Events are triggered
+    -- as mentioned in:
+    -- https://vi.stackexchange.com/a/4495/20389
+    event = "InsertEnter",
+    -- You can also have it load at immediately at
+    -- startup by commenting above and uncommenting below:
+    -- lazy = false
+    opts = overrides.copilot,
+  },
+  {
+    "hrsh7th/nvim-cmp",
+    dependencies = {
+      {
+        "zbirenbaum/copilot-cmp",
+        config = function()
+          require("copilot_cmp").setup()
+        end,
+      },
+    },
+    opts = {
+      sources = {
+        { name = "nvim_lsp", group_index = 2 },
+        { name = "copilot",  group_index = 2 },
+        { name = "luasnip",  group_index = 2 },
+        { name = "buffer",   group_index = 2 },
+        { name = "nvim_lua", group_index = 2 },
+        { name = "path",     group_index = 2 },
+      },
+    },
+  },
+
 }
 
 return plugins
