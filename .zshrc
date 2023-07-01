@@ -57,3 +57,6 @@ zplug load
 source "$HOME/.zshrc_local"
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+[[ ! -f ~/.p10k_malo.zsh ]] || source ~/.p10k_malo.zsh.malo
+[[ ! -f ~/.p10k_macair.zsh ]] || source ~/.p10k_macair.zsh
+[[ ! -f ~/.p10k_ubu_oracle.zsh ]] || source ~/.p10k_ubu_oracle.zsh

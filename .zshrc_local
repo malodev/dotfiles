@@ -150,6 +150,7 @@ export GITLAB_API_PRIVATE_TOKEN=Q7oVX1DkeLBsfCRJX1qr
 export GITLAB_API_ENDPOINT=http://gitlab.marconirovereto.it/api/v3
 alias git_for_cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias cfgls='config ls-tree --full-tree --name-only -r HEAD'
 
 totp() { 
 	oathtool --totp -b $(<~/".totp_${1:-coinbase}") | pbcopy; 
@@ -196,4 +197,4 @@ setopt HIST_IGNORE_ALL_DUPS
 
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
-[[ -f ~/.zshrc_macair ]] && source ~/.zshrc_ubu_oracle
+[[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
