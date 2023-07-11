@@ -6,6 +6,6 @@
 --   command = "tabdo wincmd =",
 -- })
 vim.g.copilot_assume_mapped = true
-
+-- vim.keymap.set('n', "<leader>pv", vim.cmd.Ex )
 
 
