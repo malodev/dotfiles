@@ -1,3 +1,5 @@
+fpath=(/usr/share/zsh/$ZSH_VERSION/functions $fpath)
+
 # Fig pre block. Keep at the top of this file.
 [[ -f $HOME/.fig/shell/zshrc.pre.zsh ]] && source "$HOME/.fig/shell/zshrc.pre.zsh"
 export LC_ALL=it_IT.UTF-8 && export LANG=it_IT.UTF-8
@@ -60,3 +62,5 @@ source "$HOME/.zshrc_local"
 [[ ! -f ~/.p10k_malo.zsh ]] || source ~/.p10k_malo.zsh
 [[ ! -f ~/.p10k_macair.zsh ]] || source ~/.p10k_macair.zsh
 [[ ! -f ~/.p10k_ubu_oracle.zsh ]] || source ~/.p10k_ubu_oracle.zsh
+
+
