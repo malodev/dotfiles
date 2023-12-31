@@ -9,7 +9,8 @@ return {
     config = function()
         require('chatgpt').setup(
             {
-                api_key_cmd = "op read op://private/GPTApiKey/credential --no-newline",
+                -- api_key_cmd = "op read op://private/GPTApiKey/credential --no-newline",
+                api_key_cmd = nil,
                 yank_register = '+',
                 edit_with_instructions = {
                     diff = false,
