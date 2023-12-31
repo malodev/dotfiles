@@ -5,12 +5,9 @@ global.mapleader = " "
 global.maplocalleader = " "
 
 -- make CTRL + C behave exactly the same as ESC
-keymap.set(
-  "i",
-  "<C-c>",
-  "<ESC>",
-  { desc = "Make CTRL + C behave exactly the same as ESC", silent = true, noremap = true }
-)
+opts["desc"] = "Make CTRL + C behave exactly the same as ESC"
+keymap.set("i", "<C-c>", "<ESC>", opts)
+opts.desc = nil
 
 -- delete one word in insert mode (note that <C-h> sends the same ASCII escape sequence as <C-BS>)
 keymap.set("i", "<C-h>", "<C-w>", opts)
@@ -35,7 +32,9 @@ keymap.set("n", "<C-u>", ":UndotreeToggle<CR>", opts)
 keymap.set("n", "<C-x>", ":bd<CR>", opts)
 
 -- quickly switch between buffers
+opts["desc"] = "Show previous buffer"
 keymap.set("n", "<", ":bp<CR>", opts)
+opts["desc"] = "Show next buffer"
 keymap.set("n", ">", ":bn<CR>", opts)
 
 -- quickly switch between windows
@@ -43,33 +42,37 @@ keymap.set("n", "<C-h>", "<C-w>h", opts)
 keymap.set("n", "<C-l>", "<C-w>l", opts)
 
 -- Toogle pin current buffer
-keymap.set(
-  "n",
-  "<leader>bp",
-  ":BufferLineTogglePin<CR>",
-  { desc = "Pin current buffer", silent = true, noremap = true }
-)
+opts["desc"] = "Pin current buffer"
+keymap.set("n", "<leader>bp", ":BufferLineTogglePin<CR>", opts)
 
 -- Pick a buffer
-keymap.set("n", "<leader>pb", ":BufferLinePick<CR>", { desc = "Pick a buffer", silent = true, noremap = true })
+opts["desc"] = "Pick a buffer by letter"
+keymap.set("n", "<leader>pb", ":BufferLinePick<CR>", opts)
 
 -- save current buffer
-keymap.set("n", "<C-s>", ":w<CR>", { desc = "Save current buffer", silent = true, noremap = true })
+opts["desc"] = "Save current buffer"
+keymap.set("n", "<C-s>", ":w<CR>", opts)
 
 -- write to all buffers
-keymap.set("n", "<leader>w", ":wa<CR>", { desc = "Write all buffers", silent = true, noremap = true })
+opts["desc"] = "Write all buffers"
+keymap.set("n", "<leader>w", ":wa<CR>", opts)
 
 -- quit all buffers
+opts["desc"] = "Quit all buffers"
 keymap.set("n", "<leader>q", ":qa<CR>", opts)
 
 -- force quit all buffers
+opts["desc"] = "Force quit all buffers"
 keymap.set("n", "<leader>fq", ":qa!<CR>", opts)
 
 -- clear search term when centering the cursor
+opts["desc"] = "Clear search term when centering the cursor"
 keymap.set("n", "zz", "zz:noh<CR>", opts)
 
 -- toggle transparency
+opts["desc"] = "Toggle transparency"
 keymap.set("n", "<C-t>", ":TransparentToggle<CR>", opts)
+opts.desc = nil
 
 -- open up Themery
 -- keymap.set('n', '<leader>t', ':Themery<CR>', opts)
@@ -101,6 +104,9 @@ keymap.set("n", "<C-k>", "<C-u>zz", opts)
 -- creates a new line below the cursor and goes back into normal mode
 keymap.set("n", "<CR>", "o<Esc>", opts)
 
+-- enter in insert mode, and insert new line
+keymap.set("n", "<C-CR>", "i<CR>", opts)
+
 -- creates a new line above the cursor and goes back into normal mode
 keymap.set("n", "<A-CR>", "O<Esc>", opts)
 
@@ -110,6 +116,8 @@ keymap.set("n", "<C-down>", ":resize +2<cr>", opts)
 keymap.set("n", "<C-left>", ":vertical resize -2<cr>", opts)
 keymap.set("n", "<C-Right>", ":vertical resize +2<CR>", opts)
 
+-- Under Windows, the * and + registers are equivalent.
+-- For X11 systems, * is the selection, and + is the cut buffer (like clipboard).
 -- copy into system clipboard with CTRL + C
 keymap.set("v", "<C-c>", '"+y', opts)
 
@@ -144,18 +152,17 @@ local wk = require("which-key")
 wk.register({
   c = {
     name = "ChatGPT",
-    c = { "<cmd>ChatGPT<CR>", "ChatGPT" },
-    e = { "<cmd>ChatGPTEditWithInstruction<CR>", "Edit with instruction", mode = { "n", "v" } },
-    g = { "<cmd>ChatGPTRun grammar_correction<CR>", "Grammar Correction", mode = { "n", "v" } },
-    t = { "<cmd>ChatGPTRun translate<CR>", "Translate", mode = { "n", "v" } },
-    k = { "<cmd>ChatGPTRun keywords<CR>", "Keywords", mode = { "n", "v" } },
-    d = { "<cmd>ChatGPTRun docstring<CR>", "Docstring", mode = { "n", "v" } },
-    a = { "<cmd>ChatGPTRun add_tests<CR>", "Add Tests", mode = { "n", "v" } },
-    o = { "<cmd>ChatGPTRun optimize_code<CR>", "Optimize Code", mode = { "n", "v" } },
-    s = { "<cmd>ChatGPTRun summarize<CR>", "Summarize", mode = { "n", "v" } },
-    f = { "<cmd>ChatGPTRun fix_bugs<CR>", "Fix Bugs", mode = { "n", "v" } },
-    x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code", mode = { "n", "v" } },
-    r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit", mode = { "n", "v" } },
-   l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis", mode = { "n", "v" } },
+
+    g = { "<cmd>ChatGPTRun grammar_correction<CR>", "Grammar Correction (GPT)", mode = { "n", "v" } },
+    t = { "<cmd>ChatGPTRun translate<CR>", "Translate (GPT)", mode = { "n", "v" } },
+    k = { "<cmd>ChatGPTRun keywords<CR>", "Keywords (GPT)", mode = { "n", "v" } },
+    d = { "<cmd>ChatGPTRun docstring<CR>", "Docstring (GPT)", mode = { "n", "v" } },
+    a = { "<cmd>ChatGPTRun add_tests<CR>", "Add Tests (GPT)", mode = { "n", "v" } },
+    o = { "<cmd>ChatGPTRun optimize_code<CR>", "Optimize Code (GPT)", mode = { "n", "v" } },
+    s = { "<cmd>ChatGPTRun summarize<CR>", "Summarize (GPT)", mode = { "n", "v" } },
+    f = { "<cmd>ChatGPTRun fix_bugs<CR>", "Fix Bugs (GPT)", mode = { "n", "v" } },
+    x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code (GPT)", mode = { "n", "v" } },
+    r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit (GPT)", mode = { "n", "v" } },
+    l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis (GPT)", mode = { "n", "v" } },
   },
-})
+}, { prefix = "<leader>" })
