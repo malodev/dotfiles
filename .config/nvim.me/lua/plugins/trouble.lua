@@ -4,6 +4,6 @@ return {
     opts = {
     },
     config = function ()
-        vim.keymap.set('n', ';t', '<cmd>TroubleToggle<cr>', {silent = true, noremap = true})
+        vim.keymap.set('n', '<leader>t', '<cmd>TroubleToggle<cr>', {silent = true, noremap = true})
     end
 }
