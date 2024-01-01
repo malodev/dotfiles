@@ -150,6 +150,8 @@ export GITLAB_API_PRIVATE_TOKEN=Q7oVX1DkeLBsfCRJX1qr
 export GITLAB_API_ENDPOINT=http://gitlab.marconirovereto.it/api/v3
 alias git_for_cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias cfglazy='lazygit --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias cfgls='config ls-tree --full-tree --name-only -r HEAD'
 
 totp() { 
