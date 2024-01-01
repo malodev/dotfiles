@@ -18,6 +18,7 @@ return {
 				},
 			})
 			require("telescope").load_extension("fzf")
+      require('telescope').load_extension('prosession')
 		end,
 		keys = {
 			{ "<leader>ff", "<cmd>Telescope find_files<CR>", desc = "telescope: find_files" },
@@ -25,6 +26,7 @@ return {
 			{ "<leader>fb", "<cmd>Telescope buffers<CR>", desc = "telescope: buffers" },
 			{ "<leader>fo", "<cmd>Telescope oldfiles<CR>", desc = "telescope: oldfiles" },
 			{ "<leader>fc", "<cmd>Telescope command_history <CR>", desc = "telescope: oldfiles" },
+			{ "<leader>fp", "<cmd>Telescope prosession <CR>", desc = "telescope: sessions" },
 		},
 	},
 	{ "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
