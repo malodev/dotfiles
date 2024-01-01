@@ -52,6 +52,7 @@ keymap.set("n", "<leader>pb", ":BufferLinePick<CR>", opts)
 -- save current buffer
 opts["desc"] = "Save current buffer"
 keymap.set("n", "<C-s>", ":w<CR>", opts)
+keymap.set("i", "<C-s>", "<Esc>:w<CR>", opts)
 
 -- write to all buffers
 opts["desc"] = "Write all buffers"
@@ -105,6 +106,8 @@ keymap.set("n", "<C-k>", "<C-u>zz", opts)
 keymap.set("n", "<A-CR>j", "o<Esc>", opts)
 keymap.set("n", "<S-down>", "V", opts)
 keymap.set("n", "<S-up>", "V", opts)
+keymap.set("i", "<S-down>", "<Esc>V", opts)
+keymap.set("i", "<S-up>", "<Esc>V", opts)
 keymap.set("v", "<S-down>", "<down>", opts)
 keymap.set("v", "<S-up>", "<up>", opts)
 
