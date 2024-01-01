@@ -18,6 +18,8 @@ return {
     },
   },
   keys = {
-    { "<C-n>", "<cmd>Neotree filesystem reveal toggle<CR>", desc = "Toggle Neotree panel" },
+    { "<C-n>",     "<cmd>Neotree filesystem reveal toggle<CR>", desc = "Toggle Neotree panel" },
+    -- Alternatively, use "<leader>n" when the key C-n is not forwaed to nvim
+    { "<leader>n", "<cmd>Neotree filesystem reveal toggle<CR>", desc = "Toggle Neotree panel" },
   },
 }
