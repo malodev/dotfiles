@@ -19,9 +19,7 @@ return {
           offsets = {
             {
               filetype = "neo-tree",
-              text = function()
-                return vim.fn.getcwd()
-              end,
+              text = "Explorer",
               text_align = "left",
               separator = true,
             },
