@@ -104,13 +104,21 @@ keymap.set("n", "<C-k>", "<C-u>zz", opts)
 
 -- creates a new line below the cursor and goes back into normal mode
 keymap.set("n", "<A-CR>j", "o<Esc>", opts)
-keymap.set("n", "<S-down>", "V", opts)
-keymap.set("n", "<S-up>", "V", opts)
-keymap.set("i", "<S-down>", "<Esc>V", opts)
-keymap.set("i", "<S-up>", "<Esc>V", opts)
-keymap.set("v", "<S-down>", "<down>", opts)
-keymap.set("v", "<S-up>", "<up>", opts)
+keymap.set("n", "<S-Down>", "V", opts)
+keymap.set("n", "<S-Up>", "V", opts)
+keymap.set("i", "<S-Down>", "<Esc>V", opts)
+keymap.set("i", "<S-Up>", "<Esc>V", opts)
+keymap.set("v", "<S-Down>", "<Down>", opts)
+keymap.set("v", "<S-Up>", "<Up>", opts)
 
+keymap.set("n", "<S-Left>", "v<Left>", opts)
+keymap.set("n", "<S-Right>", "v<Right>", opts)
+keymap.set("i", "<S-Left>", "<Esc>v", opts)
+keymap.set("i", "<S-Right>", "<Esc>v", opts)
+keymap.set("v", "<S-Left>", "<Left>", opts)
+keymap.set("v", "<S-Right>", "<Right>", opts)
+
+keymap.set("n", "<S-End>", "v$", opts)
 -- enter in insert mode, and insert new line
 keymap.set("n", "<A-CR>i", "i<CR>", opts)
 
