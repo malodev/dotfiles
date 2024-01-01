@@ -70,8 +70,8 @@ opts["desc"] = "Clear search term when centering the cursor"
 keymap.set("n", "zz", "zz:noh<CR>", opts)
 
 -- toggle transparency
-opts["desc"] = "Toggle transparency"
-keymap.set("n", "<C-t>", ":TransparentToggle<CR>", opts)
+-- opts["desc"] = "Toggle transparency"
+-- keymap.set("n", "<C-t>", ":TransparentToggle<CR>", opts)
 opts.desc = nil
 
 -- open up Themery
@@ -102,13 +102,17 @@ keymap.set("n", "<C-j>", "<C-d>zz", opts)
 keymap.set("n", "<C-k>", "<C-u>zz", opts)
 
 -- creates a new line below the cursor and goes back into normal mode
-keymap.set("n", "<CR>", "o<Esc>", opts)
+keymap.set("n", "<A-CR>j", "o<Esc>", opts)
+keymap.set("n", "<S-down>", "V", opts)
+keymap.set("n", "<S-up>", "V", opts)
+keymap.set("v", "<S-down>", "<down>", opts)
+keymap.set("v", "<S-up>", "<up>", opts)
 
 -- enter in insert mode, and insert new line
-keymap.set("n", "<C-CR>", "i<CR>", opts)
+keymap.set("n", "<A-CR>i", "i<CR>", opts)
 
 -- creates a new line above the cursor and goes back into normal mode
-keymap.set("n", "<A-CR>", "O<Esc>", opts)
+keymap.set("n", "<A-CR>k", "O<Esc>", opts)
 
 -- quick resizing of buffers
 keymap.set("n", "<C-up>", ":resize -2<cr>", opts)
@@ -137,6 +141,10 @@ keymap.set("v", "<leader>p", '"_dP', opts)
 -- move lines around
 keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
 keymap.set("v", "K", ":m '<-2<CR>gv=gv", opts)
+
+opts["desc"] = "Search the selected text"
+keymap.set('v', '/', "\"fy/\\V<C-R>f<CR>", opts )
+opts.desc = nil
 
 -- vertical movement keeps cursor in middle (visual mode)
 keymap.set("v", "<C-j>", "<C-d>zz", opts)
