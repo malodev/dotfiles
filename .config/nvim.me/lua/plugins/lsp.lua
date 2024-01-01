@@ -1,0 +1,285 @@
+return {
+	-- complition part
+	{
+		"L3MON4D3/LuaSnip",
+		lazy = false,
+		dependencies = {
+			"rafamadriz/friendly-snippets",
+			"saadparwaiz1/cmp_luasnip",
+		},
+		config = function()
+			require("luasnip.loaders.from_vscode").lazy_load()
+		end,
+	},
+	{
+		"hrsh7th/cmp-nvim-lsp",
+		lazy = false,
+		config = true,
+	},
+	{
+		"zbirenbaum/copilot-cmp",
+		config = function()
+			require("copilot_cmp").setup()
+		end,
+	},
+	{
+		"hrsh7th/nvim-cmp",
+		lazy = false,
+		config = function()
+			local cmp = require("cmp")
+			local cmp_select_opts = { behavior = cmp.SelectBehavior.Select }
+
+			cmp.setup({
+				sources = cmp.config.sources({
+					{ name = "copilot" },
+					{ name = "nvim_lsp" },
+					{ name = "nvim_lua" },
+					{ name = "luasnip" },
+					{ name = "buffer" },
+					{ name = "path" },
+				}),
+				mapping = cmp.mapping.preset.insert({
+					["<C-Space>"] = cmp.mapping.complete(),
+					["<C-u>"] = cmp.mapping.scroll_docs(-4),
+					["<C-d>"] = cmp.mapping.scroll_docs(4),
+					-- ["<C-f>"] = cmp_action.luasnip_jump_forward(),
+					-- ["<C-b>"] = cmp_action.luasnip_jump_backward(),
+					["<CR>"] = cmp.mapping.confirm({ select = false }),
+					["<Up>"] = cmp.mapping.select_prev_item(cmp_select_opts),
+					["<Down>"] = cmp.mapping.select_next_item(cmp_select_opts),
+					["<C-p>"] = cmp.mapping(function()
+						if cmp.visible() then
+							cmp.select_prev_item(cmp_select_opts)
+						else
+							cmp.complete()
+						end
+					end),
+					["<C-n>"] = cmp.mapping(function()
+						if cmp.visible() then
+							cmp.select_next_item(cmp_select_opts)
+						else
+							cmp.complete()
+						end
+					end),
+				}),
+				snippet = {
+					expand = function(args)
+						require("luasnip").lsp_expand(args.body)
+					end,
+				},
+				window = {
+					completion = cmp.config.window.bordered(),
+					documentation = cmp.config.window.bordered(),
+				},
+				formatting = {
+					fields = { "abbr", "menu", "kind" },
+					format = function(entry, item)
+						local menu_icon = {
+							nvim_lsp = "λ",
+							luasnip = "⋗",
+							buffer = "Ω",
+							path = "🖫",
+							nvim_lua = "Π",
+						}
+
+						item.menu = menu_icon[entry.source.name]
+						return item
+					end,
+				},
+			})
+		end,
+	},
+	-- LSP part
+	{
+		"williamboman/mason.nvim",
+		lazy = false,
+		opts = {},
+		config = function()
+			require("mason").setup({})
+		end,
+	},
+	{
+		"williamboman/mason-lspconfig.nvim",
+		lazy = false,
+		opts = {
+			auto_install = true,
+			ensure_installed = {
+				"html",
+				"cssls",
+				"tsserver",
+				"eslint",
+				"emmet_language_server",
+				"dockerls",
+				"docker_compose_language_service",
+				"lua_ls",
+				"jsonls",
+				"biome",
+				"intelephense",
+				"yamlls",
+				"marksman",
+				"bashls",
+				"svelte",
+				"tailwindcss",
+				"taplo",
+				"sqls",
+				"pyright",
+			},
+		},
+	},
+	{
+		"neovim/nvim-lspconfig",
+		lazy = false,
+		config = function()
+			local capabilities = require("cmp_nvim_lsp").default_capabilities()
+			-- language servers setup
+			-- emmet_language_server
+			-- htmx
+			-- intelephense
+			-- biome
+			--
+			--
+			local lspconfig = require("lspconfig")
+			lspconfig.marksman.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.tsserver.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.eslint.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.html.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.lua_ls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.clangd.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.bashls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.dockerls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.gopls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.jsonls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.cssls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.vimls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.yamlls.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.rust_analyzer.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.pyright.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.svelte.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.tailwindcss.setup({
+				capabilities = capabilities,
+			})
+
+			---
+			-- UI settings
+			---
+			local border_style = vim.g.lsp_zero_ui_float_border
+			if border_style == nil then
+				border_style = "rounded"
+			end
+			if type(border_style) == "string" then
+				vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = border_style })
+
+				vim.lsp.handlers["textDocument/signatureHelp"] =
+					vim.lsp.with(vim.lsp.handlers.signature_help, { border = border_style })
+
+				vim.diagnostic.config({
+					float = { border = border_style },
+				})
+			end
+			local signs = vim.g.lsp_zero_ui_signcolumn
+			if (signs == nil and vim.o.signcolumn == "auto") or signs == 1 or signs == true then
+				vim.o.signcolumn = "yes"
+			end
+			vim.keymap.set(
+				"n",
+				"K",
+				vim.lsp.buf.hover,
+				{ desc = "Displays hover information about the symbol under the cursor in a floating window" }
+			)
+			vim.keymap.set(
+				"n",
+				"<leader>gd",
+				vim.lsp.buf.definition,
+				{ desc = " Jumps to the definition of the symbol under the cursor" }
+			)
+			vim.keymap.set(
+				"n",
+				"<leader>gr",
+				vim.lsp.buf.references,
+				{ desc = "Lists all the references to the symbol under the cursor in the quickfix window." }
+			)
+			vim.keymap.set(
+				"n",
+				"<leader>ca",
+				vim.lsp.buf.code_action,
+				{ desc = "Selects a code action available at the current cursor position." }
+			)
+			vim.keymap.set(
+				"n",
+				"gD",
+				"<cmd>lua vim.lsp.buf.declaration()<cr>",
+				{ desc = "Jumps to the declaration of the symbol under the cursor" }
+			)
+			vim.keymap.set(
+				"n",
+				"gi",
+				"<cmd>lua vim.lsp.buf.implementation()<cr>",
+				{ desc = "Lists all the implementations for the symbol under the cursor in the quickfix window" }
+			)
+			vim.keymap.set(
+				"n",
+				"go",
+				"<cmd>lua vim.lsp.buf.type_definition()<cr>",
+				{ desc = "Jumps to the definition of the type of the symbol under the cursor." }
+			)
+			vim.keymap.set(
+				"n",
+				"<F2>",
+				vim.lsp.buf.rename,
+				{ desc = "Renames all references to the symbol under the cursor" }
+			)
+			vim.keymap.set(
+				{ "n", "x" },
+				"<F3>",
+				"<cmd>lua vim.lsp.buf.format({async = true})<cr>",
+				{ desc = "Format code in current buffer" }
+			)
+			vim.keymap.set(
+				"n",
+				"<F4>",
+				"<cmd>lua vim.lsp.buf.code_action()<cr>",
+				{ desc = "Selects a code action available at the current cursor position." }
+			)
+			vim.keymap.set("n", "gl", vim.diagnostic.open_float, { desc = "Show diagnostics in a floating window" })
+			vim.keymap.set(
+				"n",
+				"[d",
+				vim.diagnostic.goto_prev,
+				{ desc = "Move to the previous diagnostic in the current buffer" }
+			)
+			vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Move to the next diagnostic" })
+		end,
+	},
+}
