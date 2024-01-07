@@ -105,7 +105,7 @@ return {
 			auto_install = true,
 			ensure_installed = {
 				"html",
-				"cssls",
+				"tailwindcss",
 				"tsserver",
 				"eslint",
 				"emmet_language_server",
@@ -119,7 +119,6 @@ return {
 				"marksman",
 				"bashls",
 				"svelte",
-				"tailwindcss",
 				"taplo",
 				"sqls",
 				"pyright",
@@ -140,6 +139,9 @@ return {
 			--
 			local lspconfig = require("lspconfig")
 			lspconfig.marksman.setup({
+				capabilities = capabilities,
+			})
+			lspconfig.tailwindcss.setup({
 				capabilities = capabilities,
 			})
 			lspconfig.tsserver.setup({
@@ -169,9 +171,6 @@ return {
 			lspconfig.jsonls.setup({
 				capabilities = capabilities,
 			})
-			lspconfig.cssls.setup({
-				capabilities = capabilities,
-			})
 			lspconfig.vimls.setup({
 				capabilities = capabilities,
 			})
@@ -185,9 +184,6 @@ return {
 				capabilities = capabilities,
 			})
 			lspconfig.svelte.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.tailwindcss.setup({
 				capabilities = capabilities,
 			})
 
