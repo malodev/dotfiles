@@ -91,8 +91,11 @@ keymap.set("n", "J", "mzJ`z", opts)
 keymap.set("n", "<C-a>", "ggVG", opts)
 
 -- indent and outdent lines quickly
-keymap.set("n", "<TAB>", ">>", opts)
-keymap.set("n", "<S-TAB>", "<<", opts)
+-- keymap.set("n", "<TAB>", ">>", opts)
+-- keymap.set("n", "<S-TAB>", "<<", opts)
+
+-- keymap.set("n", "<TAB>", ":bnext<CR>", opts)
+-- keymap.set("n", "<S-TAB>", ":bprevious<CR>", opts)
 
 -- search movement keeps cursor in middle
 keymap.set("n", "n", "nzzzv", opts)
