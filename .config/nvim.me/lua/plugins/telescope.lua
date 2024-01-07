@@ -26,7 +26,7 @@ return {
 			{ "<leader>fb", "<cmd>Telescope buffers<CR>", desc = "telescope: buffers" },
 			{ "<leader>fo", "<cmd>Telescope oldfiles<CR>", desc = "telescope: oldfiles" },
 			{ "<leader>fc", "<cmd>Telescope command_history <CR>", desc = "telescope: oldfiles" },
-			{ "<leader>fp", "<cmd>Telescope prosession <CR>", desc = "telescope: sessions" },
+			{ "<leader>pf", "<cmd>Telescope prosession <CR>", desc = "telescope: sessions" },
 		},
 	},
 	{ "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
