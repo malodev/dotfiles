@@ -4,6 +4,7 @@ vim.cmd("set softtabstop=2")
 vim.cmd("set shiftwidth=2")
 vim.cmd("set ignorecase")
 vim.cmd("set smartcase")
+vim.cmd("set mousemodel=extend")
 
 vim.g.mapleader = " "
 vim.opt.clipboard = "unnamedplus" -- use system clipboard
