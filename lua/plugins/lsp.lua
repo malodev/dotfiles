@@ -95,7 +95,11 @@ return {
 		lazy = false,
 		opts = {},
 		config = function()
-			require("mason").setup({})
+			require("mason").setup({
+				ensure_installed = {
+					"prettierd",
+				},
+			})
 		end,
 	},
 	{
@@ -109,19 +113,18 @@ return {
 				"tsserver",
 				"eslint",
 				"emmet_language_server",
-				"dockerls",
-				"docker_compose_language_service",
+				-- "dockerls",
+				-- "docker_compose_language_service",
 				"lua_ls",
-				"jsonls",
-				"biome",
-				"intelephense",
-				"yamlls",
+				-- "jsonls",
+				-- "intelephense",
+				-- "yamlls",
 				"marksman",
-				"bashls",
-				"svelte",
-				"taplo",
-				"sqls",
-				"pyright",
+				-- "bashls",
+				-- "svelte",
+				-- "taplo",
+				-- "sqls",
+				-- "pyright",
 			},
 		},
 	},
@@ -130,7 +133,6 @@ return {
 		lazy = false,
 		config = function()
 			local capabilities = require("cmp_nvim_lsp").default_capabilities()
-			-- language servers setup
 			-- emmet_language_server
 			-- htmx
 			-- intelephense
@@ -138,55 +140,23 @@ return {
 			--
 			--
 			local lspconfig = require("lspconfig")
-			lspconfig.marksman.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.tailwindcss.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.tsserver.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.eslint.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.html.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.lua_ls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.clangd.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.bashls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.dockerls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.gopls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.jsonls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.vimls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.yamlls.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.rust_analyzer.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.pyright.setup({
-				capabilities = capabilities,
-			})
-			lspconfig.svelte.setup({
-				capabilities = capabilities,
-			})
 
+			-- local servers = { "html", "tailwindcss", "tsserver", "eslint", "emmet_language_server", "dockerls", "docker_compose_language_service", "lua_ls", "jsonls", "biome", "intelephense", "yamlls", "marksman", "bashls", "svelte", "taplo", "sqls", "pyright", "clangd", "gopls", "rust_analyzer", "vimls" }
+			local servers = {
+				"html",
+				"tailwindcss",
+				"tsserver",
+				"eslint",
+				"emmet_language_server",
+				"lua_ls",
+				"jsonls",
+				"biome",
+			}
+			for _, lsp in ipairs(servers) do
+				lspconfig[lsp].setup({
+					capabilities = capabilities,
+				})
+			end
 			---
 			-- UI settings
 			---
