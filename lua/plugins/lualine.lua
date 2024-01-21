@@ -10,6 +10,8 @@ return {
 				-- section_separators = { "", "" },
 				component_separators = { left = "", right = "" },
 				icons_enabled = true,
+				globalstatus = false,
+				ignore_focus = { "NvimTree" },
 			},
 			sections = {
 				lualine_a = { { "mode", icons_enabled = true, icon = "" } },
@@ -32,14 +34,15 @@ return {
 					{
 						"diff",
 						diff_color = {
-							-- Same color values as the general color option can be used here.
-							added = { fg = "#a6e3a1", bg = "#242324" }, -- Changes the diff's added color
-							modified = { fg = "#f9e2af", bg = "#242324" }, -- Changes the diff's modified color
-							removed = { fg = "#f38ba8", bg = "#242324" }, -- Changes the diff's removed color you
+							-- same color values as the general color option can be used here.
+							added = { fg = "#a6e3a1", bg = "#242324" }, -- changes the diff's added color
+							modified = { fg = "#f9e2af", bg = "#242324" }, -- changes the diff's modified color
+							removed = { fg = "#f38ba8", bg = "#242324" }, -- changes the diff's removed color you
 						},
 						symbols = { added = " ", modified = "󰿡 ", removed = " " },
 					},
 				},
+				lualine_c = { "hostname" },
 				lualine_b = { { "diagnostic", sources = { "nvim_lsp", "vim_lsp" } } },
 				lualine_y = { "selectioncount", "searchcount" },
 				lualine_z = { { "mode", icons_enabled = true, icon = "" } },
