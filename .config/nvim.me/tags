@@ -1,0 +1,45 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+["<C-n>"] 	lua/plugins/lsp.lua	/^					["<C-n>"] = cmp.mapping(function()$/;"	f
+["<C-p>"] 	lua/plugins/lsp.lua	/^					["<C-p>"] = cmp.mapping(function()$/;"	f
+__index 	lua/malodev/logos.lua	/^    __index = function(logos, key)$/;"	f
+_lazygit_toggle	lua/plugins/toggleterm.lua	/^    function _lazygit_toggle()$/;"	f
+callback 	lua/plugins/alpha.lua	/^            callback = function()$/;"	f
+config 	lua/plugins/alpha.lua	/^    config = function()$/;"	f
+config 	lua/plugins/bufferline.lua	/^    config = function()$/;"	f
+config 	lua/plugins/catppuccin.lua	/^  config = function(_, opts)$/;"	f
+config 	lua/plugins/chatgpt.lua	/^    config = function()$/;"	f
+config 	lua/plugins/editing.lua	/^		config = function()$/;"	f
+config 	lua/plugins/format-on-save.lua	/^    config = function()$/;"	f
+config 	lua/plugins/gitsign.lua	/^  config = function()$/;"	f
+config 	lua/plugins/harpoon.lua	/^  config = function()$/;"	f
+config 	lua/plugins/lsp.lua	/^		config = function()$/;"	f
+config 	lua/plugins/markdown.lua	/^        config = function()$/;"	f
+config 	lua/plugins/neotree.lua	/^  config = function()$/;"	f
+config 	lua/plugins/null-ls.lua	/^  config = function()$/;"	f
+config 	lua/plugins/nvim-surround.lua	/^    config = function()$/;"	f
+config 	lua/plugins/rainbow.lua	/^    config = function ()$/;"	f
+config 	lua/plugins/telescope.lua	/^		config = function()$/;"	f
+config 	lua/plugins/telescope.lua	/^		config = function(_, opts)$/;"	f
+config 	lua/plugins/toggleterm.lua	/^  config = function()$/;"	f
+config 	lua/plugins/tresitter.lua	/^  config = function()$/;"	f
+config 	lua/plugins/trouble.lua	/^    config = function ()$/;"	f
+diagnostics_indicator 	lua/plugins/bufferline.lua	/^          diagnostics_indicator = function(count, level, diagnostics_dict, context)$/;"	f
+expand 	lua/plugins/lsp.lua	/^					expand = function(args)$/;"	f
+format 	lua/plugins/lsp.lua	/^					format = function(entry, item)$/;"	f
+functions 	lua/plugins/catppuccin.lua	/^      functions = {},$/;"	f
+header	lua/plugins/alpha.lua	/^        local function header()$/;"	f
+init 	lua/plugins/markdown.lua	/^        init = function()$/;"	f
+init 	lua/plugins/which-key.lua	/^  init = function()$/;"	f
+map	lua/plugins/gitsign.lua	/^        local function map(mode, l, r, opts)$/;"	f
+on_attach 	lua/plugins/gitsign.lua	/^      on_attach = function(bufnr)$/;"	f
+on_close 	lua/plugins/toggleterm.lua	/^      on_close = function(term)$/;"	f
+on_open 	lua/plugins/toggleterm.lua	/^      on_open = function(term)$/;"	f
+toggle_telescope	lua/plugins/harpoon.lua	/^    local function toggle_telescope(harpoon_files)$/;"	f
+{ '<leader>pd', function() require('persistence').stop() end, desc 	lua/plugins/persistence.lua	/^        { '<leader>pd', function() require('persistence').stop() end, desc = "Don't Save Current Session" },$/;"	f
+{ '<leader>pl', function() require('persistence').load({ last 	lua/plugins/persistence.lua	/^        { '<leader>pl', function() require('persistence').load({ last = true }) end, desc = 'Restore Last Session' },$/;"	f
+{ '<leader>ps', function() require('persistence').load() end, desc 	lua/plugins/persistence.lua	/^        { '<leader>ps', function() require('persistence').load() end, desc = 'Restore Session' },$/;"	f

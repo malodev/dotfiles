@@ -94,8 +94,8 @@ keymap.set("n", "<C-a>", "ggVG", opts)
 -- keymap.set("n", "<TAB>", ">>", opts)
 -- keymap.set("n", "<S-TAB>", "<<", opts)
 
--- keymap.set("n", "<TAB>", ":bnext<CR>", opts)
--- keymap.set("n", "<S-TAB>", ":bprevious<CR>", opts)
+keymap.set("n", "<TAB>", ":bnext<CR>", opts)
+keymap.set("n", "<S-TAB>", ":bprevious<CR>", opts)
 
 -- search movement keeps cursor in middle
 keymap.set("n", "n", "nzzzv", opts)
@@ -157,7 +157,7 @@ keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
 keymap.set("v", "K", ":m '<-2<CR>gv=gv", opts)
 
 opts["desc"] = "Search the selected text"
-keymap.set('v', '/', "\"fy/\\V<C-R>f<CR>", opts )
+keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
 opts.desc = nil
 
 -- vertical movement keeps cursor in middle (visual mode)
@@ -172,19 +172,19 @@ keymap.set("v", "<C-d>", '"+ygvd', opts)
 local wk = require("which-key")
 
 wk.register({
-  c = {
-    name = "ChatGPT",
+	c = {
+		name = "ChatGPT",
 
-    g = { "<cmd>ChatGPTRun grammar_correction<CR>", "Grammar Correction (GPT)", mode = { "n", "v" } },
-    t = { "<cmd>ChatGPTRun translate<CR>", "Translate (GPT)", mode = { "n", "v" } },
-    k = { "<cmd>ChatGPTRun keywords<CR>", "Keywords (GPT)", mode = { "n", "v" } },
-    d = { "<cmd>ChatGPTRun docstring<CR>", "Docstring (GPT)", mode = { "n", "v" } },
-    a = { "<cmd>ChatGPTRun add_tests<CR>", "Add Tests (GPT)", mode = { "n", "v" } },
-    o = { "<cmd>ChatGPTRun optimize_code<CR>", "Optimize Code (GPT)", mode = { "n", "v" } },
-    s = { "<cmd>ChatGPTRun summarize<CR>", "Summarize (GPT)", mode = { "n", "v" } },
-    f = { "<cmd>ChatGPTRun fix_bugs<CR>", "Fix Bugs (GPT)", mode = { "n", "v" } },
-    x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code (GPT)", mode = { "n", "v" } },
-    r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit (GPT)", mode = { "n", "v" } },
-    l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis (GPT)", mode = { "n", "v" } },
-  },
+		g = { "<cmd>ChatGPTRun grammar_correction<CR>", "Grammar Correction (GPT)", mode = { "n", "v" } },
+		t = { "<cmd>ChatGPTRun translate<CR>", "Translate (GPT)", mode = { "n", "v" } },
+		k = { "<cmd>ChatGPTRun keywords<CR>", "Keywords (GPT)", mode = { "n", "v" } },
+		d = { "<cmd>ChatGPTRun docstring<CR>", "Docstring (GPT)", mode = { "n", "v" } },
+		a = { "<cmd>ChatGPTRun add_tests<CR>", "Add Tests (GPT)", mode = { "n", "v" } },
+		o = { "<cmd>ChatGPTRun optimize_code<CR>", "Optimize Code (GPT)", mode = { "n", "v" } },
+		s = { "<cmd>ChatGPTRun summarize<CR>", "Summarize (GPT)", mode = { "n", "v" } },
+		f = { "<cmd>ChatGPTRun fix_bugs<CR>", "Fix Bugs (GPT)", mode = { "n", "v" } },
+		x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code (GPT)", mode = { "n", "v" } },
+		r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit (GPT)", mode = { "n", "v" } },
+		l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis (GPT)", mode = { "n", "v" } },
+	},
 }, { prefix = "<leader>" })
