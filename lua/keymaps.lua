@@ -4,17 +4,24 @@ local global = vim.g
 global.mapleader = " "
 global.maplocalleader = " "
 
+local function tc(t1, t2)
+	for i = 1, #t2 do
+		t1[#t1 + 1] = t2[i]
+	end
+	return t1
+end
+
+keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
+
 -- make CTRL + C behave exactly the same as ESC
-opts["desc"] = "Make CTRL + C behave exactly the same as ESC"
-keymap.set("i", "<C-c>", "<ESC>", opts)
-opts.desc = nil
+keymap.set("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
 
 -- delete one word in insert mode (note that <C-h> sends the same ASCII escape sequence as <C-BS>)
 keymap.set("i", "<C-h>", "<C-w>", opts)
 
 -- remap ^ and $ to H and L, respectively
-keymap.set("n", "H", "^", opts)
-keymap.set("n", "L", "$", opts)
+keymap.set("n", "H", "^", tc(opts, { desc = "H goes to the beginning of line" }))
+keymap.set("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
 
 -- open up lazy.nvim UI
 -- keymap.set('n', '<leader>l', ':Lazy<CR>', opts)
@@ -155,6 +162,10 @@ keymap.set("v", "<leader>p", '"_dP', opts)
 -- move lines around
 keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
 keymap.set("v", "K", ":m '<-2<CR>gv=gv", opts)
+keymap.set("n", "J", ":m .+1<CR>==")
+keymap.set("n", "K", ":m .-2<CR>==")
+keymap.set("i", "J", ":m .+1<CR>==gi")
+keymap.set("i", "K", ":m .-2<CR>==gi")
 
 opts["desc"] = "Search the selected text"
 keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
