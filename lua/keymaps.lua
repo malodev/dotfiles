@@ -27,7 +27,7 @@ keymap.set("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
 -- keymap.set('n', '<leader>l', ':Lazy<CR>', opts)
 
 -- toggle undotree
-keymap.set("n", "<C-u>", ":UndotreeToggle<CR>", opts)
+keymap.set("n", "<F5>", vim.cmd.UndotreeToggle, opts)
 
 -- toggle nvim-tree
 -- keymap.set('n', '<C-n>', ':NvimTreeFindFileToggle<CR>', opts)
@@ -171,6 +171,8 @@ opts["desc"] = "Search the selected text"
 keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
 opts.desc = nil
 
+keymap.set("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
+keymap.set("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
 -- vertical movement keeps cursor in middle (visual mode)
 keymap.set("v", "<C-j>", "<C-d>zz", opts)
 keymap.set("v", "<C-k>", "<C-u>zz", opts)
