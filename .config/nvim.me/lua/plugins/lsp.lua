@@ -19,7 +19,9 @@ return {
 	{
 		"zbirenbaum/copilot-cmp",
 		config = function()
-			require("copilot_cmp").setup()
+			require("copilot_cmp").setup({
+				fix_pairs = true,
+			})
 		end,
 	},
 	{
@@ -39,7 +41,7 @@ return {
 					{ name = "path" },
 				}),
 				mapping = cmp.mapping.preset.insert({
-					["<C-Space>"] = cmp.mapping.complete(),
+					["<C-\\>"] = cmp.mapping.complete(),
 					["<C-u>"] = cmp.mapping.scroll_docs(-4),
 					["<C-d>"] = cmp.mapping.scroll_docs(4),
 					-- ["<C-f>"] = cmp_action.luasnip_jump_forward(),
@@ -115,6 +117,7 @@ return {
 				"emmet_language_server",
 				-- "dockerls",
 				-- "docker_compose_language_service",
+				"gopls",
 				"lua_ls",
 				-- "jsonls",
 				-- "intelephense",
@@ -151,6 +154,7 @@ return {
 				"lua_ls",
 				"jsonls",
 				"biome",
+				"gopls",
 			}
 			for _, lsp in ipairs(servers) do
 				lspconfig[lsp].setup({
