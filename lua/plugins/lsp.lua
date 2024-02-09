@@ -153,7 +153,6 @@ return {
 				"emmet_language_server",
 				"lua_ls",
 				"jsonls",
-				"biome",
 				"gopls",
 			}
 			for _, lsp in ipairs(servers) do
