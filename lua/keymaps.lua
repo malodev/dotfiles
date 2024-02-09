@@ -200,8 +200,8 @@ keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
 keymap.set("v", "K", ":m '<-2<CR>gv=gv", opts)
 keymap.set("n", "<A-J>", ":m .+1<CR>==")
 keymap.set("n", "<A-K>", ":m .-2<CR>==")
-keymap.set("i", "J", ":m .+1<CR>==gi")
-keymap.set("i", "K", ":m .-2<CR>==gi")
+keymap.set("i", "<A-J>", ":m .+1<CR>==gi")
+keymap.set("i", "<A-K>", ":m .-2<CR>==gi")
 
 opts["desc"] = "Search the selected text"
 keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
