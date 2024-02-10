@@ -149,7 +149,6 @@ keymap.set("n", "<C-j>", "<C-d>zz", opts)
 keymap.set("n", "<C-k>", "<C-u>zz", opts)
 
 -- creates a new line below the cursor and goes back into normal mode
-keymap.set("n", "<A-CR>j", "o<Esc>", opts)
 keymap.set("n", "<S-Down>", "V", opts)
 keymap.set("n", "<S-Up>", "V", opts)
 keymap.set("i", "<S-Down>", "<Esc>V", opts)
@@ -165,11 +164,6 @@ keymap.set("v", "<S-Left>", "<Left>", opts)
 keymap.set("v", "<S-Right>", "<Right>", opts)
 
 keymap.set("n", "<S-End>", "v$", opts)
--- enter in insert mode, and insert new line
-keymap.set("n", "<A-CR>i", "i<CR>", opts)
-
--- creates a new line above the cursor and goes back into normal mode
-keymap.set("n", "<A-CR>k", "O<Esc>", opts)
 
 -- quick resizing of buffers
 keymap.set("n", "<C-up>", ":resize -2<cr>", opts)
@@ -217,8 +211,7 @@ keymap.set("v", "<C-k>", "<C-u>zz", opts)
 keymap.set("v", "<C-a>", "ggVG", opts)
 
 keymap.set("v", "<C-d>", '"+ygvd', opts)
--- WhichKey mappings
-local wk = require("which-key")
+
 -- noice mappings
 keymap.set("n", "<leader>nl", function()
 	require("noice").cmd("last")
@@ -234,17 +227,21 @@ end, tc(opts, { desc = "Dismiss all visible messages" }))
 
 keymap.set("n", "<leader>nt", function()
 	require("noice").cmd("telescope")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
+end, tc(opts, { desc = "Telescope messages" }))
 
 keymap.set("n", "<leader>nx", function()
 	require("noice").cmd("disable")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
+end, tc(opts, { desc = "Disable noice" }))
 
 keymap.set("n", "<leader>ne", function()
 	require("noice").cmd("enable")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
+end, tc(opts, { desc = "Enable noice" }))
+
 -- my mappings for custom commands
 keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
+
+-- WhichKey mappings
+local wk = require("which-key")
 
 -- ChatGPT mappings
 wk.register({
