@@ -9,7 +9,7 @@ return {
 		end
 
 		toggleterm.setup({
-			size = 13,
+			size = 30,
 			open_mapping = [[<A-t>]],
 			shade_filetypes = {},
 			shade_terminals = true,
@@ -23,6 +23,45 @@ return {
 		})
 
 		local Terminal = require("toggleterm.terminal").Terminal
+		local hTerm = Terminal:new({
+			size = 10,
+			direction = "horizontal",
+			float_opts = {
+				border = "curved",
+			},
+			on_open = function(term)
+				vim.api.nvim_buf_set_keymap(
+					term.bufnr,
+					"t",
+					"<C-k>",
+					"<cmd>wincmd k<CR>",
+					{ noremap = true, silent = true }
+				)
+				vim.api.nvim_buf_set_keymap(
+					term.bufnr,
+					"t",
+					"<A-->",
+					"<cmd>close<CR>",
+					{ noremap = true, silent = true }
+				)
+			end,
+		})
+		local floatTerm = Terminal:new({
+			direction = "float",
+			float_opts = {
+				border = "curved",
+			},
+			on_open = function(term)
+				vim.api.nvim_buf_set_keymap(
+					term.bufnr,
+					"t",
+					"<A-i>",
+					"<cmd>close<CR>",
+					{ noremap = true, silent = true }
+				)
+			end,
+		})
+
 		local lazygit = Terminal:new({
 			cmd = "lazygit",
 			dir = "git_dir",
@@ -33,7 +72,7 @@ return {
 			-- function to run on opening the terminal
 			on_open = function(term)
 				vim.cmd("startinsert!")
-				vim.api.nvim_buf_set_keymap(term.bufnr, "n", "q", "<cmd>close<CR>", { noremap = true, silent = true })
+				vim.api.nvim_buf_set_keymap(term.bufnr, "t", "q", "<cmd>close<CR>", { noremap = true, silent = true })
 			end,
 			-- function to run on closing the terminal
 			on_close = function(term)
@@ -41,10 +80,28 @@ return {
 			end,
 		})
 
+		function _hTerm_toggle()
+			hTerm:toggle()
+		end
+		function _floatTerm_toggle()
+			floatTerm:toggle()
+		end
 		function _lazygit_toggle()
 			lazygit:toggle()
 		end
 
+		vim.api.nvim_set_keymap(
+			"n",
+			"<A-->",
+			"<cmd>lua _hTerm_toggle()<CR>",
+			{ noremap = true, silent = true, desc = "Toggle horizontal terminal" }
+		)
+		vim.api.nvim_set_keymap(
+			"n",
+			"<A-i>",
+			"<cmd>lua _floatTerm_toggle()<CR>",
+			{ noremap = true, silent = true, desc = "Toggle float terminal" }
+		)
 		vim.api.nvim_set_keymap(
 			"n",
 			"<leader>gl",
