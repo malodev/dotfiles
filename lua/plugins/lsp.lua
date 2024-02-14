@@ -230,7 +230,13 @@ return {
 				{ desc = "Renames all references to the symbol under the cursor" }
 			)
 			vim.keymap.set(
-				{ "n", "x", "i" },
+				"i",
+				"<F3>",
+				"<cmd>lua vim.lsp.buf.format({async = true})<cr><ESC>zzi",
+				{ desc = "Format code in current buffer" }
+			)
+			vim.keymap.set(
+				{ "n", "x" },
 				"<F3>",
 				"<cmd>lua vim.lsp.buf.format({async = true})<cr>zz",
 				{ desc = "Format code in current buffer" }
