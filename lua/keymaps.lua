@@ -46,8 +46,9 @@ keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
 keymap.set("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
 
 -- delete one word in insert mode (note that <C-h> sends the same ASCII escape sequence as <C-BS>)
-keymap.set("i", "<C-h>", "<C-w>", opts)
-
+-- keymap.set("i", "<C-h>", "<C-w>", opts)
+--
+--
 -- remap ^ and $ to H and L, respectively
 keymap.set("n", "H", "^", tc(opts, { desc = "H goes to the beginning of line" }))
 keymap.set("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
@@ -68,7 +69,7 @@ keymap.set("n", "<F5>", vim.cmd.UndotreeToggle, opts)
 keymap.set("n", "<C-x>", ":bd<CR>", opts)
 keymap.set(
 	"n",
-	"<leader>df",
+	"<leader>bf",
 	-- ":call delete(expand('%')) | bd!<CR>",
 	":lua delete_current_file()<CR>",
 	tc(opts, { desc = "Delete current file and close the buffer" })
@@ -76,12 +77,14 @@ keymap.set(
 
 -- quickly switch between buffers
 opts["desc"] = "Show previous buffer"
-keymap.set("n", "<", ":bp<CR>", opts)
+keymap.set("n", "<", ":bp<CR>", tc(opts, { desc = "Show previous buffer" }))
 opts["desc"] = "Show next buffer"
-keymap.set("n", ">", ":bn<CR>", opts)
+keymap.set("n", ">", ":bn<CR>", tc(opts, { desc = "Show next buffer" }))
 
 -- quickly switch between windows
-keymap.set("n", "<C-h>", "<C-w>h", opts)
+keymap.set("n", "<C-j>", "<C-w>j", opts)
+keymap.set("n", "<C-k>", "<C-w>k", opts)
+keymap.set("n", "<C-BS>", "<C-w>h", opts)
 keymap.set("n", "<C-l>", "<C-w>l", opts)
 
 -- Toogle pin current buffer
@@ -144,10 +147,6 @@ keymap.set("n", "<S-TAB>", ":bprevious<CR>", opts)
 keymap.set("n", "n", "nzzzv", opts)
 keymap.set("n", "N", "Nzzzv", opts)
 
--- vertical movement keeps cursor in middle
-keymap.set("n", "<C-j>", "<C-d>zz", opts)
-keymap.set("n", "<C-k>", "<C-u>zz", opts)
-
 -- creates a new line below the cursor and goes back into normal mode
 keymap.set("n", "<S-Down>", "V", opts)
 keymap.set("n", "<S-Up>", "V", opts)
@@ -166,8 +165,8 @@ keymap.set("v", "<S-Right>", "<Right>", opts)
 keymap.set("n", "<S-End>", "v$", opts)
 
 -- quick resizing of buffers
-keymap.set("n", "<C-up>", ":resize -2<cr>", opts)
-keymap.set("n", "<C-down>", ":resize +2<cr>", opts)
+keymap.set("n", "<C-up>", ":resize +2<cr>", opts)
+keymap.set("n", "<C-down>", ":resize -2<cr>", opts)
 keymap.set("n", "<C-left>", ":vertical resize -2<cr>", opts)
 keymap.set("n", "<C-Right>", ":vertical resize +2<CR>", opts)
 
@@ -175,6 +174,8 @@ keymap.set("n", "<C-Right>", ":vertical resize +2<CR>", opts)
 -- For X11 systems, * is the selection, and + is the cut buffer (like clipboard).
 -- copy into system clipboard with CTRL + C
 keymap.set("v", "<C-c>", '"+y', opts)
+
+keymap.set("n", "<A-'>", 'ci"', tc({ desc = 'change text between "' }, opts))
 
 -- copy into host system clipboard with <leader>y
 keymap.set("v", "<leader>y", '"*y', opts)
@@ -187,7 +188,7 @@ keymap.set("v", "<TAB>", "<S->>gv", opts)
 keymap.set("v", "<S-TAB>", "<S-<>gv", opts)
 
 -- the greatest remap ever (Primeagen)
-keymap.set("v", "<leader>p", '"_dP', opts)
+keymap.set("v", "<leader>p", '"_dp', opts)
 
 -- move lines around
 keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
@@ -221,7 +222,7 @@ keymap.set("n", "<leader>nh", function()
 	require("noice").cmd("history")
 end, tc(opts, { desc = "Show the message history" }))
 
-keymap.set("n", "<leader>nd", function()
+keymap.set("n", "<leader>nn", function()
 	require("noice").cmd("dismiss")
 end, tc(opts, { desc = "Dismiss all visible messages" }))
 
@@ -259,5 +260,38 @@ wk.register({
 		x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code (GPT)", mode = { "n", "v" } },
 		r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit (GPT)", mode = { "n", "v" } },
 		l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis (GPT)", mode = { "n", "v" } },
+	},
+	b = {
+		name = "Buffers",
+	},
+	d = {
+		name = "Debugging",
+	},
+	f = {
+		name = "Telescope and force",
+	},
+	g = {
+		name = "LSP Go to and git",
+	},
+	h = {
+		name = "Gitsign hunk",
+	},
+	m = {
+		name = "Markdown",
+	},
+	n = {
+		name = "Noice",
+	},
+	p = {
+		name = "Persistence (session)",
+	},
+	r = {
+		name = "Rest client",
+	},
+	t = {
+		name = "Toggles",
+	},
+	x = {
+		name = "Trouble",
 	},
 }, { prefix = "<leader>" })
