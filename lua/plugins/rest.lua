@@ -30,21 +30,16 @@ return {
 				-- table of curl `--write-out` variables or false if disabled
 				-- for more granular control see Statistics Spec
 				show_statistics = false,
-				-- executables or functions for formatting response body [optional]
-				-- set them to false if you want to disable them
-				formatters = {
-					json = "jq",
-					html = function(body)
-						return vim.fn.system({ "tidy", "-i", "-q", "-" }, body)
-					end,
-				},
+				html = function(body)
+					return vim.fn.system({ "tidy", "-i", "-q", "-" }, body)
+				end,
 			},
 			-- Jump to request line on run
-			jump_to_request = false,
-			env_file = ".env",
-			custom_dynamic_variables = {},
-			yank_dry_run = true,
-			search_back = true,
+			-- jump_to_request = false,
+			env_file = ".env.json",
+			-- custom_dynamic_variables = {},
+			-- yank_dry_run = true,
+			-- search_back = true,
 		})
 		-- <Plug>RestNvim, run the request under the cursor
 		-- <Plug>RestNvimPreview, preview the request cURL command
