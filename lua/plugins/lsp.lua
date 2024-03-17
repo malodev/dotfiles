@@ -1,5 +1,5 @@
 return {
-	-- complition part
+	-- completion part
 	{
 		"L3MON4D3/LuaSnip",
 		lazy = false,
