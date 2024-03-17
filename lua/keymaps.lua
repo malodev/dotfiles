@@ -188,7 +188,7 @@ keymap.set("v", "<TAB>", "<S->>gv", opts)
 keymap.set("v", "<S-TAB>", "<S-<>gv", opts)
 
 -- the greatest remap ever (Primeagen)
-keymap.set("v", "<leader>p", '"_dp', opts)
+keymap.set("v", "<leader>p", '"_dP', opts)
 
 -- move lines around
 keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
