@@ -99,6 +99,7 @@ return {
 		config = function()
 			require("mason").setup({
 				ensure_installed = {
+					"stylua",
 					"prettierd",
 				},
 			})
