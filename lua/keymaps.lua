@@ -1,8 +1,5 @@
 local opts = { noremap = true, silent = true }
 local keymap = vim.keymap
-local global = vim.g
-global.mapleader = " "
-global.maplocalleader = " "
 
 local function tc(t1, t2)
 	-- Create a new table to avoid modifying the original tables

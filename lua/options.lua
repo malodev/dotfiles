@@ -7,6 +7,7 @@ vim.cmd("set smartcase")
 vim.cmd("set mousemodel=extend")
 
 vim.g.mapleader = " "
+vim.g.maplocalleader = " "
 vim.opt.clipboard = "unnamedplus" -- use system clipboard
 vim.opt.number = true -- show absolute number
 vim.opt.relativenumber = true -- add numbers to each line on the left side
