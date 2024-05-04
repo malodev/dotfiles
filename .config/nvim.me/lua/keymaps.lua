@@ -1,8 +1,43 @@
 local opts = { noremap = true, silent = true }
 local keymap = vim.keymap
-local global = vim.g
-global.mapleader = " "
-global.maplocalleader = " "
+
+local function tc(t1, t2)
+	-- Create a new table to avoid modifying the original tables
+	local mergedTable = {}
+
+	-- First, copy all the key-value pairs from the first table to the mergedTable
+	for key, value in pairs(t1) do
+		mergedTable[key] = value
+	end
+
+	-- Then, iterate over the second table and add its key-value pairs to the mergedTable
+	-- If a key already exists, its value will be overwritten by the value from t2
+	for key, value in pairs(t2) do
+		mergedTable[key] = value
+	end
+
+	return mergedTable
+end
+
+-- Define the function to delete the current file with confirmation
+function _G.delete_current_file()
+	-- Get the name of the current file
+	local file = vim.fn.expand("%")
+	-- Ask for confirmation
+	local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
+
+	if confirm == 1 then
+		-- If confirmed, delete the file
+		os.remove(file)
+		-- Close the buffer without saving
+		vim.api.nvim_command("bdelete!")
+		print("File deleted: " .. file)
+	else
+		print("Operation cancelled.")
+	end
+end
+
+keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
 
 local function tc(t1, t2)
 	-- Create a new table to avoid modifying the original tables
@@ -46,8 +81,9 @@ keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
 keymap.set("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
 
 -- delete one word in insert mode (note that <C-h> sends the same ASCII escape sequence as <C-BS>)
-keymap.set("i", "<C-h>", "<C-w>", opts)
-
+-- keymap.set("i", "<C-h>", "<C-w>", opts)
+--
+--
 -- remap ^ and $ to H and L, respectively
 keymap.set("n", "H", "^", tc(opts, { desc = "H goes to the beginning of line" }))
 keymap.set("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
@@ -68,7 +104,7 @@ keymap.set("n", "<F5>", vim.cmd.UndotreeToggle, opts)
 keymap.set("n", "<C-x>", ":bd<CR>", opts)
 keymap.set(
 	"n",
-	"<leader>df",
+	"<leader>bf",
 	-- ":call delete(expand('%')) | bd!<CR>",
 	":lua delete_current_file()<CR>",
 	tc(opts, { desc = "Delete current file and close the buffer" })
@@ -76,12 +112,14 @@ keymap.set(
 
 -- quickly switch between buffers
 opts["desc"] = "Show previous buffer"
-keymap.set("n", "<", ":bp<CR>", opts)
+keymap.set("n", "<", ":bp<CR>", tc(opts, { desc = "Show previous buffer" }))
 opts["desc"] = "Show next buffer"
-keymap.set("n", ">", ":bn<CR>", opts)
+keymap.set("n", ">", ":bn<CR>", tc(opts, { desc = "Show next buffer" }))
 
 -- quickly switch between windows
-keymap.set("n", "<C-h>", "<C-w>h", opts)
+keymap.set("n", "<C-j>", "<C-w>j", opts)
+keymap.set("n", "<C-k>", "<C-w>k", opts)
+keymap.set("n", "<C-BS>", "<C-w>h", opts)
 keymap.set("n", "<C-l>", "<C-w>l", opts)
 
 -- Toogle pin current buffer
@@ -144,12 +182,7 @@ keymap.set("n", "<S-TAB>", ":bprevious<CR>", opts)
 keymap.set("n", "n", "nzzzv", opts)
 keymap.set("n", "N", "Nzzzv", opts)
 
--- vertical movement keeps cursor in middle
-keymap.set("n", "<C-j>", "<C-d>zz", opts)
-keymap.set("n", "<C-k>", "<C-u>zz", opts)
-
 -- creates a new line below the cursor and goes back into normal mode
-keymap.set("n", "<A-CR>j", "o<Esc>", opts)
 keymap.set("n", "<S-Down>", "V", opts)
 keymap.set("n", "<S-Up>", "V", opts)
 keymap.set("i", "<S-Down>", "<Esc>V", opts)
@@ -165,15 +198,10 @@ keymap.set("v", "<S-Left>", "<Left>", opts)
 keymap.set("v", "<S-Right>", "<Right>", opts)
 
 keymap.set("n", "<S-End>", "v$", opts)
--- enter in insert mode, and insert new line
-keymap.set("n", "<A-CR>i", "i<CR>", opts)
-
--- creates a new line above the cursor and goes back into normal mode
-keymap.set("n", "<A-CR>k", "O<Esc>", opts)
 
 -- quick resizing of buffers
-keymap.set("n", "<C-up>", ":resize -2<cr>", opts)
-keymap.set("n", "<C-down>", ":resize +2<cr>", opts)
+keymap.set("n", "<C-up>", ":resize +2<cr>", opts)
+keymap.set("n", "<C-down>", ":resize -2<cr>", opts)
 keymap.set("n", "<C-left>", ":vertical resize -2<cr>", opts)
 keymap.set("n", "<C-Right>", ":vertical resize +2<CR>", opts)
 
@@ -181,6 +209,8 @@ keymap.set("n", "<C-Right>", ":vertical resize +2<CR>", opts)
 -- For X11 systems, * is the selection, and + is the cut buffer (like clipboard).
 -- copy into system clipboard with CTRL + C
 keymap.set("v", "<C-c>", '"+y', opts)
+
+keymap.set("n", "<A-'>", 'ci"', tc({ desc = 'change text between "' }, opts))
 
 -- copy into host system clipboard with <leader>y
 keymap.set("v", "<leader>y", '"*y', opts)
@@ -200,8 +230,8 @@ keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
 keymap.set("v", "K", ":m '<-2<CR>gv=gv", opts)
 keymap.set("n", "<A-J>", ":m .+1<CR>==")
 keymap.set("n", "<A-K>", ":m .-2<CR>==")
-keymap.set("i", "J", ":m .+1<CR>==gi")
-keymap.set("i", "K", ":m .-2<CR>==gi")
+keymap.set("i", "<A-J>", ":m .+1<CR>==gi")
+keymap.set("i", "<A-K>", ":m .-2<CR>==gi")
 
 opts["desc"] = "Search the selected text"
 keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
@@ -217,6 +247,35 @@ keymap.set("v", "<C-k>", "<C-u>zz", opts)
 keymap.set("v", "<C-a>", "ggVG", opts)
 
 keymap.set("v", "<C-d>", '"+ygvd', opts)
+
+-- noice mappings
+keymap.set("n", "<leader>nl", function()
+	require("noice").cmd("last")
+end, tc(opts, { desc = "Show the last message" }))
+
+keymap.set("n", "<leader>nh", function()
+	require("noice").cmd("history")
+end, tc(opts, { desc = "Show the message history" }))
+
+keymap.set("n", "<leader>nn", function()
+	require("noice").cmd("dismiss")
+end, tc(opts, { desc = "Dismiss all visible messages" }))
+
+keymap.set("n", "<leader>nt", function()
+	require("noice").cmd("telescope")
+end, tc(opts, { desc = "Telescope messages" }))
+
+keymap.set("n", "<leader>nx", function()
+	require("noice").cmd("disable")
+end, tc(opts, { desc = "Disable noice" }))
+
+keymap.set("n", "<leader>ne", function()
+	require("noice").cmd("enable")
+end, tc(opts, { desc = "Enable noice" }))
+
+-- my mappings for custom commands
+keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
+
 -- WhichKey mappings
 local wk = require("which-key")
 -- noice mappings
@@ -262,5 +321,38 @@ wk.register({
 		x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code (GPT)", mode = { "n", "v" } },
 		r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit (GPT)", mode = { "n", "v" } },
 		l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis (GPT)", mode = { "n", "v" } },
+	},
+	b = {
+		name = "Buffers",
+	},
+	d = {
+		name = "Debugging",
+	},
+	f = {
+		name = "Telescope and force",
+	},
+	g = {
+		name = "LSP Go to and git",
+	},
+	h = {
+		name = "Gitsign hunk",
+	},
+	m = {
+		name = "Markdown",
+	},
+	n = {
+		name = "Noice",
+	},
+	p = {
+		name = "Persistence (session)",
+	},
+	r = {
+		name = "Rest client",
+	},
+	t = {
+		name = "Toggles",
+	},
+	x = {
+		name = "Trouble",
 	},
 }, { prefix = "<leader>" })

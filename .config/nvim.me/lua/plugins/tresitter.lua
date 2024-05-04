@@ -17,6 +17,8 @@ return {
 				"markdown_inline",
 				"bash",
 				"regex",
+				"http",
+				"json",
 			},
 			sync_install = false,
 			highlight = { enable = true },

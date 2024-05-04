@@ -1,5 +1,5 @@
 return {
-	-- complition part
+	-- completion part
 	{
 		"L3MON4D3/LuaSnip",
 		lazy = false,
@@ -99,6 +99,7 @@ return {
 		config = function()
 			require("mason").setup({
 				ensure_installed = {
+					"stylua",
 					"prettierd",
 				},
 			})
@@ -232,6 +233,12 @@ return {
 			)
 			vim.keymap.set(
 				{ "n", "x", "i" },
+				"<F3>",
+				"<cmd>lua vim.lsp.buf.format({async = true})<cr><ESC>zzi",
+				{ desc = "Format code in current buffer" }
+			)
+			vim.keymap.set(
+				{ "n", "x" },
 				"<F3>",
 				"<cmd>lua vim.lsp.buf.format({async = true})<cr>zz",
 				{ desc = "Format code in current buffer" }
