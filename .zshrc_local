@@ -1,126 +1,5 @@
-#source ~/.fonts/*.sh to put in .zshrc_malo
-POWERLEVEL9K_SHORTEN_DIR_LENGTH=3
-POWERLEVEL9K_SHORTEN_DELIMITER=""
-#export POWERLEVEL9K_SHORTEN_STRATEGY="truncate_from_right"
-
-if [[ `uname` == 'Darwin' ]]
-then
-    export OSX=1
-    alias airport='/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport'
-	zsh_wifi_level() {
-		/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI |awk '{print $2}'|sed s/-//
-	}
-else
-    export OSX=
-    alias airport=''
-    zsh_wifi_level() {
-      local connected=$(nmcli -t|grep "connected to eth0")
-      [[ ! -z connected ]] && echo 200 && exit
-      echo 0
-    }
-fi
-
-zsh_internet_signal(){
-  #source on quality levels - http://www.wireless-nets.com/resources/tutorials/define_SNR_values.html
-  #source on signal levels  - http://www.speedguide.net/faq/how-to-read-rssisignal-and-snrnoise-ratings-440
-  local signal=$(airport -I | grep agrCtlRSSI | awk '{print $2}' | sed 's/-//g')
-  local noise=$(airport -I | grep agrCtlNoise | awk '{print $2}' | sed 's/-//g')
-  local SNR=$(bc <<<"scale=2; $signal / $noise")
-  local net=$(curl -D- -o /dev/null -s http://www.google.it | grep HTTP/1.1 | awk '{print $2}')
-  local color='%F{yellow}'
-  local symbol="\uf197"
-
-  # Excellent Signal (5 bars)
-  if [[ ! -z "${signal// }" ]] && [[ $SNR -gt .40 ]] ;
-    then color='%F{blue}' ; symbol="\uf1eb" ;
-  fi
-
-  # Good Signal (3-4 bars)
-  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .40 ]] && [[ $SNR -gt .25 ]] ;
-    then color='%F{green}' ; symbol="\uf1eb" ;
-  fi
-
-  # Low Signal (2 bars)
-  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .25 ]] && [[ $SNR -gt .15 ]] ;
-    then color='%F{yellow}' ; symbol="\uf1eb" ;
-  fi
-
-  # Very Low Signal (1 bar)
-  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .15 ]] && [[ $SNR -gt .10 ]] ;
-    then color='%F{red}' ; symbol="\uf1eb" ;
-  fi
-
-  # No Signal - No Internet
-  if [[ ! -z "${signal// }" ]] && [[ ! $SNR -gt .10 ]] ;
-    then color='%F{red}' ; symbol="\uf011";
-  fi
-
-  if [[ -z "${signal// }" ]] && [[ "$net" -ne 200 ]] ;
-    then color='%F{red}' ; symbol="\uf011" ;
-  fi
-
-  # Ethernet Connection (no wifi, hardline)
-  if [[ -z "${signal// }" ]] && [[ "$net" -eq 200 ]] ;
-    then color='%F{blue}' ; symbol="\uf197" ;
-  fi
-
-  echo -n "%{$color%}$symbol " # \f1eb is wifi bars
-}
-
-zsh_wifi_signal(){
-	local signal=$(zsh_wifi_level)
-	local color='%F{yellow}'
-	local symbol="\uf1eb"
-	[[ $signal -gt 70 ]] && color='%F{green}'
-	[[ $signal -lt 50 ]] && color='%F{red}'
-	[[ $signal -gt 100 ]] && symbol="\uf301" && echo -n "%{$color%}$symbol" && exit
-	echo -n "%{$color%}$symbol  $signal%{%f%}"
-}
-
-#Download jq do convert json
-zsh_weather(){
-  local weather=$(curl -s "https://api.apixu.com/v1/current.json?key=bd941b8e09f4429fb6d113835172210&q=Rovereto")
-  local temp=$(echo $weather | jq .current.temp_c)
-  local condition=$(echo $weather | jq .current.condition.text)
-  #Default value
-  local color='%F{green}'
-  local symbol="\uf2c7"
-
-  if [[ $condition == *"rain"* ]] ;
-  then symbol="\uf043" ; color='%F{blue}'
-  fi
-
-  if [[ $condition == *"cloudy"* || $condition == *"Overcast"* ]] ;
-  then symbol="\uf0c2" ; color='%F{grey}';
-  fi
-
-  if [[ $condition == *"Sunny"* ]] ;
-  then symbol="\uf185" ; color='%F{yellow}';
-  fi
-
-  echo -n "%{$color%}$temp\u2103  $symbol"
-}
-
-#POWERLEVEL9K_PROMPT_ON_NEWLINE=true
-#POWERLEVEL9K_RPROMPT_ON_NEWLINE=false
-#POWERLEVEL9K_PROMPT_ADD_NEWLINE=false
-#POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=''
-#POWERLEVEL9K_MULTILINE_SECOND_PROMPT_PREFIX="$(prompt_os_icon left 1)$  "
-#POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX="$(prompt_os_icon left 1)$  "
-#POWERLEVEL9K_TIME_FORMAT="%D{\uf017 %H:%M}"
-
-#POWERLEVEL9K_CUSTOM_WIFI_SIGNAL="zsh_wifi_signal"
-#POWERLEVEL9K_CUSTOM_WEATHER="zsh_weather"
-#POWERLEVEL9K_CUSTOM_WIFI_SIGNAL_BACKGROUND="black"
-#POWERLEVEL9K_CUSTOM_WEATHER_BACKGROUND="black"
-#POWERLEVEL9K_CUSTOM_INTERNET_SIGNAL="zsh_internet_signal"
-#POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(context custom_wifi_signal dir vcs virtualenv )
-#POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(os_icon context dir vcs virtualenv )
-#POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status battery root_indicator background_jobs load time)
-#POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status root_indicator background_jobs)
 export DEFAULT_USER="$USER"
 
-alias passwd_gen='LC_ALL=C tr -dc "[:alpha:][:alnum:]" < /dev/urandom | head -c 20 | pbcopy'
 [[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
 
 gitlab_group_members_id() { [[ $1 != "" ]] && gitlab group_members $1|awk -F "|" '{print $5}'|grep -E '\d+' }
@@ -196,6 +75,15 @@ setopt EXTENDED_HISTORY
 
 setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_IGNORE_SPACE
+setopt HIST_SAVE_NO_DUPS
+setopt HIST_VERIFY
+setopt HIST_REDUCE_BLANKS
+
+
+bindkey "^[[A" history-substring-search-up
+bindkey "^[[B" history-substring-search-down
+
 
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
