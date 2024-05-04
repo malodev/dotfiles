@@ -2,6 +2,7 @@ return {
 	"mfussenegger/nvim-dap",
 	dependencies = {
 		"theHamsta/nvim-dap-virtual-text",
+		"nvim-neotest/nvim-nio",
 		{
 			"rcarriga/nvim-dap-ui",
 			keys = {
@@ -37,6 +38,27 @@ return {
 			dapui.close()
 		end
 
+		dap.adapters.python = {
+			type = "executable",
+			command = "python",
+			args = { "-m", "debugpy.adapter" },
+		}
+		dap.configurations.python = {
+			{
+				type = "python",
+				request = "launch",
+				name = "Launch file",
+				program = "${file}",
+				pythonPath = function()
+					local cwd = vim.fn.getcwd()
+					if vim.fn.executable(cwd .. "/.venv/bin/python") == 1 then
+						return cwd .. "/.venv/bin/python"
+					else
+						return "python"
+					end
+				end,
+			},
+		}
 		dap.adapters.node2 = {
 			type = "executable",
 			command = "node",

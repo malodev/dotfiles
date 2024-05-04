@@ -3,16 +3,17 @@ return {
 		"akinsho/bufferline.nvim",
 		version = "*",
 		dependencies = "nvim-tree/nvim-web-devicons",
+		lazy = false,
 		config = function()
 			vim.opt.termguicolors = true
 			require("bufferline").setup({
 				options = {
-          indicator = {
-                icon = ' ', -- this should be omitted if indicator style is not 'icon'
-                style = 'icon' -- 'icon' | 'underline' | 'none',
-            },
-          -- show_tab_indicators = true,
-          separator_style = {'', ''} , -- "slant" | "slope" | "thick" | "thin" | { 'any', 'any' },
+					indicator = {
+						icon = " ", -- this should be omitted if indicator style is not 'icon'
+						style = "icon", -- 'icon' | 'underline' | 'none',
+					},
+					-- show_tab_indicators = true,
+					separator_style = { "", "" }, -- "slant" | "slope" | "thick" | "thin" | { 'any', 'any' },
 					diagnostics = "nvim_lsp",
 					---@diagnostic disable-next-line: unused-local
 					diagnostics_indicator = function(count, level, diagnostics_dict, context)
@@ -37,17 +38,22 @@ return {
 						},
 					},
 				},
-        highlights = {
-            indicator_selected = {
-                fg = '#aff17e',
-                bg = '#000000',
-            },
-            separator = {
-                fg = '#333333',
-                bg = '#000000',
-            },
-        }
+				highlights = {
+					indicator_selected = {
+						fg = "#aff17e",
+						bg = "#000000",
+					},
+					separator = {
+						fg = "#333333",
+						bg = "#000000",
+					},
+				},
 			})
 		end,
+		keys = {
+			{ "<leader>bl", "<cmd>BufferLineCloseLeft<CR>", desc = "BufferLine: Close Left" },
+			{ "<leader>br", "<cmd>BufferLineCloseRight<CR>", desc = "BufferLine: Close Right" },
+			{ "<leader>bo", "<cmd>BufferLineCloseOthers<CR>", desc = "BufferLine: Close Others" },
+		},
 	},
 }
