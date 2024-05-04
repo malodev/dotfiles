@@ -154,6 +154,7 @@ return {
 				"emmet_language_server",
 				"lua_ls",
 				"jsonls",
+				"biome",
 				"gopls",
 			}
 			for _, lsp in ipairs(servers) do
@@ -231,7 +232,7 @@ return {
 				{ desc = "Renames all references to the symbol under the cursor" }
 			)
 			vim.keymap.set(
-				"i",
+				{ "n", "x", "i" },
 				"<F3>",
 				"<cmd>lua vim.lsp.buf.format({async = true})<cr><ESC>zzi",
 				{ desc = "Format code in current buffer" }

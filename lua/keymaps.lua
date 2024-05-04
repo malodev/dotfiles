@@ -39,6 +39,44 @@ end
 
 keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
 
+local function tc(t1, t2)
+	-- Create a new table to avoid modifying the original tables
+	local mergedTable = {}
+
+	-- First, copy all the key-value pairs from the first table to the mergedTable
+	for key, value in pairs(t1) do
+		mergedTable[key] = value
+	end
+
+	-- Then, iterate over the second table and add its key-value pairs to the mergedTable
+	-- If a key already exists, its value will be overwritten by the value from t2
+	for key, value in pairs(t2) do
+		mergedTable[key] = value
+	end
+
+	return mergedTable
+end
+
+-- Define the function to delete the current file with confirmation
+function _G.delete_current_file()
+	-- Get the name of the current file
+	local file = vim.fn.expand("%")
+	-- Ask for confirmation
+	local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
+
+	if confirm == 1 then
+		-- If confirmed, delete the file
+		os.remove(file)
+		-- Close the buffer without saving
+		vim.api.nvim_command("bdelete!")
+		print("File deleted: " .. file)
+	else
+		print("Operation cancelled.")
+	end
+end
+
+keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
+
 -- make CTRL + C behave exactly the same as ESC
 keymap.set("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
 
@@ -240,6 +278,32 @@ keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the li
 
 -- WhichKey mappings
 local wk = require("which-key")
+-- noice mappings
+keymap.set("n", "<leader>nl", function()
+	require("noice").cmd("last")
+end, tc(opts, { desc = "Show the last message" }))
+
+keymap.set("n", "<leader>nh", function()
+	require("noice").cmd("history")
+end, tc(opts, { desc = "Show the message history" }))
+
+keymap.set("n", "<leader>nd", function()
+	require("noice").cmd("dismiss")
+end, tc(opts, { desc = "Dismiss all visible messages" }))
+
+keymap.set("n", "<leader>nt", function()
+	require("noice").cmd("telescope")
+end, tc(opts, { desc = "Dismiss all visible messages" }))
+
+keymap.set("n", "<leader>nx", function()
+	require("noice").cmd("disable")
+end, tc(opts, { desc = "Dismiss all visible messages" }))
+
+keymap.set("n", "<leader>ne", function()
+	require("noice").cmd("enable")
+end, tc(opts, { desc = "Dismiss all visible messages" }))
+-- my mappings for custom commands
+keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
 -- ChatGPT mappings
 wk.register({
