@@ -3,6 +3,9 @@ return {
 		"akinsho/bufferline.nvim",
 		version = "*",
 		dependencies = "nvim-tree/nvim-web-devicons",
+		cond = function()
+			return require("config").is_enabled.bufferline
+		end,
 		lazy = false,
 		config = function()
 			vim.opt.termguicolors = true

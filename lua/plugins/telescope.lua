@@ -65,6 +65,9 @@ return {
 	},
 	{
 		"LukasPietzschmann/telescope-tabs",
+		cond = function()
+			return require("config").is_enabled.telescope_tabs
+		end,
 		config = function()
 			require("telescope").load_extension("telescope-tabs")
 			require("telescope-tabs").setup({
