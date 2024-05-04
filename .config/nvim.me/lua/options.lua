@@ -12,10 +12,13 @@ vim.opt.clipboard = "unnamedplus" -- use system clipboard
 vim.opt.number = true -- show absolute number
 vim.opt.relativenumber = true -- add numbers to each line on the left side
 
--- the following lines are for relative number to be disabled in insert mode
 local autocmd = vim.api.nvim_create_autocmd
 local augroup = vim.api.nvim_create_augroup
 
+-- Read the HOME environment variable
+local home = os.getenv("HOME")
+
+-- the following lines are for relative number to be disabled in insert mode
 local number_toggle = augroup("numbertoggle", { clear = true })
 
 autocmd({ "InsertLeave" }, {
@@ -83,5 +86,13 @@ autocmd({ "InsertEnter", "WinLeave" }, {
 			vim.api.nvim_win_set_var(0, "auto-cursorline", cl)
 			vim.wo.cursorline = false
 		end
+	end,
+})
+
+-- Set filetype for i3 config files
+autocmd({ "BufRead", "BufNewFile" }, {
+	pattern = home .. "/.config/i3/*.conf",
+	callback = function()
+		vim.bo.filetype = "i3config"
 	end,
 })
