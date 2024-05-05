@@ -24,7 +24,16 @@ return {
 						color = { fg = "#ff9e64" },
 					},
 				},
-				lualine_x = { "encoding", "fileformat", "filetype" },
+				lualine_x = {
+					{
+						"rest",
+						icon = "",
+						fg = "#428890",
+					},
+					"encoding",
+					"fileformat",
+					"filetype",
+				},
 				lualine_y = { "progress" },
 				lualine_z = { "location" },
 			},
