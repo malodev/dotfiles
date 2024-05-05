@@ -9,7 +9,7 @@ return {
 		require("nvim-tree").setup({})
 	end,
 	keys = {
-		{ "<C-n>", "<cmd>NvimTreeToggle<CR>", desc = "Toogle nvim-tree" },
+		{ "<C-n>", "<cmd>NvimTreeToggle<CR><C-W><C-W>", desc = "Toogle nvim-tree" },
 		{ "<C-b>", "<cmd>NvimTreeFindFile<CR>", desc = "Show the current buffer in NvimTree" },
 		{ "<leader>e", "<cmd>NvimTreeFocus<CR>", desc = "Focus on NvimTree" },
 	},

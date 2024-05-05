@@ -96,3 +96,89 @@ autocmd({ "BufRead", "BufNewFile" }, {
 		vim.bo.filetype = "i3config"
 	end,
 })
+
+function _G.set_terminal_keymaps()
+	local opts = { noremap = true, silent = true, buffer = 0 }
+	vim.keymap.set("t", "<C-a>", "<A-Down>i", opts)
+	vim.keymap.set("t", "<C-e>", "<A-Up>", opts)
+	vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], opts)
+	vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
+	vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], opts)
+	vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], opts)
+	vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], opts)
+	vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], opts)
+	vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], opts)
+end
+
+-- if you only want these mappings for toggle term use term://*toggleterm#* instead
+vim.cmd("autocmd! TermOpen term://* lua set_terminal_keymaps()")
+
+vim.api.nvim_create_autocmd("BufEnter", {
+	nested = true,
+	callback = function()
+		local api = require("nvim-tree.api")
+
+		-- Only 1 window with nvim-tree left: we probably closed a file buffer
+		if #vim.api.nvim_list_wins() == 1 and api.tree.is_tree_buf() then
+			-- Required to let the close event complete. An error is thrown without this.
+			vim.defer_fn(function()
+				-- close nvim-tree: will go to the last hidden buffer used before closing
+				api.tree.toggle({ find_file = true, focus = true })
+				-- re-open nivm-tree
+				api.tree.toggle({ find_file = true, focus = true })
+				-- nvim-tree is still the active window. Go to the previous window.
+				vim.cmd("wincmd p")
+			end, 0)
+		end
+	end,
+})
+
+local nvimTreeFocusOrToggle = function()
+	local nvimTree = require("nvim-tree.api")
+	local currentBuf = vim.api.nvim_get_current_buf()
+	local currentBufFt = vim.api.nvim_buf_get_option(currentBuf, "filetype")
+	if currentBufFt == "NvimTree" then
+		vim.cmd("wincmd w")
+	else
+		nvimTree.tree.focus()
+	end
+end
+
+vim.keymap.set("n", "<A-1>", nvimTreeFocusOrToggle)
+
+-- -- Set vim.g.nvimtree_was_open to 1 when the NvimTree window is opened
+-- vim.cmd("autocmd FileType NvimTree let g:nvimtree_was_open = 1")
+--
+-- -- Set vim.g.nvimtree_was_open to 0 when the NvimTree window is closed
+-- vim.cmd("autocmd BufWinLeave NvimTree let g:nvimtree_was_open = 0")
+--
+-- -- Function to save the variable
+-- function _G.save_nvimtree_state()
+-- 	local file = io.open(vim.fn.stdpath("data") .. "/nvimtree_was_open.txt", "w")
+-- 	if file then
+-- 		file:write(vim.g.nvimtree_was_open)
+-- 		file:close()
+-- 		-- vim.api.nvim_echo(
+-- 		-- 	{ { "Save State to " .. vim.fn.stdpath("data") .. "/nvimtree_was_open.txt", "DiagnosticInfo" } },
+-- 		-- 	true,
+-- 		-- 	{}
+-- 		-- )
+-- 	end
+-- end
+--
+-- -- Function to load the variable
+-- function _G.load_nvimtree_state()
+-- 	local file = io.open(vim.fn.stdpath("data") .. "/nvimtree_was_open.txt", "r")
+-- 	if file then
+-- 		vim.g.nvimtree_was_open = file:read("*a")
+-- 		-- vim.api.nvim_echo({ { "Load State: " .. vim.g.nvimtree_was_open, "DiagnosticInfo" } }, true, {})
+--
+-- 		file:close()
+-- 		if vim.g.nvimtree_was_open == "1" then
+-- 			local api = require("nvim-tree.api")
+-- 			api.tree.open()
+-- 			-- vim.cmd("NvimTreeOpen")
+-- 			-- vim.cmd("wincmd w")
+-- 		end
+-- 	end
+-- end

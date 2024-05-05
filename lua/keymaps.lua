@@ -305,6 +305,8 @@ end, tc(opts, { desc = "Dismiss all visible messages" }))
 -- my mappings for custom commands
 keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
+-- keymap.set("t", "<C-A>", [[<C-\>|]], tc(opts, { desc = "Terminal beginning of line" }))
+-- keymap.set("t", "<C-E>", [[<C-\>$]], tc(opts, { desc = "Terminal beginning of line" }))
 -- ChatGPT mappings
 wk.register({
 	c = {
