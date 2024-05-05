@@ -7,6 +7,7 @@ return {
 			"nvim-lua/popup.nvim",
 			"folke/trouble.nvim",
 			"nvim-telescope/telescope-media-files.nvim",
+			"nvim-telescope/telescope-smart-history.nvim",
 		},
 		config = function(_, opts)
 			local trouble = require("trouble.providers.telescope")
@@ -21,8 +22,16 @@ return {
 					},
 				},
 				defaults = {
+					history = {
+						path = vim.fn.stdpath("data") .. "/telescope_history.sqlite3",
+						limit = 100,
+					},
 					mappings = {
-						i = { ["<c-t>"] = trouble.open_with_trouble },
+						i = {
+							["<c-t>"] = trouble.open_with_trouble,
+							["<A-Down>"] = require("telescope.actions").cycle_history_next,
+							["<A-Up>"] = require("telescope.actions").cycle_history_prev,
+						},
 						n = { ["<c-t>"] = trouble.open_with_trouble },
 					},
 					layout_config = {
@@ -32,10 +41,12 @@ return {
 					},
 				},
 			})
+			require("telescope").load_extension("smart_history")
 			require("telescope").load_extension("fzf")
 			require("telescope").load_extension("prosession")
 			require("telescope").load_extension("media_files")
 			require("telescope").load_extension("noice")
+			require("telescope").load_extension("rest")
 		end,
 		keys = {
 			{ "<leader>ff", "<cmd>Telescope find_files<CR>", desc = "telescope: find_files" },
@@ -47,6 +58,7 @@ return {
 			{ "<leader>fp", "<cmd>Telescope prosession<CR>", desc = "telescope: sessions" },
 			{ "<leader>fi", "<cmd>Telescope media_files<CR>", desc = "telescope: media_files" },
 			{ "<leader>fn", "<cmd>Telescope noice<CR>", desc = "telescope: media_files" },
+			{ "<leader>fr", "<cmd>Telescope rest select_env<CR>", desc = "telescope: select rest env" },
 		},
 	},
 	{ "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
