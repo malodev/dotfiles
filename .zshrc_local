@@ -1,5 +1,11 @@
 export DEFAULT_USER="$USER"
 
+if [[ "$(uname)" == "Darwin" ]]; then
+    export OSX=1
+else
+    export OSX=0
+fi
+
 [[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
 
 gitlab_group_members_id() { [[ $1 != "" ]] && gitlab group_members $1|awk -F "|" '{print $5}'|grep -E '\d+' }
