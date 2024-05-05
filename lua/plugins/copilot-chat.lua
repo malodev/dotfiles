@@ -10,6 +10,9 @@ return {
 			debug = true, -- Enable debugging
 			-- See Configuration section for rest
 		},
+		keys = {
+			{ "<leader>cc", "<cmd>CopilotChatToggle<CR>" },
+		},
 		-- See Commands section for default commands if you want to lazy load on them
 	},
 }
