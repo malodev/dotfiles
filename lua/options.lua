@@ -144,7 +144,8 @@ local nvimTreeFocusOrToggle = function()
 	end
 end
 
-vim.keymap.set("n", "<A-1>", nvimTreeFocusOrToggle)
+-- vim.keymap.set("n", "<leader>tn", nvimTreeFocusOrToggle)
+vim.keymap.set("n", "<A-n>", nvimTreeFocusOrToggle)
 
 -- -- Set vim.g.nvimtree_was_open to 1 when the NvimTree window is opened
 -- vim.cmd("autocmd FileType NvimTree let g:nvimtree_was_open = 1")
