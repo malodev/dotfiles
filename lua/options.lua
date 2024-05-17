@@ -6,6 +6,7 @@ vim.cmd("set ignorecase")
 vim.cmd("set smartcase")
 vim.cmd("set mousemodel=extend")
 
+vim.keymap.set("n", "<Space>", "<Nop>", { silent = true, remap = false })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 vim.opt.clipboard = "unnamedplus" -- use system clipboard
