@@ -29,8 +29,8 @@ return {
 					mappings = {
 						i = {
 							["<c-t>"] = trouble.open_with_trouble,
-							["<A-Down>"] = require("telescope.actions").cycle_history_next,
-							["<A-Up>"] = require("telescope.actions").cycle_history_prev,
+							["<c-j>"] = require("telescope.actions").cycle_history_next,
+							["<c-k>"] = require("telescope.actions").cycle_history_prev,
 						},
 						n = { ["<c-t>"] = trouble.open_with_trouble },
 					},
@@ -57,7 +57,7 @@ return {
 			{ "<leader>pf", "<cmd>Telescope prosession<CR>", desc = "telescope: sessions" },
 			{ "<leader>fp", "<cmd>Telescope prosession<CR>", desc = "telescope: sessions" },
 			{ "<leader>fi", "<cmd>Telescope media_files<CR>", desc = "telescope: media_files" },
-			{ "<leader>fn", "<cmd>Telescope noice<CR>", desc = "telescope: media_files" },
+			{ "<leader>fn", "<cmd>Telescope noice<CR>", desc = "telescope: noice" },
 			{ "<leader>fr", "<cmd>Telescope rest select_env<CR>", desc = "telescope: select rest env" },
 		},
 	},
