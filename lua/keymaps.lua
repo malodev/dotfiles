@@ -308,53 +308,31 @@ keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the li
 -- keymap.set("t", "<C-A>", [[<C-\>|]], tc(opts, { desc = "Terminal beginning of line" }))
 -- keymap.set("t", "<C-E>", [[<C-\>$]], tc(opts, { desc = "Terminal beginning of line" }))
 -- ChatGPT mappings
-wk.register({
-	c = {
-		name = "ChatGPT",
-
-		g = { "<cmd>ChatGPTRun grammar_correction<CR>", "Grammar Correction (GPT)", mode = { "n", "v" } },
-		t = { "<cmd>ChatGPTRun translate<CR>", "Translate (GPT)", mode = { "n", "v" } },
-		k = { "<cmd>ChatGPTRun keywords<CR>", "Keywords (GPT)", mode = { "n", "v" } },
-		d = { "<cmd>ChatGPTRun docstring<CR>", "Docstring (GPT)", mode = { "n", "v" } },
-		a = { "<cmd>ChatGPTRun add_tests<CR>", "Add Tests (GPT)", mode = { "n", "v" } },
-		o = { "<cmd>ChatGPTRun optimize_code<CR>", "Optimize Code (GPT)", mode = { "n", "v" } },
-		s = { "<cmd>ChatGPTRun summarize<CR>", "Summarize (GPT)", mode = { "n", "v" } },
-		f = { "<cmd>ChatGPTRun fix_bugs<CR>", "Fix Bugs (GPT)", mode = { "n", "v" } },
-		x = { "<cmd>ChatGPTRun explain_code<CR>", "Explain Code (GPT)", mode = { "n", "v" } },
-		r = { "<cmd>ChatGPTRun roxygen_edit<CR>", "Roxygen Edit (GPT)", mode = { "n", "v" } },
-		l = { "<cmd>ChatGPTRun code_readability_analysis<CR>", "Code Readability Analysis (GPT)", mode = { "n", "v" } },
-	},
-	b = {
-		name = "Buffers",
-	},
-	d = {
-		name = "Debugging",
-	},
-	f = {
-		name = "Telescope and force",
-	},
-	g = {
-		name = "LSP Go to and git",
-	},
-	h = {
-		name = "Gitsign hunk",
-	},
-	m = {
-		name = "Markdown",
-	},
-	n = {
-		name = "Noice",
-	},
-	p = {
-		name = "Persistence (session)",
-	},
-	r = {
-		name = "Rest client",
-	},
-	t = {
-		name = "Toggles",
-	},
-	x = {
-		name = "Trouble",
+wk.add({
+	{ "<leader>b", group = "Buffers" },
+	{ "<leader>c", group = "ChatGPT" },
+	{ "<leader>d", group = "Debugging" },
+	{ "<leader>f", group = "Telescope and force" },
+	{ "<leader>g", group = "LSP Go to and git" },
+	{ "<leader>h", group = "Gitsign hunk" },
+	{ "<leader>m", group = "Markdown" },
+	{ "<leader>n", group = "Noice" },
+	{ "<leader>p", group = "Persistence (session)" },
+	{ "<leader>r", group = "Rest client" },
+	{ "<leader>t", group = "Toggles" },
+	{ "<leader>x", group = "Trouble" },
+	{
+		mode = { "n", "v" },
+		{ "<leader>ca", "<cmd>ChatGPTRun add_tests<CR>", desc = "Add Tests (GPT)" },
+		{ "<leader>cd", "<cmd>ChatGPTRun docstring<CR>", desc = "Docstring (GPT)" },
+		{ "<leader>cf", "<cmd>ChatGPTRun fix_bugs<CR>", desc = "Fix Bugs (GPT)" },
+		{ "<leader>cg", "<cmd>ChatGPTRun grammar_correction<CR>", desc = "Grammar Correction (GPT)" },
+		{ "<leader>ck", "<cmd>ChatGPTRun keywords<CR>", desc = "Keywords (GPT)" },
+		{ "<leader>cl", "<cmd>ChatGPTRun code_readability_analysis<CR>", desc = "Code Readability Analysis (GPT)" },
+		{ "<leader>co", "<cmd>ChatGPTRun optimize_code<CR>", desc = "Optimize Code (GPT)" },
+		{ "<leader>cr", "<cmd>ChatGPTRun roxygen_edit<CR>", desc = "Roxygen Edit (GPT)" },
+		{ "<leader>cs", "<cmd>ChatGPTRun summarize<CR>", desc = "Summarize (GPT)" },
+		{ "<leader>ct", "<cmd>ChatGPTRun translate<CR>", desc = "Translate (GPT)" },
+		{ "<leader>cx", "<cmd>ChatGPTRun explain_code<CR>", desc = "Explain Code (GPT)" },
 	},
 }, { prefix = "<leader>" })
