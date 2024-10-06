@@ -113,7 +113,7 @@ return {
 			ensure_installed = {
 				"html",
 				"tailwindcss",
-				"tsserver",
+				"ts_ls",
 				"eslint",
 				"emmet_language_server",
 				-- "dockerls",
@@ -149,7 +149,7 @@ return {
 			local servers = {
 				"html",
 				"tailwindcss",
-				"tsserver",
+				"ts_ls",
 				"eslint",
 				"emmet_language_server",
 				"lua_ls",
