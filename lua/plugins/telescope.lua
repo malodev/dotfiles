@@ -10,7 +10,11 @@ return {
 			"nvim-telescope/telescope-smart-history.nvim",
 		},
 		config = function(_, opts)
-			local trouble = require("trouble.sources.telescope")
+			local open_with_trouble = require("trouble.sources.telescope").open
+
+			-- Use this to add more results without clearing the trouble list
+			-- local add_to_trouble = require("trouble.sources.telescope").add
+
 			require("telescope").setup({
 				extensions = {
 					media_files = {
@@ -28,11 +32,11 @@ return {
 					},
 					mappings = {
 						i = {
-							["<c-t>"] = trouble.open,
+							["<c-t>"] = open_with_trouble,
 							["<c-j>"] = require("telescope.actions").cycle_history_next,
 							["<c-k>"] = require("telescope.actions").cycle_history_prev,
 						},
-						n = { ["<c-t>"] = trouble.open },
+						n = { ["<c-t>"] = open_with_trouble },
 					},
 					layout_config = {
 						horizontal = {
