@@ -1,7 +1,10 @@
 -- palenight
 return {
 	"nvim-lualine/lualine.nvim",
-	dependencies = { "nvim-tree/nvim-web-devicons" },
+	dependencies = {
+		"nvim-tree/nvim-web-devicons",
+		"AndreM222/copilot-lualine",
+	},
 	config = function()
 		require("lualine").setup({
 			options = {
@@ -18,11 +21,11 @@ return {
 				lualine_b = { "branch" },
 				lualine_c = {
 					"filename",
-					{
-						require("noice").api.statusline.mode.get,
-						cond = require("noice").api.statusline.mode.has,
-						color = { fg = "#ff9e64" },
-					},
+					-- {
+					-- 	require("noice").api.statusline.mode.get,
+					-- 	cond = require("noice").api.statusline.mode.has,
+					-- 	color = { fg = "#ff9e64" },
+					-- },
 				},
 				lualine_x = {
 					{
@@ -30,6 +33,7 @@ return {
 						icon = "",
 						fg = "#428890",
 					},
+					"copilot",
 					"encoding",
 					"fileformat",
 					"filetype",
@@ -41,7 +45,7 @@ return {
 				lualine_a = { "mode" },
 				lualine_b = { "branch" },
 				lualine_c = { "filename" },
-				lualine_x = { "encoding", "fileformat", "filetype" },
+				lualine_x = { "copilot", "encoding", "fileformat", "filetype" },
 				lualine_y = { "progress" },
 				lualine_z = { "location" },
 			},
