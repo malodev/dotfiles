@@ -3,6 +3,6 @@ return {
 		chatgpt = false,
 		neogit = true,
 		telescope_tabs = true,
-		bufferline = false,
+		bufferline = true,
 	},
 }
