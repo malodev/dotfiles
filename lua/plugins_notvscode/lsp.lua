@@ -101,6 +101,7 @@ return {
 				ensure_installed = {
 					"stylua",
 					"prettierd",
+					"black",
 				},
 			})
 		end,
@@ -128,7 +129,6 @@ return {
 				-- "svelte",
 				-- "taplo",
 				-- "sqls",
-				"black",
 				"basedpyright",
 			},
 		},
