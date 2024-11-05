@@ -11,7 +11,21 @@ if not vim.loop.fs_stat(lazypath) then
 	})
 end
 vim.opt.rtp:prepend(lazypath)
-require("lazy").setup("plugins", {
+require("lazy").setup({
+	{
+		import = "plugins_notvscode",
+		cond = function()
+			return not vim.g.vscode
+		end,
+	},
+	{ import = "plugins_always", cond = true },
+	{
+		import = "plugins_vscode",
+		cond = function()
+			return vim.g.vscode
+		end,
+	},
+}, {
 	rocks = {
 		enable = true, -- Enable LuaRocks support
 		install = true, -- Automatically install missing rocks
@@ -20,4 +34,5 @@ require("lazy").setup("plugins", {
 		disable = false, -- Do not disable LuaRocks
 		hererocks = true, -- Enable Hererocks to manage Lua dependencies
 	},
-})
+}
+)

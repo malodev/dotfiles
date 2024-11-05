@@ -128,7 +128,8 @@ return {
 				-- "svelte",
 				-- "taplo",
 				-- "sqls",
-				-- "pyright",
+				"black",
+				"basedpyright",
 			},
 		},
 	},
@@ -137,6 +138,11 @@ return {
 		lazy = false,
 		config = function()
 			local capabilities = require("cmp_nvim_lsp").default_capabilities()
+			capabilities.textDocument.foldingRange = {
+				dynamicRegistration = false,
+				lineFoldingOnly = true,
+			}
+
 			-- emmet_language_server
 			-- htmx
 			-- intelephense
@@ -156,6 +162,7 @@ return {
 				"jsonls",
 				"biome",
 				"gopls",
+				"basedpyright",
 			}
 			for _, lsp in ipairs(servers) do
 				lspconfig[lsp].setup({
@@ -258,5 +265,8 @@ return {
 			)
 			vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Move to the next diagnostic" })
 		end,
+	},
+	{
+		"nvimdev/lspsaga.nvim",
 	},
 }

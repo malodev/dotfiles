@@ -1,6 +1,6 @@
 return {
 	is_enabled = {
-		chatgpt = false,
+		chatgpt = true,
 		neogit = true,
 		telescope_tabs = true,
 		bufferline = true,

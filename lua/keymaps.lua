@@ -1,24 +1,6 @@
 local opts = { noremap = true, silent = true }
 local keymap = vim.keymap
 
-local function tc(t1, t2)
-	-- Create a new table to avoid modifying the original tables
-	local mergedTable = {}
-
-	-- First, copy all the key-value pairs from the first table to the mergedTable
-	for key, value in pairs(t1) do
-		mergedTable[key] = value
-	end
-
-	-- Then, iterate over the second table and add its key-value pairs to the mergedTable
-	-- If a key already exists, its value will be overwritten by the value from t2
-	for key, value in pairs(t2) do
-		mergedTable[key] = value
-	end
-
-	return mergedTable
-end
-
 -- Define the function to delete the current file with confirmation
 function _G.delete_current_file()
 	-- Get the name of the current file
@@ -55,24 +37,6 @@ local function tc(t1, t2)
 	end
 
 	return mergedTable
-end
-
--- Define the function to delete the current file with confirmation
-function _G.delete_current_file()
-	-- Get the name of the current file
-	local file = vim.fn.expand("%")
-	-- Ask for confirmation
-	local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
-
-	if confirm == 1 then
-		-- If confirmed, delete the file
-		os.remove(file)
-		-- Close the buffer without saving
-		vim.api.nvim_command("bdelete!")
-		print("File deleted: " .. file)
-	else
-		print("Operation cancelled.")
-	end
 end
 
 keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
@@ -276,8 +240,6 @@ end, tc(opts, { desc = "Enable noice" }))
 -- my mappings for custom commands
 keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
--- WhichKey mappings
-local wk = require("which-key")
 -- noice mappings
 keymap.set("n", "<leader>nl", function()
 	require("noice").cmd("last")
@@ -308,31 +270,35 @@ keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the li
 -- keymap.set("t", "<C-A>", [[<C-\>|]], tc(opts, { desc = "Terminal beginning of line" }))
 -- keymap.set("t", "<C-E>", [[<C-\>$]], tc(opts, { desc = "Terminal beginning of line" }))
 -- ChatGPT mappings
-wk.add({
-	{ "<leader>b", group = "Buffers" },
-	{ "<leader>c", group = "ChatGPT" },
-	{ "<leader>d", group = "Debugging" },
-	{ "<leader>f", group = "Telescope and force" },
-	{ "<leader>g", group = "LSP Go to and git" },
-	{ "<leader>h", group = "Gitsign hunk" },
-	{ "<leader>m", group = "Markdown" },
-	{ "<leader>n", group = "Noice" },
-	{ "<leader>p", group = "Persistence (session)" },
-	{ "<leader>r", group = "Rest client" },
-	{ "<leader>t", group = "Toggles" },
-	{ "<leader>x", group = "Trouble" },
-	{
-		mode = { "n", "v" },
-		{ "<leader>ca", "<cmd>ChatGPTRun add_tests<CR>", desc = "Add Tests (GPT)" },
-		{ "<leader>cd", "<cmd>ChatGPTRun docstring<CR>", desc = "Docstring (GPT)" },
-		{ "<leader>cf", "<cmd>ChatGPTRun fix_bugs<CR>", desc = "Fix Bugs (GPT)" },
-		{ "<leader>cg", "<cmd>ChatGPTRun grammar_correction<CR>", desc = "Grammar Correction (GPT)" },
-		{ "<leader>ck", "<cmd>ChatGPTRun keywords<CR>", desc = "Keywords (GPT)" },
-		{ "<leader>cl", "<cmd>ChatGPTRun code_readability_analysis<CR>", desc = "Code Readability Analysis (GPT)" },
-		{ "<leader>co", "<cmd>ChatGPTRun optimize_code<CR>", desc = "Optimize Code (GPT)" },
-		{ "<leader>cr", "<cmd>ChatGPTRun roxygen_edit<CR>", desc = "Roxygen Edit (GPT)" },
-		{ "<leader>cs", "<cmd>ChatGPTRun summarize<CR>", desc = "Summarize (GPT)" },
-		{ "<leader>ct", "<cmd>ChatGPTRun translate<CR>", desc = "Translate (GPT)" },
-		{ "<leader>cx", "<cmd>ChatGPTRun explain_code<CR>", desc = "Explain Code (GPT)" },
-	},
-}, { prefix = "<leader>" })
+if not vim.g.vscode then
+	-- WhichKey mappings
+	local wk = require("which-key")
+	wk.add({
+		{ "<leader>b", group = "Buffers" },
+		{ "<leader>c", group = "ChatGPT" },
+		{ "<leader>d", group = "Debugging" },
+		{ "<leader>f", group = "Telescope and force" },
+		{ "<leader>g", group = "LSP Go to and git" },
+		{ "<leader>h", group = "Gitsign hunk" },
+		{ "<leader>m", group = "Markdown" },
+		{ "<leader>n", group = "Noice" },
+		{ "<leader>p", group = "Persistence (session)" },
+		{ "<leader>r", group = "Rest client" },
+		{ "<leader>t", group = "Toggles" },
+		{ "<leader>x", group = "Trouble" },
+		{
+			mode = { "n", "v" },
+			{ "<leader>ca", "<cmd>ChatGPTRun add_tests<CR>", desc = "Add Tests (GPT)" },
+			{ "<leader>cd", "<cmd>ChatGPTRun docstring<CR>", desc = "Docstring (GPT)" },
+			{ "<leader>cf", "<cmd>ChatGPTRun fix_bugs<CR>", desc = "Fix Bugs (GPT)" },
+			{ "<leader>cg", "<cmd>ChatGPTRun grammar_correction<CR>", desc = "Grammar Correction (GPT)" },
+			{ "<leader>ck", "<cmd>ChatGPTRun keywords<CR>", desc = "Keywords (GPT)" },
+			{ "<leader>cl", "<cmd>ChatGPTRun code_readability_analysis<CR>", desc = "Code Readability Analysis (GPT)" },
+			{ "<leader>co", "<cmd>ChatGPTRun optimize_code<CR>", desc = "Optimize Code (GPT)" },
+			{ "<leader>cr", "<cmd>ChatGPTRun roxygen_edit<CR>", desc = "Roxygen Edit (GPT)" },
+			{ "<leader>cs", "<cmd>ChatGPTRun summarize<CR>", desc = "Summarize (GPT)" },
+			{ "<leader>ct", "<cmd>ChatGPTRun translate<CR>", desc = "Translate (GPT)" },
+			{ "<leader>cx", "<cmd>ChatGPTRun explain_code<CR>", desc = "Explain Code (GPT)" },
+		},
+	}, { prefix = "<leader>" })
+end
