@@ -189,6 +189,7 @@ return {
 				"gopls",
 				"basedpyright",
 				"marksman",
+				"astro",
 			}
 			for _, lsp in ipairs(servers) do
 				lspconfig[lsp].setup({

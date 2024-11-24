@@ -22,6 +22,7 @@ return {
 				"graphql",
 				"json",
 				"dockerfile",
+				"astro",
 			},
 			sync_install = false,
 			highlight = { enable = true },
