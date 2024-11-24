@@ -1,0 +1,357 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+palette = "catppuccin_mocha"
+right_format = """$battery $time"""
+# Starship modules
+[character]
+# Note the use of Catppuccin color 'peach'
+#success_symbol = "[[󰄛](green) ❯](blue)"
+#error_symbol = "[[󰄛](red) ❯](blue)"
+#vimcmd_symbol = "[󰄛 ❮](subtext1)" # For use with zsh-vi-mode
+success_symbol = '[](bold fg:green)'
+error_symbol = '[](bold fg:red)'
+vimcmd_symbol = '[](bold fg:green)'
+vimcmd_replace_one_symbol = '[](bold fg:purple)'
+vimcmd_replace_symbol = '[](bold fg:purple)'
+vimcmd_visual_symbol = '[](bold fg:lavender)'
+
+[cmd_duration]
+style = "surface2"
+format = '[\($duration\)]($style) '
+
+[git_branch]
+symbol = " "
+style = "bold mauve"
+format = '[$symbol$branch(:$remote_branch)]($style) '
+
+[git_status]
+style = "lavender"
+format = '([\[$all_status$ahead_behind\]]($style) )'
+conflicted = '[🏳](red)'
+#up_to_date = '[✓](green)'
+untracked = '${count}🤷'
+stashed = '${count}📦'
+modified = '${count}📝'
+staged = '[++\($count\)](green)'
+renamed = '${count}󰾵'
+deleted = '[${count}🗑](lavender)'
+ahead = '⇡${count}'
+diverged = '⇕⇡${ahead_count}⇣${behind_count}'
+behind = '⇣${count}'
+
+
+[directory]
+read_only = " 󰌾"
+#truncation_length = 4
+style = "bold lavender"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = "󰝚 "
+"Pictures" = " "
+"Develop" = "󰲋 "
+
+[palettes.catppuccin_mocha]
+rosewater = "#f5e0dc"
+flamingo = "#f2cdcd"
+pink = "#f5c2e7"
+mauve = "#cba6f7"
+red = "#f38ba8"
+maroon = "#eba0ac"
+peach = "#fab387"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+teal = "#94e2d5"
+sky = "#89dceb"
+sapphire = "#74c7ec"
+blue = "#89b4fa"
+lavender = "#b4befe"
+text = "#cdd6f4"
+subtext1 = "#bac2de"
+subtext0 = "#a6adc8"
+overlay2 = "#9399b2"
+overlay1 = "#7f849c"
+overlay0 = "#6c7086"
+surface2 = "#585b70"
+surface1 = "#45475a"
+surface0 = "#313244"
+base = "#1e1e2e"
+mantle = "#181825"
+crust = "#11111b"
+
+format = '$all'
+
+[battery]
+format = '[$symbol$percentage]($style)'
+full_symbol = '🔋'
+charging_symbol = '⚡️'
+#unknown_symbol = '🤷'
+unknown_symbol = '󰚥'
+empty_symbol = '💀'
+
+#  󰁺  󰁻  󰁼  󰁽  󰁾󱊢  󰁿  󰂀  󰂁  󰂂  󰁹 
+#  󰢜  󰂆  󰂇  󰂈  󰂈󱊥  󰢝  󰂉  󰂊  󰂋  󰂅
+# 10 20 30 40 50 60 70 80 90 100
+[[battery.display]] # 'bold red' style and discharging_symbol when capacity is between 0% and 10%
+threshold = 10
+style = 'bold red'
+charging_symbol = '🪫'
+discharging_symbol = '󱟥'
+
+[[battery.display]] # capacity between 10% and 20%
+threshold = 20
+discharging_symbol = '󰁺'
+charging_symbol = '󰢜'
+
+[[battery.display]] # capacity between 20% and 30%
+threshold = 30
+discharging_symbol = '󰁻'
+charging_symbol = '󰂇'
+style = 'bold peach'
+
+[[battery.display]] # capacity between 30% and 40%
+threshold = 40
+discharging_symbol = '󰁼'
+charging_symbol = '󰂇'
+style = 'yellow'
+
+[[battery.display]] # capacity between 40% and 50%
+threshold = 50
+discharging_symbol = '󰁽'
+charging_symbol = '󰂈'
+style = 'yellow'
+
+[[battery.display]] # capacity between 50% and 60%
+threshold = 60
+discharging_symbol = '󱊢'
+charging_symbol = '󱊥'
+style = 'green'
+
+[[battery.display]] # capacity between 60% and 70%
+threshold = 70
+discharging_symbol = '󰁿'
+charging_symbol = '󰢝 '
+style = 'green'
+
+[[battery.display]] # capacity between 70% and 80%
+threshold = 80
+discharging_symbol = '󰂀 '
+charging_symbol = '󰂉'
+style = 'green'
+
+[[battery.display]] # capacity between 80% and 90%
+threshold = 90
+discharging_symbol = '󰂁'
+charging_symbol = '󰂊'
+style = 'green'
+
+[[battery.display]] # capacity between 90% and 99%
+threshold = 99 
+discharging_symbol = '󰂂'
+charging_symbol = '󰂋'
+style = 'green'
+
+
+[[battery.display]]  # capacity between 99% and 100%
+threshold = 100
+discharging_symbol = '󰁹'
+charging_symbol = '󰂅'
+style = 'green'
+
+[username]
+disabled = false
+show_always = true
+style_user = "bg:base fg:lavender"
+style_root = "bold bg:base fg:red"
+format = '[$user]($style)@'
+
+[time]
+disabled = false
+style = "surface2"
+#style = "bg:peach"
+#format = '🕙[$time]($style) '
+format = '[$time]($style) '
+#time_format = '%T'
+time_format = "%R"
+#format = '[[  $time ](fg:mantle bg:purple)]($style)'
+
+
+# Preset nerd fonts symbols
+[aws]
+symbol = "  "
+
+[buf]
+symbol = " "
+
+[c]
+symbol = " "
+
+[conda]
+symbol = " "
+
+[crystal]
+symbol = " "
+
+[dart]
+symbol = " "
+
+[docker_context]
+symbol = " "
+
+[elixir]
+symbol = " "
+
+[elm]
+symbol = " "
+
+[fennel]
+symbol = " "
+
+[fossil_branch]
+symbol = " "
+
+[git_commit]
+tag_symbol = '  '
+
+[golang]
+symbol = " "
+
+[guix_shell]
+symbol = " "
+
+[haskell]
+symbol = " "
+
+[haxe]
+symbol = " "
+
+[hg_branch]
+symbol = " "
+
+[hostname]
+ssh_only = false
+ssh_symbol = " "
+style = "surface2"
+format='[$ssh_symbol$hostname]($style) '
+
+[java]
+symbol = " "
+
+[julia]
+symbol = " "
+
+[kotlin]
+symbol = " "
+
+[lua]
+symbol = " "
+format = '[$symbol$version]($style) '
+
+[memory_usage]
+symbol = "󰍛 "
+
+[meson]
+symbol = "󰔷 "
+
+[nim]
+symbol = "󰆥 "
+
+[nix_shell]
+symbol = " "
+
+[nodejs]
+symbol = ""
+style = "mauve"
+format = '[$symbol]($style)[$version](surface2) '
+
+[ocaml]
+symbol = " "
+
+[os]
+disabled = false
+
+[os.symbols]
+Alpaquita = " "
+Alpine = " "
+AlmaLinux = " "
+Amazon = " "
+Android = " "
+Arch = " "
+Artix = " "
+CentOS = " "
+Debian = " "
+DragonFly = " "
+Emscripten = " "
+EndeavourOS = " "
+Fedora = " "
+FreeBSD = " "
+Garuda = "󰛓 "
+Gentoo = " "
+HardenedBSD = "󰞌 "
+Illumos = "󰈸 "
+Kali = " "
+Linux = " "
+Mabox = " "
+Macos = " "
+Manjaro = " "
+Mariner = " "
+MidnightBSD = " "
+Mint = " "
+NetBSD = " "
+NixOS = " "
+OpenBSD = "󰈺 "
+openSUSE = " "
+OracleLinux = "󰌷 "
+Pop = " "
+Raspbian = " "
+Redhat = " "
+RedHatEnterprise = " "
+RockyLinux = " "
+Redox = "󰀘 "
+Solus = "󰠳 "
+SUSE = " "
+Ubuntu = " "
+Unknown = " "
+Void = " "
+Windows = "󰍲 "
+
+[package]
+symbol = "󰏗"
+style = "lavender"
+format = '[$symbol]($style)[$version](surface2) '
+
+[perl]
+symbol = " "
+
+[php]
+symbol = " "
+
+[pijul_channel]
+symbol = " "
+
+[python]
+symbol = " "
+
+[rlang]
+symbol = "󰟔 "
+
+[ruby]
+symbol = " "
+
+[rust]
+symbol = "󱘗 "
+
+[scala]
+symbol = " "
+
+[swift]
+symbol = " "
+
+[zig]
+symbol = " "
+
+[gradle]
+symbol = " "
