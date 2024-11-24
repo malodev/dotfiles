@@ -118,13 +118,17 @@ keymap.set("n", "zz", "zz:noh<CR>", opts)
 -- toggle transparency
 -- opts["desc"] = "Toggle transparency"
 -- keymap.set("n", "<C-t>", ":TransparentToggle<CR>", opts)
-opts.desc = nil
 
 -- open up Themery
 -- keymap.set('n', '<leader>t', ':Themery<CR>', opts)
 
 -- replace current word
-keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
+keymap.set(
+	"n",
+	"<leader>s",
+	[[:%s/<C-r><C-w>/<C-r><C-w>/gI<Left><Left><Left>]],
+	tc(opts, { desc = "Search and replace current word" })
+)
 
 -- make current file an executable
 -- keymap.set('n', '<leader>x', '<cmd>!chmod +x %<CR>', opts)
@@ -199,7 +203,6 @@ keymap.set("i", "<A-K>", ":m .-2<CR>==gi")
 
 opts["desc"] = "Search the selected text"
 keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
-opts.desc = nil
 
 keymap.set("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
 keymap.set("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
