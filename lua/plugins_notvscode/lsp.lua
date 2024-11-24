@@ -149,11 +149,13 @@ return {
 				-- "intelephense",
 				-- "yamlls",
 				"marksman",
+				"remark_ls",
 				-- "bashls",
 				-- "svelte",
 				-- "taplo",
 				-- "sqls",
 				"basedpyright",
+				"harper_ls",
 			},
 		},
 	},
@@ -175,7 +177,6 @@ return {
 			--
 			local lspconfig = require("lspconfig")
 
-			-- local servers = { "html", "tailwindcss", "tsserver", "eslint", "emmet_language_server", "dockerls", "docker_compose_language_service", "lua_ls", "jsonls", "biome", "intelephense", "yamlls", "marksman", "bashls", "svelte", "taplo", "sqls", "pyright", "clangd", "gopls", "rust_analyzer", "vimls" }
 			local servers = {
 				"html",
 				"tailwindcss",
@@ -187,12 +188,20 @@ return {
 				"biome",
 				"gopls",
 				"basedpyright",
+				"marksman",
 			}
 			for _, lsp in ipairs(servers) do
 				lspconfig[lsp].setup({
 					capabilities = capabilities,
 				})
 			end
+			-- lspconfig.harper_ls.setup({
+			-- 	settings = {
+			-- 		["harper-ls"] = {
+			-- 			userDictPath = "~/.local/share/dict.txt",
+			-- 		},
+			-- 	},
+			-- })
 			---
 			-- UI settings
 			---
