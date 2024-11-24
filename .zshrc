@@ -30,18 +30,9 @@ zplug "zsh-users/zsh-history-substring-search"
 
 # Use the package as a command
 # And accept glob patterns (e.g., brace, wildcard, ...)
-zplug "Jxck/dotfiles", as:command, use:"bin/{histuniq,color}"
-zplug "djui/alias-tips"
 zplug "b4b4r07/enhancd", use:enhancd.sh
 
 zplug "zsh-users/zsh-syntax-highlighting", defer:2
-
-#POWERLEVEL9K_MODE='awesome-fontconfig'
-#zplug "bhilburn/powerlevel9k", as:theme, use:powerlevel9k.zsh-theme
-zplug "romkatv/powerlevel10k", as:theme, depth:1
-
-zplug "plugins/git",   from:oh-my-zsh
-zplug "plugins/tmux",   from:oh-my-zsh
 
 zplug check || zplug install
 
@@ -49,10 +40,13 @@ zplug check || zplug install
 zplug load
 # END Zplug
 
+eval "$(starship init zsh)"
+# tabtab source for serverless package
+# uninstall by removing these lines or running `tabtab uninstall serverless`
+[[ -f /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/serverless.zsh ]] && . /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/serverless.zsh
+# tabtab source for sls package
+# uninstall by removing these lines or running `tabtab uninstall sls`
+[[ -f /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh ]] && . /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh
+
 source "$HOME/.zshrc_local"
 
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-[[ ! -f ~/.p10k_malo.zsh ]] || source ~/.p10k_malo.zsh
-[[ ! -f ~/.p10k_macair.zsh ]] || source ~/.p10k_macair.zsh
-[[ ! -f ~/.p10k_ubu_oracle.zsh ]] || source ~/.p10k_ubu_oracle.zsh
