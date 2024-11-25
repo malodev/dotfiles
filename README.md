@@ -3,7 +3,7 @@
 Clone the repo using:
 
 ```sh
-clone https://github.com/malodev/dotfiles ~/.dotfiles
+git clone https://github.com/malodev/dotfiles ~/.dotfiles
 ```
 
 The configuration files in this repo are using [GNU Stow](https://www.gnu.org/software/stow/)
