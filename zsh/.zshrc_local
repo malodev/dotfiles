@@ -90,7 +90,7 @@ setopt HIST_REDUCE_BLANKS
 bindkey "^[[A" history-substring-search-up
 bindkey "^[[B" history-substring-search-down
 
-
+echo "🛠️zshrc_local loaded."
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle

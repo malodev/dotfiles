@@ -52,5 +52,6 @@ bindkey -v # vi mode
 bindkey ^R history-incremental-search-backward # rebind ^R 
 bindkey ^S history-incremental-search-forward # rebind ^S
 
+echo "🛠️zshrc loaded."
 source "$HOME/.zshrc_local"
 
