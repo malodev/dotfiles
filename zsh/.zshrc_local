@@ -1,0 +1,96 @@
+export DEFAULT_USER="$USER"
+
+if [[ "$(uname)" == "Darwin" ]]; then
+    export OSX=1
+else
+    export OSX=0
+fi
+
+[[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
+
+gitlab_group_members_id() { [[ $1 != "" ]] && gitlab group_members $1|awk -F "|" '{print $5}'|grep -E '\d+' }
+gitlab_users() {
+        tmpfile=$(mktemp /tmp/gitlab_users.XXXXXX)
+        exec 3>"$tmpfile"
+        exec 4<"$tmpfile"
+        rm "$tmpfile"
+    gitlab users "{per_page: 100, page: 1}"|grep -E 'active' >& 3
+    gitlab users "{per_page: 100, page: 2}"|grep -E 'active' >& 3
+
+        if [[ $1 != "" ]]; then
+                cat <& 4 >$1
+    else
+                cat <& 4
+    fi
+}
+gitlab_users_match() {
+        if [[ $1 != "" ]]; then
+                awk -F '|' 'NR==FNR {seen[$1]=1; next} gsub(/ /, "", $10) && $10!="" && seen[$10]==1 { print $12}' $1 <(gitlab_users)
+        fi
+}
+# group_id=$(gitlab create_group "4bi-2016" "4bi-2016" "{ visibility_level: 0 }" | tail -2|head -1|awk -F '|' '{print $4}')
+# for i in $(gitlab_users_match 4bi.txt); do gitlab add_group_member 225 $i 30; done
+#
+export GITLAB_API_PRIVATE_TOKEN=Q7oVX1DkeLBsfCRJX1qr
+export GITLAB_API_ENDPOINT=http://gitlab.marconirovereto.it/api/v3
+alias git_for_cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias cfglazy='lazygit --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+alias cfgls='config ls-tree --full-tree --name-only -r HEAD'
+
+totp() { 
+	oathtool --totp -b $(<~/".totp_${1:-coinbase}") | pbcopy; 
+}
+
+
+if [[ "$OSX" == "1" ]]; then
+   export CLICOLOR=1
+   export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
+else
+  eval "`dircolors -b`"
+  alias ls='ls --color=auto'
+fi
+
+alias l='ls -al'
+
+# Radicle is a peer-to-peer stack for code collaboration https://docs.radicle.xyz/ 
+export PATH="$HOME/.radicle/bin:$PATH"
+
+
+# history setting
+export HISTFILE=~/.zsh_history
+
+# In bash, Setting the HISTFILESIZE and HISTSIZE variables to an empty string
+# makes the bash history size unlimited. However, it’s not possible to set the
+# history to an unlimited size in zsh(theoretically, at least). From an zsh
+# mailing list, it appears the max history size can be LONG_MAX from limits.h
+# header file. That has a (really huge) value of 9223372036854775807, which
+# should be enough to store trillions of commands. 
+export HISTFILESIZE=9223372036854775807
+export HISTSIZE=9223372036854775807
+export SAVEHIST=9223372036854775807
+
+setopt APPEND_HISTORY
+setopt INC_APPEND_HISTORY
+setopt SHARE_HISTORY
+
+# records the timestamp of each command. To view time: history -E
+export HISTTIMEFORMAT="[%F %T] "
+setopt EXTENDED_HISTORY
+
+setopt HIST_FIND_NO_DUPS
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_IGNORE_SPACE
+setopt HIST_SAVE_NO_DUPS
+setopt HIST_VERIFY
+setopt HIST_REDUCE_BLANKS
+
+
+bindkey "^[[A" history-substring-search-up
+bindkey "^[[B" history-substring-search-down
+
+
+[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
+[[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
+[[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
