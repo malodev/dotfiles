@@ -103,6 +103,7 @@ path add /usr/local/bin
 # source ($nu.default-config-dir | path join 'custom.nu')
 mkdir ~/.cache/starship
 starship init nu | save -f ~/.cache/starship/init.nu
+zoxide init nushell | save -f ~/.zoxide.nu
 
 $env.EDITOR = '/opt/homebrew/bin/nvim' 
 $env.CARAPACE_BRIDGES = 'zsh,fish,bash,inshellisense' # optional
