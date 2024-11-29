@@ -90,6 +90,17 @@ setopt HIST_REDUCE_BLANKS
 bindkey "^[[A" history-substring-search-up
 bindkey "^[[B" history-substring-search-down
 
+
+# ~/.zshrc
+export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense' # optional
+zstyle ':completion:*' format $'\e[2;37mCompleting %d\e[m'
+source <(carapace _carapace)
+
+# Order of groups can be configured with the zstyle [group-order](https://zsh.sourceforge.io/Guide/zshguide06.html).
+zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'external commands'
+
+
+
 echo "🛠️zshrc_local loaded."
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
