@@ -141,9 +141,9 @@ let light_theme = {
 }
 
 # External completer example
-# let carapace_completer = {|spans|
-#     carapace $spans.0 nushell ...$spans | from json
-# }
+let carapace_completer = {|spans|
+     carapace $spans.0 nushell ...$spans | from json
+}
 
 # The default config record. This is where much of your global configuration is setup.
 $env.config = {
@@ -911,6 +911,18 @@ alias v = nvim
 alias t = tmux
 alias tl = tmux list-sessions
 alias ts = tmux new-session -A -s 
+
+# Check the operating system
+let is_macos = ( (^uname -s) == "Darwin" )
+let is_linux = ( (^uname -s) == "Linux" )
+# Check if the current user is root
+if $is_macos {
+  alias as = aerospace
+  def ff [] {
+    aerospace list-windows --all | fzf --bind 'enter:execute(bash -c "aerospace focus --window-id {1}")+abort'
+  }
+}
+
 
 use ~/.cache/starship/init.nu
 source ~/.cache/carapace/init.nu
