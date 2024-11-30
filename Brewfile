@@ -1,10 +1,15 @@
+tap "homebrew/bundle"
+tap "homebrew/cask"
+
+# Apps
+brew "utf8proc"
 brew "neovim"
+
 
 # command line tools
 brew "fzf"
 brew "ripgrep"
 brew "lsd"
-brew "exa"
 brew "bat"
 brew "fd"
 brew "procs"
