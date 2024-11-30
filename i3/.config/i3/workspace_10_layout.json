@@ -1,0 +1,68 @@
+{
+    "border": "pixel",
+    "floating": "auto_off",
+    "layout": "splitv",
+    "marks": [],
+    "percent": 0.5,
+    "type": "con",
+    "nodes": [
+        {
+            "border": "pixel",
+            "current_border_width": 1,
+            "floating": "auto_off",
+            "geometry": {
+               "height": 740,
+               "width": 1012,
+               "x": 0,
+               "y": 0
+            },
+            "marks": [],
+            "name": "calibre — || EN-Non-Fiction ||",
+            "percent": null,
+            "swallows": [
+               {
+               "class": "^calibre$",
+               "instance": "^calibre\\-gui$",
+               "machine": "^malos\\-main\\-server$",
+               "title": "^calibre\\ \\—\\ \\|\\|\\ EN\\-Non\\-Fiction\\ \\|\\|$"
+               }
+            ],
+            "type": "con"
+        }
+    ]
+}
+
+{
+    "border": "pixel",
+    "floating": "auto_off",
+    "layout": "splitv",
+    "marks": [],
+    "percent": 0.5,
+    "type": "con",
+    "nodes": [
+        {
+            "border": "pixel",
+            "current_border_width": 1,
+            "floating": "auto_off",
+            "geometry": {
+               "height": 2036,
+               "width": 3760,
+               "x": 40,
+               "y": 40
+            },
+            "marks": [],
+            "name": "WhatsApp - Google Chrome",
+            "percent": null,
+            "swallows": [
+               {
+               "class": "^Google\\-chrome$",
+               "instance": "^google\\-chrome$",
+               "machine": "^malos\\-main\\-server$",
+               "title": "^WhatsApp\\ \\-\\ Google\\ Chrome$",
+               "window_role": "^browser$"
+               }
+            ],
+            "type": "con"
+        }
+    ]
+}
