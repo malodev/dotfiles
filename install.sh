@@ -14,7 +14,7 @@ brew upgrade
 # install all our dependencies with bundle
 brew bundle
 brew bundle --file=~/dotfiles/Brewfile
-
+brew install -q "font-symbols-only-nerd-font"
 # Check for Kitty.app and install if we don't have it
 # if test ! $(which kitty); then
 #   curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
