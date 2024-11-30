@@ -1,6 +1,4 @@
 tap "homebrew/bundle"
-tap "homebrew/cask"
-
 # Apps
 brew "utf8proc"
 brew "neovim"
@@ -21,9 +19,13 @@ brew "starship"
 brew "zsh"
 brew "nushell"
 
+# Apps
+cask "kitty"
+
 # Mac specific apps 
 # tap "FelixKratz/formulae"
 # brew "sketchybar"
+cask "font-hack-nerd-font" if OS.mac?
 brew "FelixKratz/formulae/sketchybar" if OS.mac?
 cask "nikitabobko/tap/aerospace" if OS.mac?
 

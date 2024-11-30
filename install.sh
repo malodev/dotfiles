@@ -16,9 +16,9 @@ brew bundle
 brew bundle --file=~/dotfiles/Brewfile
 
 # Check for Kitty.app and install if we don't have it
-if test ! $(which kitty); then
-  curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
-fi
+# if test ! $(which kitty); then
+#   curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
+# fi
 
 stow nvim
 stow kitty
