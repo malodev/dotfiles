@@ -6,12 +6,13 @@ after-login-command = []
 # You can use it to add commands that run after AeroSpace startup.
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
-after-startup-command = ['exec-and-forget sketchybar']
+after-startup-command = ['exec-and-forget /opt/homebrew/bin/sketchybar',
+  'exec-and-forget /opt/homebrew/bin/borders active_color=0xffb4befe inactive_color=0xff585b70 width=5.0']
 
 # Notify Sketchybar about workspace change
 exec-on-workspace-change = ['/bin/bash', '-c',
   'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE',
-  'exec-and-forget borders active_color=0xffe1e3e4 inactive_color=0xff494d64 width=5.0'
+  'exec-and-forget /opt/homebrew/bin/borders active_color=0xffb4befe inactive_color=0xff585b70 width=5.0'
 ]
 
 # Start AeroSpace at login
@@ -219,10 +220,12 @@ alt-shift-semicolon = 'mode service'
 alt-shift-enter = 'mode apps'
 
 alt-t = 'exec-and-forget open -a /Applications/Telegram.app'
-alt-a = 'exec-and-forget open -a /Applications/Arc.app'
+alt-p = 'exec-and-forget open -a /Applications/1Password.app'
+alt-c = 'exec-and-forget open -a /Applications/Google Chrome.app'
 alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
-alt-g = 'exec-and-forget open -a /Applications/Ghostty.app'
-alt-s = 'exec-and-forget open -a /Applications/Safari.app'
+alt-g = 'exec-and-forget open -a /Applications/GIMP.app'
+alt-y = 'exec-and-forget open -a /Applications/kitty.app'
+alt-e = 'exec-and-forget open -a /Applications/ExcalidrawZ.app'
 alt-q = 'exec-and-forget open -a /System/Applications/QuickTime Player.app'
 
 
@@ -245,5 +248,3 @@ shift-down = ['volume set 0', 'mode main']
 
 [mode.apps.binding]
 alt-k = ['exec-and-forget open -a /Applications/Kitty.app', 'mode main']
-
-
