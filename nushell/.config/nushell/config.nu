@@ -900,3 +900,4 @@ $env.config = {
 
 source config-custom.nu
 source generated.nu
+print $"(ansi wb)(ansi reset)(ansi gi) Custom config loaded(ansi reset)"

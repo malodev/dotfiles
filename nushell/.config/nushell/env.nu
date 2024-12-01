@@ -86,36 +86,4 @@ $env.NU_PLUGIN_DIRS = [
     ($nu.default-config-dir | path join 'plugins') # add <nushell-config-dir>/plugins
 ]
 
-# To add entries to PATH (on Windows you might use Path), you can use the following pattern:
-# $env.PATH = ($env.PATH | split row (char esep) | prepend '/some/path')
-# An alternate way to add entries to $env.PATH is to use the custom command `path add`
-# which is built into the nushell stdlib:
-use std "path add"
-# $env.PATH = ($env.PATH | split row (char esep))
-# path add /some/path
-# path add ($env.CARGO_HOME | path join "bin")
-path add ($env.HOME | path join ".local" "bin")
-# $env.PATH = ($env.PATH | uniq)
-path add /usr/local/bin
-
-# Check the operating system
-let is_macos = ( $nu.os-info.name == "macos" )
-let is_linux  = ( $nu.os-info.name == "linux" )
-
 source env-custom.nu
-
-if $is_macos {
-  save-alias 'as = aoerospace'
-  save-code r#'
-def --env ff [] {
-  aerospace list-windows --all | fzf --bind 'enter:execute(bash -c "aerospace focus --window-id {1}")+abort'
-}
-'#
-  path add /opt/homebrew/bin
-  $env.EDITOR = '/opt/homebrew/bin/nvim' 
-}
-
-if $is_linux {
-  path add /home/linuxbrew/.linuxbrew/bin
-  $env.EDITOR = '/home/linuxbrew/.linuxbrew/nvim' 
-}
