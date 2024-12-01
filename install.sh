@@ -20,24 +20,26 @@ brew install -q "font-symbols-only-nerd-font"
 #   curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
 # fi
 
-stow nvim
-stow kitty
-stow tmux
-stow starship
-stow nushell
-stow zsh
+stow -v nvim
+stow -v kitty
+stow -v tmux
+stow -v starship
+stow -v nushell
+stow -v zsh
 
 # get os (linux or macos)
 os=$(uname -s)
 
+echo "Specific configs for $os"
+
 # if os is macos do specific actions for macos
 if [ $os = "Darwin" ]; then
-  stow sketchybar-omerxx
-  stow aerospace
+  stow -v sketchybar
+  stow -v aerospace
 fi
 
 if [ $os = "Linux" ]; then
-  stow i3
+  stow -v i3
 fi
 
 
