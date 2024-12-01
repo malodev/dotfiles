@@ -96,27 +96,26 @@ use std "path add"
 # path add ($env.CARGO_HOME | path join "bin")
 path add ($env.HOME | path join ".local" "bin")
 # $env.PATH = ($env.PATH | uniq)
-path add /opt/homebrew/bin
 path add /usr/local/bin
+
 # Check the operating system
-let is_macos = ( (^uname -s) == "Darwin" )
-let is_linux = ( (^uname -s) == "Linux" )
-# Check if the current user is root
+let is_macos = ( $nu.os-info.name == "macos" )
+let is_linux  = ( $nu.os-info.name == "linux" )
+
+source env-custom.nu
+
 if $is_macos {
-    path add /opt/homebrew/bin
-    $env.EDITOR = '/opt/homebrew/bin/nvim' 
+  save-alias 'as = aoerospace'
+  save-code r#'
+def --env ff [] {
+  aerospace list-windows --all | fzf --bind 'enter:execute(bash -c "aerospace focus --window-id {1}")+abort'
 }
+'#
+  path add /opt/homebrew/bin
+  $env.EDITOR = '/opt/homebrew/bin/nvim' 
+}
+
 if $is_linux {
-    path add /home/linuxbrew/.linuxbrew/bin
-    $env.EDITOR = '/home/linuxbrew/.linuxbrew/nvim' 
+  path add /home/linuxbrew/.linuxbrew/bin
+  $env.EDITOR = '/home/linuxbrew/.linuxbrew/nvim' 
 }
-
-# To load from a custom file you can use:
-# source ($nu.default-config-dir | path join 'custom.nu')
-mkdir ~/.cache/starship
-starship init nu | save -f ~/.cache/starship/init.nu
-zoxide init nushell | save -f ~/.zoxide.nu
-
-$env.CARAPACE_BRIDGES = 'zsh,fish,bash,inshellisense' # optional
-mkdir ~/.cache/carapace
-carapace _carapace nushell | save --force ~/.cache/carapace/init.nu
