@@ -22,12 +22,11 @@ SHADOW=on
 # (cd $CONFIG_DIR/helper && make)
 # $CONFIG_DIR/helper/helper $HELPER > /dev/null 2>&1 &
 
-
 # Setting up the general bar appearance and default values
 sketchybar --bar     height=50                                         \
-                     color=$BAR_COLOR                                  \
+                     color=$TRANSPARENT                                \
                      shadow=$SHADOW                                    \
-                     position=right                                     \
+                     position=right                                    \
                      sticky=on                                         \
                      padding_right=18                                  \
                      padding_left=18                                   \
