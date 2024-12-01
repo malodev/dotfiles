@@ -2,7 +2,7 @@ tap "homebrew/bundle"
 # Apps
 brew "utf8proc"
 brew "neovim"
-
+cask "visual-studio-code"
 
 # command line tools
 brew "fzf"
