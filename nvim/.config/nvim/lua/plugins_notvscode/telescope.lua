@@ -48,6 +48,23 @@ return {
 					},
 				},
 				extensions = {
+					"fzf",
+					prosession = {
+						path = vim.fn.stdpath("data") .. "/prosession",
+						ignore = {
+							"node_modules",
+							".git",
+						},
+					},
+					smart_history = {
+						path = vim.fn.stdpath("data") .. "/telescope_smart_history.sqlite3",
+					},
+					"rest",
+					noice = {
+						layout_config = {
+							preview_width = 0.65,
+						},
+					},
 					media_files = {
 						-- filetypes whitelist
 						-- defaults to {"png", "jpg", "mp4", "webm", "pdf"}
