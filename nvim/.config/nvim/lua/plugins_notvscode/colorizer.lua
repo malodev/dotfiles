@@ -1,5 +1,8 @@
 return {
 	"catgoose/nvim-colorizer.lua",
+	cond = function()
+		return require("config").is_enabled.nvchad_colorizer
+	end,
 	event = "BufReadPre",
 	opts = { -- set to setup table
 		filetypes = { "*" },
