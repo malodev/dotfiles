@@ -8,6 +8,10 @@ return {
 		for k, v in pairs(opts) do
 			leap.opts[k] = v
 		end
-		leap.add_default_mappings(true)
+		-- Add 'custom' mappings
+		vim.keymap.set({ "n", "x", "o" }, "f", "<Plug>(leap-forward)", { desc = "Leap Forward" })
+		vim.keymap.set({ "n", "x", "o" }, "F", "<Plug>(leap-backward)", { desc = "Leap Backward" })
+		vim.keymap.set({ "n", "x", "o" }, "gF", "<Plug>(leap-from-window)", { desc = "Leap From Window" })
+		-- vim.keymap('n', '<leader>l', '<cmd>lua require("leap").leap()<CR>', { noremap = true, silent = true })
 	end,
 }
