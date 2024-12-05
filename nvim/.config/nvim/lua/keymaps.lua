@@ -22,21 +22,7 @@ end
 keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
 
 local function tc(t1, t2)
-	-- Create a new table to avoid modifying the original tables
-	local mergedTable = {}
-
-	-- First, copy all the key-value pairs from the first table to the mergedTable
-	for key, value in pairs(t1) do
-		mergedTable[key] = value
-	end
-
-	-- Then, iterate over the second table and add its key-value pairs to the mergedTable
-	-- If a key already exists, its value will be overwritten by the value from t2
-	for key, value in pairs(t2) do
-		mergedTable[key] = value
-	end
-
-	return mergedTable
+	return vim.tbl_extend("force", t1, t2)
 end
 
 keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
@@ -243,30 +229,6 @@ end, tc(opts, { desc = "Enable noice" }))
 -- my mappings for custom commands
 keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
--- noice mappings
-keymap.set("n", "<leader>nl", function()
-	require("noice").cmd("last")
-end, tc(opts, { desc = "Show the last message" }))
-
-keymap.set("n", "<leader>nh", function()
-	require("noice").cmd("history")
-end, tc(opts, { desc = "Show the message history" }))
-
-keymap.set("n", "<leader>nd", function()
-	require("noice").cmd("dismiss")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
-
-keymap.set("n", "<leader>nt", function()
-	require("noice").cmd("telescope")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
-
-keymap.set("n", "<leader>nx", function()
-	require("noice").cmd("disable")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
-
-keymap.set("n", "<leader>ne", function()
-	require("noice").cmd("enable")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
 -- my mappings for custom commands
 keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
