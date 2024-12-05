@@ -136,4 +136,13 @@ return {
 			end)
 		end,
 	},
+	{
+		"js-everts/cmp-tailwind-colors",
+		dependencies = { "hrsh7th/nvim-cmp" },
+		config = function()
+			require("cmp-tailwind-colors").setup({
+				enable_alpha = true, -- requires pumblend > 0.
+			})
+		end,
+	},
 }
