@@ -1,7 +1,7 @@
 return {
 	{
 		"nvim-telescope/telescope.nvim",
-		tag = "0.1.5",
+		-- tag = "0.1.5",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"nvim-lua/popup.nvim",
@@ -9,13 +9,44 @@ return {
 			"nvim-telescope/telescope-media-files.nvim",
 			"nvim-telescope/telescope-smart-history.nvim",
 		},
-		config = function(_, opts)
+		config = function()
 			local open_with_trouble = require("trouble.sources.telescope").open
 
 			-- Use this to add more results without clearing the trouble list
 			-- local add_to_trouble = require("trouble.sources.telescope").add
 
 			require("telescope").setup({
+				pickers = {
+					find_files = {
+						file_ignore_patterns = {
+							"node_modules",
+							".git",
+							".DS_Store",
+							".venv",
+							".pytest_cache",
+							".mypy_cache",
+							".idea",
+							".vscode",
+						},
+						hidden = true,
+					},
+					live_grep = {
+						file_ignore_patterns = {
+							"node_modules",
+							".git",
+							".DS_Store",
+							".venv",
+							".pytest_cache",
+							".mypy_cache",
+							".idea",
+							".vscode",
+						},
+						additional_args = function(_)
+							return { "--hidden" }
+						end,
+						-- hidden = true,
+					},
+				},
 				extensions = {
 					media_files = {
 						-- filetypes whitelist
