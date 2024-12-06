@@ -6,14 +6,11 @@ after-login-command = []
 # You can use it to add commands that run after AeroSpace startup.
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
-after-startup-command = ['exec-and-forget /opt/homebrew/bin/sketchybar',
-  'exec-and-forget /opt/homebrew/bin/borders active_color=0xffb4befe inactive_color=0xff585b70 width=5.0']
+after-startup-command = ['exec-and-forget /opt/homebrew/bin/sketchybar']
 
 # Notify Sketchybar about workspace change
 exec-on-workspace-change = ['/bin/bash', '-c',
-  'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE',
-  'exec-and-forget /opt/homebrew/bin/borders active_color=0xffb4befe inactive_color=0xff585b70 width=5.0'
-]
+  'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE']
 
 # Start AeroSpace at login
 start-at-login = false
@@ -62,6 +59,18 @@ run = 'layout floating'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'finder'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'WhatsApp'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = '1Password'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Settings'
 run = 'layout floating'
 
 # Possible values: (qwerty|dvorak)
