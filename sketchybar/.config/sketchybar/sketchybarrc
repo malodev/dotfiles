@@ -24,7 +24,7 @@ SHADOW=on
 
 # Setting up the general bar appearance and default values
 sketchybar --bar     height=50                                         \
-                     color=$TRANSPARENT                                \
+                     color=$BAR_COLOR                                \
                      shadow=$SHADOW                                    \
                      position=right                                    \
                      sticky=on                                         \
