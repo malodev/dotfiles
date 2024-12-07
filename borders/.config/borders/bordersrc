@@ -1,0 +1,13 @@
+#!/bin/bash
+
+options=(
+	style=round
+	width=5.0
+	hidpi=on
+blur_radius=20.0
+
+  active_color="gradient(top_left=0xffb4befe,bottom_right=0xffe856d6)"
+  inactive_color=glow(0xff585b70)
+)
+
+borders "${options[@]}"

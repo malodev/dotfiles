@@ -53,10 +53,38 @@ return {
 		config = function()
 			local cmp = require("cmp")
 			local cmp_select_opts = { behavior = cmp.SelectBehavior.Select }
+			local kind_icons = {
+				Text = "",
+				Method = "󰆧",
+				Function = "󰊕",
+				Constructor = "",
+				Field = "󰇽",
+				Variable = "󰂡",
+				Class = "󰠱",
+				Interface = "",
+				Module = "",
+				Property = "󰜢",
+				Unit = "",
+				Value = "󰎠",
+				Enum = "",
+				Keyword = "󰌋",
+				Snippet = "",
+				Color = "󰏘",
+				File = "󰈙",
+				Reference = "",
+				Folder = "󰉋",
+				EnumMember = "",
+				Constant = "󰏿",
+				Struct = "",
+				Event = "",
+				Operator = "󰆕",
+				TypeParameter = "󰅲",
+			}
 
 			cmp.setup({
 				sources = cmp.config.sources({
 					{ name = "copilot" },
+					{ name = "codeium" },
 					{ name = "nvim_lsp" },
 					{ name = "nvim_lua" },
 					{ name = "luasnip" },
@@ -97,17 +125,13 @@ return {
 					documentation = cmp.config.window.bordered(),
 				},
 				formatting = {
-					fields = { "abbr", "menu", "kind" },
+					fields = { "kind", "abbr", "menu" },
 					format = function(entry, item)
-						local menu_icon = {
-							nvim_lsp = "λ",
-							luasnip = "⋗",
-							buffer = "Ω",
-							path = "🖫",
-							nvim_lua = "Π",
-						}
-
-						item.menu = menu_icon[entry.source.name]
+						item.menu = item.kind
+						item = require("cmp-tailwind-colors").format(entry, item)
+						if kind_icons[item.kind] then
+							item.kind = kind_icons[item.kind] .. " "
+						end
 						return item
 					end,
 				},

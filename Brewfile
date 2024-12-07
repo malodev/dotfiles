@@ -2,6 +2,7 @@ tap "homebrew/bundle"
 # Apps
 brew "utf8proc"
 brew "neovim"
+brew  "vscode-langservers-extracted"
 cask "visual-studio-code"
 
 # command line tools
@@ -9,6 +10,8 @@ brew "fzf"
 brew "ripgrep"
 brew "lsd"
 brew "bat"
+brew "gdu"
+brew "bottom"
 brew "fd"
 brew "procs"
 brew "zoxide"

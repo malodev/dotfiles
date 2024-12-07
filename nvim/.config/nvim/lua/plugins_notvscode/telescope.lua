@@ -1,7 +1,7 @@
 return {
 	{
 		"nvim-telescope/telescope.nvim",
-		tag = "0.1.5",
+		-- tag = "0.1.5",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"nvim-lua/popup.nvim",
@@ -9,14 +9,62 @@ return {
 			"nvim-telescope/telescope-media-files.nvim",
 			"nvim-telescope/telescope-smart-history.nvim",
 		},
-		config = function(_, opts)
+		config = function()
 			local open_with_trouble = require("trouble.sources.telescope").open
 
 			-- Use this to add more results without clearing the trouble list
 			-- local add_to_trouble = require("trouble.sources.telescope").add
 
 			require("telescope").setup({
+				pickers = {
+					find_files = {
+						file_ignore_patterns = {
+							"node_modules",
+							".git",
+							".DS_Store",
+							".venv",
+							".pytest_cache",
+							".mypy_cache",
+							".idea",
+							".vscode",
+						},
+						hidden = true,
+					},
+					live_grep = {
+						file_ignore_patterns = {
+							"node_modules",
+							".git",
+							".DS_Store",
+							".venv",
+							".pytest_cache",
+							".mypy_cache",
+							".idea",
+							".vscode",
+						},
+						additional_args = function(_)
+							return { "--hidden" }
+						end,
+						-- hidden = true,
+					},
+				},
 				extensions = {
+					"fzf",
+					prosession = {
+						path = vim.fn.stdpath("data") .. "/prosession",
+						ignore = {
+							"node_modules",
+							".git",
+						},
+					},
+					smart_history = {
+						path = vim.fn.stdpath("data") .. "/telescope_smart_history.sqlite3",
+					},
+					"rest",
+					noice = {
+						layout_config = {
+							preview_width = 0.65,
+						},
+					},
 					media_files = {
 						-- filetypes whitelist
 						-- defaults to {"png", "jpg", "mp4", "webm", "pdf"}
@@ -63,6 +111,15 @@ return {
 			{ "<leader>fi", "<cmd>Telescope media_files<CR>", desc = "telescope: media_files" },
 			{ "<leader>fn", "<cmd>Telescope noice<CR>", desc = "telescope: noice" },
 			{ "<leader>fr", "<cmd>Telescope rest select_env<CR>", desc = "telescope: select rest env" },
+			{ "<leader>/", "<cmd>Telescope current_buffer_fuzzy_find<cr>", desc = "Buffer search" },
+			-- { "<leader>fc", "<cmd>Telescope git_commits<cr>", desc = "Commits" },
+			{ "<C-p>", "<cmd>Telescope git_files<cr>", desc = "Git files" },
+			-- { "<leader>fh", "<cmd>Telescope help_tags<cr>", desc = "Help" },
+			{ "<leader>fj", "<cmd>Telescope command_history<cr>", desc = "History" },
+			{ "<leader>fk", "<cmd>Telescope keymaps<cr>", desc = "Keymaps" },
+			{ "<leader>fl", "<cmd>Telescope lsp_references<cr>", desc = "Lsp References" },
+			{ "<leader>fs", "<cmd>Telescope grep_string<cr>", desc = "Grep String" },
+			{ "<leader>ft", "<cmd>Telescope treesitter<cr>", desc = "Treesitter" },
 		},
 	},
 	{ "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
