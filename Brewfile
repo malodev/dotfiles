@@ -23,8 +23,11 @@ brew "jq"
 brew "poppler"
 brew "imagemagick"
 # brew "font-symbols-only-nerd-font"
+# brew "font-jetbrains-mono-nerd-font"
 # Shells and terminal
 brew "tmux"
+brew "urlview"
+brew "reattach-to-user-namespace"
 brew "starship"
 brew "zsh"
 brew "nushell"
@@ -37,5 +40,6 @@ cask "kitty"
 # brew "sketchybar"
 cask "font-hack-nerd-font" if OS.mac?
 brew "FelixKratz/formulae/sketchybar" if OS.mac?
+brew "borders" if OS.mac?
 cask "nikitabobko/tap/aerospace" if OS.mac?
 
