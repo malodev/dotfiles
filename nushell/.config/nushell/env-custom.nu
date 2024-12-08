@@ -23,6 +23,23 @@ def save-code [...args: string] {
 
 '' | save -f $generated_file
 
+def v [...args] {
+  with-env { NVIM_APPNAME: nvim-malo} { nvim ...$args }
+}
+
+def vi [...args] {
+  with-env { NVIM_APPNAME: nvim-malo} { nvim ...$args }
+}
+
+def vt [...args] {
+  with-env { NVIM_APPNAME: nvim-test} { nvim ...$args }
+}
+
+def va [...args] {
+  with-env { NVIM_APPNAME: nvim-astro} { nvim ...$args }
+}
+
+$env.EDITOR = 'v'
 # Check the operating system
 let is_macos = ( $nu.os-info.name == "macos" )
 let is_linux  = ( $nu.os-info.name == "linux" )
@@ -36,13 +53,11 @@ def --env ff [] {
 }
 '#
   path add /opt/homebrew/bin
-  $env.EDITOR = '/opt/homebrew/bin/nvim' 
 }
 
 if $is_linux {
   print $"(ansi wb)🐧(ansi reset)(ansi gi) Linux env loaded(ansi reset)"
   path add /home/linuxbrew/.linuxbrew/bin
-  $env.EDITOR = '/home/linuxbrew/.linuxbrew/nvim' 
 }
 
 save-code r#'

@@ -7,7 +7,6 @@ alias l = ls --all
 alias c = clear
 alias ll = ls -l
 alias lk = lsd -al --hyperlink=auto 
-alias v = nvim
 alias t = tmux
 alias tl = tmux list-sessions
 alias ts = tmux new-session -A -s 
