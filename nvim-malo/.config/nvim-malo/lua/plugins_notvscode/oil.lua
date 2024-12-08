@@ -22,9 +22,9 @@ return {
 		-- Open parent directory in floating window
 		vim.keymap.set(
 			"n",
-			"<leader>-",
+			"<leader>l",
 			require("oil").toggle_float,
-			{ desc = "Open parent directory in floating window" }
+			{ desc = "Oil: Open parent directory in floating window" }
 		)
 	end,
 }
