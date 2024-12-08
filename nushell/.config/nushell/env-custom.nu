@@ -23,14 +23,6 @@ def save-code [...args: string] {
 
 '' | save -f $generated_file
 
-def v [...args] {
-  with-env { NVIM_APPNAME: nvim-malo} { nvim ...$args }
-}
-
-def vi [...args] {
-  with-env { NVIM_APPNAME: nvim-malo} { nvim ...$args }
-}
-
 def vt [...args] {
   with-env { NVIM_APPNAME: nvim-test} { nvim ...$args }
 }
@@ -39,7 +31,6 @@ def va [...args] {
   with-env { NVIM_APPNAME: nvim-astro} { nvim ...$args }
 }
 
-$env.EDITOR = 'v'
 # Check the operating system
 let is_macos = ( $nu.os-info.name == "macos" )
 let is_linux  = ( $nu.os-info.name == "linux" )

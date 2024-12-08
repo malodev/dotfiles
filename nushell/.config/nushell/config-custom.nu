@@ -2,7 +2,10 @@ def --env cx [arg] {
     cd $arg
     ls -l
 }
-
+$env.EDITOR = 'nvim'
+alias v = nvim
+alias vi = nvim
+alias vim = nvim
 alias l = ls --all
 alias c = clear
 alias ll = ls -l
