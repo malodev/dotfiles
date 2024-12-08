@@ -29,11 +29,12 @@ require("lazy").setup({
 	},
 }, {
 	rocks = {
-		enable = true, -- Enable LuaRocks support
-		install = true, -- Automatically install missing rocks
-		clean = true, -- Automatically clean rocks
-		timeout = 300, -- Timeout for LuaRocks operations (in seconds)
-		disable = false, -- Do not disable LuaRocks
 		hererocks = true, -- Enable Hererocks to manage Lua dependencies
 	},
+  install = {
+    colorscheme = { "catppuccin" },
+  },
+    ui = {
+      border = "rounded",
+    },
 })
