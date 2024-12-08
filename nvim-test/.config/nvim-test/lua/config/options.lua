@@ -6,7 +6,7 @@ set.softtabstop = 2
 set.shiftwidth = 2
 set.ignorecase = true
 set.smartcase = true
-set.mousemodel = extend
+set.mousemodel = "extend"
 
 vim.keymap.set("n", "<Space>", "<Nop>", { silent = true, remap = false })
 vim.g.mapleader = " "
