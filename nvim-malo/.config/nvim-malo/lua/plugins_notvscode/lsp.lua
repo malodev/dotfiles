@@ -1,4 +1,22 @@
+local lsp_language_servers = {
+	"html",
+	"tailwindcss",
+	"ts_ls",
+	"eslint",
+	"emmet_language_server",
+	"lua_ls",
+	"jsonls",
+	"biome",
+	"gopls",
+	"basedpyright",
+	"marksman",
+	"astro",
+	"remark_ls",
+	"harper_ls",
+}
+
 return {
+
 	-- Completion part
 	{
 		"L3MON4D3/LuaSnip",
@@ -151,6 +169,14 @@ return {
 					"black",
 					"tree-sitter-cli",
 				},
+				ui = {
+					icons = {
+						package_installed = "✓",
+						package_pending = "➜",
+						package_uninstalled = "✗",
+					},
+					border = "rounded",
+				},
 			})
 		end,
 	},
@@ -158,29 +184,8 @@ return {
 		"williamboman/mason-lspconfig.nvim",
 		lazy = false,
 		opts = {
-			auto_install = true,
-			ensure_installed = {
-				"html",
-				"tailwindcss",
-				"ts_ls",
-				"eslint",
-				"emmet_language_server",
-				-- "dockerls",
-				-- "docker_compose_language_service",
-				"gopls",
-				"lua_ls",
-				-- "jsonls",
-				-- "intelephense",
-				-- "yamlls",
-				"marksman",
-				"remark_ls",
-				-- "bashls",
-				-- "svelte",
-				-- "taplo",
-				-- "sqls",
-				"basedpyright",
-				"harper_ls",
-			},
+			automatic_installation = true,
+      ensure_installed = lsp_language_servers,
 		},
 	},
 	{
@@ -193,40 +198,46 @@ return {
 				lineFoldingOnly = true,
 			}
 
-			-- emmet_language_server
-			-- htmx
-			-- intelephense
-			-- biome
-			--
-			--
 			local lspconfig = require("lspconfig")
 
-			local servers = {
-				"html",
-				"tailwindcss",
-				"ts_ls",
-				"eslint",
-				"emmet_language_server",
-				"lua_ls",
-				"jsonls",
-				"biome",
-				"gopls",
-				"basedpyright",
-				"marksman",
-				"astro",
+			local servers = lsp_language_servers
+			local excluded_servers = {
+				"harper_ls",
 			}
 			for _, lsp in ipairs(servers) do
-				lspconfig[lsp].setup({
-					capabilities = capabilities,
-				})
+				if not vim.tbl_contains(excluded_servers, lsp) then
+					lspconfig[lsp].setup({
+						position_encoding = "utf-8",
+						capabilities = capabilities,
+					})
+				end
 			end
-			-- lspconfig.harper_ls.setup({
-			-- 	settings = {
-			-- 		["harper-ls"] = {
-			-- 			userDictPath = "~/.local/share/dict.txt",
-			-- 		},
-			-- 	},
-			-- })
+			lspconfig.harper_ls.setup({
+				position_encoding = "utf-8",
+				settings = {
+					["harper-ls"] = {
+						userDictPath = "~/.local/share/dict.txt",
+						linters = {
+							spell_check = true,
+							spelled_numbers = false,
+							an_a = true,
+							sentence_capitalization = false,
+							unclosed_quotes = true,
+							wrong_quotes = false,
+							long_sentences = true,
+							repeated_words = true,
+							spaces = true,
+							matcher = true,
+							correct_number_suffix = true,
+							number_suffix_capitalization = true,
+							multiple_sequential_pronouns = true,
+							linking_verbs = false,
+							avoid_curses = true,
+							terminating_conjunctions = true,
+						},
+					},
+				},
+			})
 			---
 			-- UI settings
 			---
@@ -251,7 +262,7 @@ return {
 			vim.keymap.set(
 				"n",
 				"K",
-				vim.lsp.buf.hover,
+				"<cmd>Lspsaga hover_docs<cr>",
 				{ desc = "Displays hover information about the symbol under the cursor in a floating window" }
 			)
 			vim.keymap.set(
@@ -311,10 +322,15 @@ return {
 			vim.keymap.set(
 				"n",
 				"<F4>",
-				"<cmd>lua vim.lsp.buf.code_action()<cr>",
+				"<cmd>Lspsaga code_action<cr>",
 				{ desc = "Selects a code action available at the current cursor position." }
 			)
-			vim.keymap.set("n", "gl", vim.diagnostic.open_float, { desc = "Show diagnostics in a floating window" })
+			vim.keymap.set(
+				"n",
+				"gl",
+				"<cmd>Lspsaga show_line_diagnostics<cr>",
+				{ desc = "Show diagnostics in a floating window" }
+			)
 			vim.keymap.set(
 				"n",
 				"[d",
@@ -326,5 +342,20 @@ return {
 	},
 	{
 		"nvimdev/lspsaga.nvim",
+		after = "nvim-lspconfig",
+		config = function()
+			require("lspsaga").setup({
+				code_action_lightbulb = {
+					enable = true,
+					enable_in_insert = true,
+					sign = true,
+					sign_priority = 20,
+					virtual_text = true,
+				},
+				ui = {
+					border_style = "round",
+				},
+			})
+		end,
 	},
 }
