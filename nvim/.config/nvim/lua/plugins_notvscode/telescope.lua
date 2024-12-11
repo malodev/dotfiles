@@ -16,6 +16,16 @@ return {
 			-- local add_to_trouble = require("trouble.sources.telescope").add
 
 			require("telescope").setup({
+				vimgrep_arguments = {
+					"rg",
+					"--color=never",
+					"--no-heading",
+					"--with-filename",
+					"--line-number",
+					"--column",
+					"--smart-case",
+					"--hidden",
+				},
 				pickers = {
 					find_files = {
 						file_ignore_patterns = {
@@ -101,8 +111,8 @@ return {
 			require("telescope").load_extension("rest")
 		end,
 		keys = {
-			{ "<leader>ff", "<cmd>Telescope find_files<CR>", desc = "telescope: find_files" },
-			{ "<leader>fg", "<cmd>Telescope live_grep<CR>", desc = "telescope: live_grep" },
+			{ "<leader>ff", "<cmd>FzfLua files<CR>", desc = "telescope: find_files" },
+			{ "<leader>fg", "<cmd>FzfLua live_grep<CR>", desc = "telescope: live_grep" },
 			{ "<leader>fb", "<cmd>Telescope buffers<CR>", desc = "telescope: buffers" },
 			{ "<leader>fo", "<cmd>Telescope oldfiles<CR>", desc = "telescope: oldfiles" },
 			{ "<leader>fc", "<cmd>Telescope command_history<CR>", desc = "telescope: command_history" },
