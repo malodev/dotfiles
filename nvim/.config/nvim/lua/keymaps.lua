@@ -202,29 +202,29 @@ keymap.set("v", "<C-a>", "ggVG", opts)
 keymap.set("v", "<C-d>", '"+ygvd', opts)
 
 -- noice mappings
-keymap.set("n", "<leader>nl", function()
-	require("noice").cmd("last")
-end, tc(opts, { desc = "Show the last message" }))
-
-keymap.set("n", "<leader>nh", function()
-	require("noice").cmd("history")
-end, tc(opts, { desc = "Show the message history" }))
-
-keymap.set("n", "<leader>nn", function()
-	require("noice").cmd("dismiss")
-end, tc(opts, { desc = "Dismiss all visible messages" }))
-
-keymap.set("n", "<leader>nt", function()
-	require("noice").cmd("telescope")
-end, tc(opts, { desc = "Telescope messages" }))
-
-keymap.set("n", "<leader>nx", function()
-	require("noice").cmd("disable")
-end, tc(opts, { desc = "Disable noice" }))
-
-keymap.set("n", "<leader>ne", function()
-	require("noice").cmd("enable")
-end, tc(opts, { desc = "Enable noice" }))
+-- keymap.set("n", "<leader>nl", function()
+-- 	require("noice").cmd("last")
+-- end, tc(opts, { desc = "Show the last message" }))
+--
+-- keymap.set("n", "<leader>nh", function()
+-- 	require("noice").cmd("history")
+-- end, tc(opts, { desc = "Show the message history" }))
+--
+-- keymap.set("n", "<leader>nn", function()
+-- 	require("noice").cmd("dismiss")
+-- end, tc(opts, { desc = "Dismiss all visible messages" }))
+--
+-- keymap.set("n", "<leader>nt", function()
+-- 	require("noice").cmd("telescope")
+-- end, tc(opts, { desc = "Telescope messages" }))
+--
+-- keymap.set("n", "<leader>nx", function()
+-- 	require("noice").cmd("disable")
+-- end, tc(opts, { desc = "Disable noice" }))
+--
+-- keymap.set("n", "<leader>ne", function()
+-- 	require("noice").cmd("enable")
+-- end, tc(opts, { desc = "Enable noice" }))
 
 -- my mappings for custom commands
 keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))

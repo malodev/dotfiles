@@ -107,7 +107,7 @@ return {
 			require("telescope").load_extension("fzf")
 			require("telescope").load_extension("prosession")
 			require("telescope").load_extension("media_files")
-			require("telescope").load_extension("noice")
+			-- require("telescope").load_extension("noice")
 			require("telescope").load_extension("rest")
 		end,
 		keys = {
