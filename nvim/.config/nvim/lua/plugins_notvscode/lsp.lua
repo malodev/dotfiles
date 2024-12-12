@@ -185,11 +185,22 @@ return {
 		lazy = false,
 		opts = {
 			automatic_installation = true,
-      ensure_installed = lsp_language_servers,
+			ensure_installed = lsp_language_servers,
 		},
 	},
 	{
 		"neovim/nvim-lspconfig",
+		dependencies = {
+			{
+				"folke/lazydev.nvim",
+				ft = "lua",
+				opts = {
+					library = {
+						{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
+					},
+				},
+			},
+		},
 		lazy = false,
 		config = function()
 			local capabilities = require("cmp_nvim_lsp").default_capabilities()
