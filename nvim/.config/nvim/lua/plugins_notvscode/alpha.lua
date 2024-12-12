@@ -1,10 +1,10 @@
 return {
 	"goolord/alpha-nvim",
 	event = "VimEnter",
+	enabled = false,
 	config = function()
 		local opts = { noremap = true, silent = true }
-		enabled = false, 
-vim.keymap.set("n", "<leader>a", ":Alpha<CR>", opts)
+		vim.keymap.set("n", "<leader>a", ":Alpha<CR>", opts)
 
 		local status_ok, alpha = pcall(require, "alpha")
 		if not status_ok then
