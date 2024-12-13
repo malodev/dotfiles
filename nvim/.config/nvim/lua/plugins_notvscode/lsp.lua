@@ -273,8 +273,8 @@ return {
 			vim.keymap.set(
 				"n",
 				"K",
-				"<cmd>Lspsaga hover_docs<cr>",
-				{ desc = "Displays hover information about the symbol under the cursor in a floating window" }
+				"<cmd>Lspsaga hover_doc<cr>",
+				{ desc = "Lspsaga: Displays hover information about the symbol under the cursor in a floating window" }
 			)
 			vim.keymap.set(
 				"n",
