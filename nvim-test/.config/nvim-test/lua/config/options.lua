@@ -8,6 +8,9 @@ set.ignorecase = true
 set.smartcase = true
 set.mousemodel = "extend"
 
+-- vim.cmd [[hi @function.buildin.lua guifg=yellow ]]
+-- vim.cmd [[hi @comment guifg=yellow ]]
+
 vim.keymap.set("n", "<Space>", "<Nop>", { silent = true, remap = false })
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
