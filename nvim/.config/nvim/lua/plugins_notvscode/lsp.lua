@@ -228,6 +228,7 @@ return {
 				settings = {
 					["harper-ls"] = {
 						userDictPath = "~/.local/share/dict.txt",
+						fileDictPath = "~/.harper/",
 						linters = {
 							spell_check = true,
 							spelled_numbers = false,
