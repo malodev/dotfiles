@@ -99,7 +99,8 @@ source <(carapace _carapace)
 # Order of groups can be configured with the zstyle [group-order](https://zsh.sourceforge.io/Guide/zshguide06.html).
 zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'external commands'
 
-
+export EDITOR=nvim
+eval "$(zoxide init zsh)"
 
 echo "🛠️zshrc_local loaded."
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
