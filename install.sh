@@ -41,6 +41,14 @@ if [ $os = "Linux" ]; then
   stow -v i3
 fi
 
-
-
-
+if ! [ -x ~/.local/bin/colorscript ]; then
+  mkdir -p ~/.local/bin
+  mkdir -p ~/.local/src
+  cd ~/.local/src/
+  git clone https://gitlab.com/dwt1/shell-color-scripts.git
+  cd shell-color-scripts
+  sudo make install
+  # optional for zsh completion
+  sudo cp completions/_colorscript /usr/share/zsh/site-functions
+  cd ~
+fi
