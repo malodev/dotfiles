@@ -6,7 +6,19 @@ else
     export OSX=0
 fi
 
+if [[ "$(uname)" == "Linux" ]]; then
+    export LINUX=1
+else
+    export LINUX=0
+fi
+
 [[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
+
+# Make sure that homebrew binaries are in the PATH
+[[ "$OSX" == "1" ]] && export PATH="/opt/homebrew/bin:$PATH"
+[[ "$LINUX" == "1" ]] && export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+ 
+eval "$(starship init zsh)"
 
 gitlab_group_members_id() { [[ $1 != "" ]] && gitlab group_members $1|awk -F "|" '{print $5}'|grep -E '\d+' }
 gitlab_users() {
