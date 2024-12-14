@@ -29,6 +29,8 @@ brew "starship"
 brew "zsh"
 brew "nushell"
 brew "hub"
+brew "viu"
+
 
 # Apps
 cask "visual-studio-code" if OS.mac?
