@@ -3,6 +3,9 @@
         "vim",
         "trouble",
         "workspace_diagnostics",
-        "document_diagnostics"
+        "document_diagnostics",
+        "_hTerm_toggle",
+        "_floatTerm_toggle",
+        "_lazygit_toggle"
     ]
 }

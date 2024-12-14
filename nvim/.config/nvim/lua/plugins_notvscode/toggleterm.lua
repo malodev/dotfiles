@@ -81,7 +81,7 @@ return {
 				)
 			end,
 			-- function to run on closing the terminal
-			on_close = function(term)
+			on_close = function(_)
 				vim.cmd("startinsert!")
 			end,
 		})
