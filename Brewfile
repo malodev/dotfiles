@@ -28,9 +28,16 @@ brew "urlview"
 brew "starship"
 brew "zsh"
 brew "nushell"
-brew "hub"
 brew "viu"
 
+# Dev tools
+brew "git"
+brew "hub"
+brew "gh"
+brew "git-delta"
+brew "node"
+brew "yarn"
+brew "deno"
 
 # Apps
 cask "visual-studio-code" if OS.mac?
