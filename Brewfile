@@ -31,6 +31,12 @@ brew "zsh"
 brew "nushell"
 brew "viu"
 
+# Web tools
+brew "curl"
+brew "wget"
+brew "w3m"
+brew "lynx"
+
 # Dev tools
 brew "git"
 brew "gh"
