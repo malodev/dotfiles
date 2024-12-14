@@ -49,24 +49,24 @@ return {
 				lualine_y = { "progress" },
 				lualine_z = { "location" },
 			},
-			winbar = {
-				lualine_a = {
-					{
-						"diff",
-						diff_color = {
-							-- same color values as the general color option can be used here.
-							added = { fg = "#a6e3a1", bg = "#242324" }, -- changes the diff's added color
-							modified = { fg = "#f9e2af", bg = "#242324" }, -- changes the diff's modified color
-							removed = { fg = "#f38ba8", bg = "#242324" }, -- changes the diff's removed color you
-						},
-						symbols = { added = " ", modified = "󰿡 ", removed = " " },
-					},
-				},
-				lualine_c = { "hostname" },
-				lualine_b = { { "diagnostic", sources = { "nvim_lsp", "vim_lsp" } } },
-				lualine_y = { "selectioncount", "searchcount" },
-				lualine_z = { { "mode", icons_enabled = true, icon = "" } },
-			},
+			-- winbar = {
+			-- 	lualine_a = {
+			-- 		{
+			-- 			"diff",
+			-- 			diff_color = {
+			-- 				-- same color values as the general color option can be used here.
+			-- 				added = { fg = "#a6e3a1", bg = "#242324" }, -- changes the diff's added color
+			-- 				modified = { fg = "#f9e2af", bg = "#242324" }, -- changes the diff's modified color
+			-- 				removed = { fg = "#f38ba8", bg = "#242324" }, -- changes the diff's removed color you
+			-- 			},
+			-- 			symbols = { added = " ", modified = "󰿡 ", removed = " " },
+			-- 		},
+			-- 	},
+			-- 	lualine_c = { "hostname" },
+			-- 	-- lualine_c = { { "diagnostic", sources = { "nvim_lsp", "vim_lsp" } } },
+			-- 	lualine_y = { "selectioncount", "searchcount" },
+			-- 	lualine_z = { { "mode", icons_enabled = true, icon = "" } },
+			-- },
 			extensions = {},
 		})
 	end,
