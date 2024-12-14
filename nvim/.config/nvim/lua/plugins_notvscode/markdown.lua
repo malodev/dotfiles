@@ -1,16 +1,44 @@
 return {
-	{
-		"iamcco/markdown-preview.nvim",
-		build = "cd app && npm install",
-		-- using npm to install rather than the vim function leads to significantly faster startup time
-		init = function()
-			vim.g.mkdp_filetypes = { "markdown" }
-		end,
-		config = function()
-			vim.g.mkdp_port = 19400
-			vim.keymap.set("n", "<leader>mm", "<Plug>MarkdownPreview", { desc = " Start Markdown Preview" })
-			vim.keymap.set("n", "<leader>mh", "<Plug>MarkdownPreviewStop", { desc = " Halt Markdown Preview" })
-			vim.keymap.set("n", "<leader>mt", "<Plug>MarkdownPreviewToggle", { desc = " Start Markdown Preview" })
-		end,
-	},
+	"toppair/peek.nvim",
+	event = { "VeryLazy" },
+	build = "deno task --quiet build:fast",
+	config = function()
+		local peek = require("peek")
+
+		peek.setup({
+			auto_load = true, -- whether to automatically load preview when
+			-- entering another markdown buffer
+			close_on_bdelete = true, -- close preview window on buffer delete
+
+			syntax = true, -- enable syntax highlighting, affects performance
+
+			theme = "dark", -- 'dark' or 'light'
+
+			update_on_change = true,
+
+			app = "webview", -- 'webview', 'browser', string or a table of strings
+			-- explained below
+
+			filetype = { "markdown" }, -- list of filetypes to recognize as markdown
+
+			-- relevant if update_on_change is true
+			throttle_at = 200000, -- start throttling when file exceeds this
+			-- amount of bytes in size
+			throttle_time = "auto", -- minimum amount of time in milliseconds
+			-- that has to pass before starting new render
+		})
+		vim.api.nvim_create_user_command("PeekOpen", function()
+			if not peek.is_open() then
+				peek.open()
+			end
+		end, {})
+
+		vim.api.nvim_create_user_command("PeekClose", function()
+			if peek.is_open() then
+				peek.close()
+			end
+		end, {})
+		vim.keymap.set("n", "<leader>mp", "<cmd>PeekOpen<cr>", { desc = "Peek Open" })
+		vim.keymap.set("n", "<leader>mc", "<cmd>PeekClose<cr>", { desc = "Peek Close" })
+	end,
 }
