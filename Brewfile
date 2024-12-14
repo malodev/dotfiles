@@ -32,9 +32,10 @@ brew "viu"
 
 # Dev tools
 brew "git"
-brew "hub"
 brew "gh"
 brew "git-delta"
+brew "git-lfs"
+brew "hub"
 brew "node"
 brew "yarn"
 brew "deno"
