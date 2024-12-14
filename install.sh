@@ -41,10 +41,10 @@ if [ $os = "Linux" ]; then
   stow -v i3
 fi
 
-if ! [ -x ~/.local/bin/colorscript ]; then
-  mkdir -p ~/.local/bin
+if ! [ -x /usr/local/bin/colorscript ]; then
   mkdir -p ~/.local/src
   cd ~/.local/src/
+  rm -rf shell-color-scripts
   git clone https://gitlab.com/dwt1/shell-color-scripts.git
   cd shell-color-scripts
   sudo make install
