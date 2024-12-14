@@ -148,7 +148,7 @@ return {
 	},
 	{
 		"LukasPietzschmann/telescope-tabs",
-		cond = function()
+		enabled = function()
 			return require("config").is_enabled.telescope_tabs
 		end,
 		config = function()

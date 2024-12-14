@@ -1,6 +1,6 @@
 return {
 	"catgoose/nvim-colorizer.lua",
-	cond = function()
+	enabled = function()
 		return require("config").is_enabled.nvchad_colorizer
 	end,
 	event = "BufReadPre",

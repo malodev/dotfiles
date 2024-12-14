@@ -3,7 +3,7 @@ return {
 		"akinsho/bufferline.nvim",
 		version = "*",
 		dependencies = "nvim-tree/nvim-web-devicons",
-		cond = function()
+		enabled = function()
 			return require("config").is_enabled.bufferline
 		end,
 		lazy = false,

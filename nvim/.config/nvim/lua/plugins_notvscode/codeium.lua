@@ -1,6 +1,6 @@
 return {
 	"Exafunction/codeium.vim",
-	cond = function()
+	enabled = function()
 		return require("config").is_enabled.codeium
 	end,
 	event = "BufEnter",

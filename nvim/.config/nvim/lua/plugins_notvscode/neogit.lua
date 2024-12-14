@@ -9,7 +9,7 @@ return {
 		-- "ibhagwan/fzf-lua",              -- optional
 	},
 	config = true,
-	cond = function()
+	enabled = function()
 		return require("config").is_enabled.neogit
 	end,
 }

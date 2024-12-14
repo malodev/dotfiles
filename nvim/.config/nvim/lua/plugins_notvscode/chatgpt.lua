@@ -1,7 +1,7 @@
 return {
 	"jackMort/ChatGPT.nvim",
 	event = "VeryLazy",
-	cond = function()
+	enabled = function()
 		return require("config").is_enabled.chatgpt
 	end,
 	dependencies = {
