@@ -64,19 +64,6 @@ return {
 			"tpope/vim-obsession",
 		},
 	},
-	-- {
-	-- 	"norcalli/nvim-colorizer.lua",
-	-- 	cond = function()
-	-- 		return require("config").is_enabled.colorizer1
-	-- 	end,
-	-- 	config = function()
-	-- 		require("colorizer").setup({
-	-- 			"*", -- Highlight all files, but customize some others.
-	-- 			css = { names = true, css = true }, -- Enable parsing rgb(...) functions in css.
-	-- 			html = { names = false, css = true }, -- Disable parsing "names" like Blue or Gray
-	-- 		})
-	-- 	end,
-	-- },
 	{
 		"monaqa/dial.nvim",
 		config = function()
