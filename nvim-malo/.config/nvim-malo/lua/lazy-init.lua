@@ -27,14 +27,27 @@ require("lazy").setup({
 			return vim.g.vscode
 		end,
 	},
+	{
+		"folke/snacks.nvim",
+		priority = 1000,
+		lazy = false,
+		opts = {},
+		config = function(_, opts)
+			local notify = vim.notify
+			require("snacks").setup(opts)
+			-- HACK: restore vim.notify after snacks setup and let noice.nvim take over
+			-- this is needed to have early notifications show up in noice history
+			vim.notify = notify
+		end,
+	},
 }, {
 	rocks = {
 		hererocks = true, -- Enable Hererocks to manage Lua dependencies
 	},
-  install = {
-    colorscheme = { "catppuccin" },
-  },
-    ui = {
-      border = "rounded",
-    },
+	install = {
+		colorscheme = { "catppuccin" },
+	},
+	ui = {
+		border = "rounded",
+	},
 })
