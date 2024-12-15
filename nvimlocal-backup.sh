@@ -1,24 +1,38 @@
 #!/bin/bash
 
+# if called without arguments
+if [ "$#" -eq 0 ]; then
+  name=""
 # Check the arguments
-if [ "$#" -ne 1 ]; then
-  echo "Usage: $0 <backup-neovim-distribution-name>"
+elif [ "$#" -eq 1 ]; then
+  name="-$1"
+else
+  echo "Usage: $0 [<backup-neovim-distribution-name>]"
   # list the available backup names
-  ls -d ~/dotfiles/nvim-* | sed 's/.*\///' | sed 's/nvim-//' |uniq | sort
+  ls -d ~/.config/nvim* | sed 's/.*\///' | sed 's/nvim-//' |uniq | sort
   exit 1
 fi
 
 # Backup nvim
 # keep only two backups
-rm -rf ~/.local/share/nvim-$1.bak-1
-rm -rf ~/.local/state/nvim-$1.bak-1
-if [ -d ~/.local/share/nvim-$1.bak ]; then
-  mv ~/.local/share/nvim-$1.bak ~/.local/share/nvim-$1.bak-1
-fi
-if [ -d ~/.local/state/nvim-$1.bak ]; then
-  mv ~/.local/state/nvim-$1.bak ~/.local/state/nvim-$1.bak-1
+rm -rf ~/.local/share/nvim$name.bak-1
+rm -rf ~/.local/state/nvim$name.bak-1
+rm -rf ~/.cache/nvim$name.bak-1
+if [ -d ~/.local/share/nvim$name.bak ]; then
+  mv ~/.local/share/nvim$name.bak ~/.local/share/nvim$name.bak-1
 fi
 
-mv ~/.local/share/nvim ~/.local/share/nvim-$1.bak
-mv ~/.local/state/nvim ~/.local/state/nvim-$1.bak
+if [ -d ~/.local/state/nvim$name.bak ]; then
+  mv ~/.local/state/nvim$name.bak ~/.local/state/nvim$name.bak-1
+fi
+
+if [ -d ~/.cache/nvim$name.bak ]; then
+  mv ~/.cache/nvim$name.bak ~/.cache/nvim$name.bak-1 
+fi
+
+# back up
+mv ~/.local/share/nvim$name{,.bak}
+mv ~/.local/state/nvim$name{,.bak}
+mv ~/.cache/nvim$name{,.bak}
+
 
