@@ -58,12 +58,12 @@ return {
 			})
 		end,
 	},
-	{
-		"dhruvasagar/vim-prosession",
-		dependencies = {
-			"tpope/vim-obsession",
-		},
-	},
+	-- {
+	-- 	"dhruvasagar/vim-prosession",
+	-- 	dependencies = {
+	-- 		"tpope/vim-obsession",
+	-- 	},
+	-- },
 	{
 		"monaqa/dial.nvim",
 		config = function()

@@ -59,13 +59,13 @@ return {
 				},
 				extensions = {
 					"fzf",
-					prosession = {
-						path = vim.fn.stdpath("data") .. "/prosession",
-						ignore = {
-							"node_modules",
-							".git",
-						},
-					},
+					-- prosession = {
+					-- 	path = vim.fn.stdpath("data") .. "/prosession",
+					-- 	ignore = {
+					-- 		"node_modules",
+					-- 		".git",
+					-- 	},
+					-- },
 					smart_history = {
 						path = vim.fn.stdpath("data") .. "/telescope_smart_history.sqlite3",
 					},
@@ -105,7 +105,7 @@ return {
 			})
 			require("telescope").load_extension("smart_history")
 			require("telescope").load_extension("fzf")
-			require("telescope").load_extension("prosession")
+			-- require("telescope").load_extension("prosession")
 			require("telescope").load_extension("media_files")
 			-- require("telescope").load_extension("noice")
 			require("telescope").load_extension("rest")
