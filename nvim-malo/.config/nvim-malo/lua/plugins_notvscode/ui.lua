@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 -- lazy.nvim
 local function term_nav(dir)
 	---@param self snacks.terminal
@@ -40,7 +41,7 @@ return {
 				long_message_to_split = true,
 			},
 		},
-    
+
     -- stylua: ignore
     keys = {
       { "<leader>sn", "", desc = "+noice"},
