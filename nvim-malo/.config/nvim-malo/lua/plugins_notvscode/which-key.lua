@@ -6,7 +6,7 @@ return {
 		vim.o.timeoutlen = 200
 	end,
 	opts = {
-		preset = "classic", -- false | "classic" | "modern" | "helix"
+		preset = "helix", -- false | "classic" | "modern" | "helix"
 		win = {
 			-- don't allow the popup to overlap with the cursor
 			no_overlap = true,
@@ -32,6 +32,17 @@ return {
 		keys = {
 			scroll_down = "<c-j>", -- binding to scroll down inside the popup
 			scroll_up = "<c-k>", -- binding to scroll up inside the popup
+		},
+	},
+	keys = {
+		{
+			"<leader>?",
+			function()
+				require("which-key").show({
+					global = true,
+				})
+			end,
+			desc = "Buffer Local Keymaps (which-key)",
 		},
 	},
 }
