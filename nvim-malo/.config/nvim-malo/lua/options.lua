@@ -12,12 +12,12 @@ vim.opt.number = true -- show absolute number
 vim.opt.relativenumber = true -- add numbers to each line on the left side
 
 -- highligh yanked text
-vim.api.nvim_create_autocmd('TextYankPost', {
-  desc = 'Highlight when yankink text',
-  group = vim.api.nvim_create_augroup('yank-highlight', { clear = true }),
-  callback = function()
-	  vim.highlight.on_yank()
-  end,
+vim.api.nvim_create_autocmd("TextYankPost", {
+	desc = "Highlight when yankink text",
+	group = vim.api.nvim_create_augroup("yank-highlight", { clear = true }),
+	callback = function()
+		vim.highlight.on_yank()
+	end,
 })
 
 if not vim.g.vscode then
@@ -146,7 +146,7 @@ if not vim.g.vscode then
 	local nvimTreeFocusOrToggle = function()
 		local nvimTree = require("nvim-tree.api")
 		local currentBuf = vim.api.nvim_get_current_buf()
-		local currentBufFt = vim.api.nvim_buf_get_option(currentBuf, "filetype")
+		local currentBufFt = vim.api.nvim_get_option_value("filetype", { buf = currentBuf })
 		if currentBufFt == "NvimTree" then
 			vim.cmd("wincmd w")
 		else
