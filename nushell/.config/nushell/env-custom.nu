@@ -47,6 +47,8 @@ def --env ff [] {
 }
 
 if $is_linux {
+  $env.PNPM_HOME = $"($env.HOME)/.local/share/pnpm"
+  $env.PATH = ($env.PATH | split row (char esep) | prepend $env.PNPM_HOME )
   print $"(ansi wb)🐧(ansi reset)(ansi gi) Linux env loaded(ansi reset)"
   path add /home/linuxbrew/.linuxbrew/bin
 }
