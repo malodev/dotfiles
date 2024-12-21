@@ -6,7 +6,8 @@
         "document_diagnostics",
         "_hTerm_toggle",
         "_floatTerm_toggle",
-        "_lazygit_toggle"
+        "_lazygit_toggle",
+        "Snacks",
     ],
     "diagnostics.disable": [
         "undefined-doc-name"
