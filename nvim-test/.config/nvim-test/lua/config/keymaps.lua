@@ -2,6 +2,7 @@ local keymap = vim.keymap.set
 
 keymap("n", "-", "<cmd>e .<CR>", { desc = "Open cwd in file tree view" })
 keymap("n", "<leader>q", "<cmd>qa<CR>", { desc = "Quit all" })
+map("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory" })
 
 
 -- WhichKey mappings
