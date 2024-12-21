@@ -32,5 +32,6 @@ return {
       verbose = { read = false, write = true, delete = true },
     })
     require('mini.tabline').setup()
+    require('mini.notify').setup()
   end
 }
