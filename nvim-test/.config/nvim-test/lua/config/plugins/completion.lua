@@ -11,6 +11,12 @@ return {
 			"L3MON4D3/LuaSnip",
 			"saadparwaiz1/cmp_luasnip",
 			"js-everts/cmp-tailwind-colors",
+			{
+				"zbirenbaum/copilot-cmp",
+				config = function()
+					require("copilot_cmp").setup()
+				end,
+			},
 		},
 		---@type cmp.Config
 		config = function()
@@ -46,6 +52,7 @@ return {
 
 			cmp.setup({
 				sources = cmp.config.sources({
+					{ name = "copilot" },
 					{ name = "nvim_lsp" },
 					{ name = "nvim_lua" },
 					{ name = "luasnip" },
