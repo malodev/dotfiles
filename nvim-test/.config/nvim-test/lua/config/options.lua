@@ -7,6 +7,7 @@ set.shiftwidth = 2
 set.ignorecase = true
 set.smartcase = true
 set.mousemodel = "extend"
+set.cmdheight = 1
 
 -- vim.cmd [[hi @function.buildin.lua guifg=yellow ]]
 -- vim.cmd [[hi @comment guifg=yellow ]]
