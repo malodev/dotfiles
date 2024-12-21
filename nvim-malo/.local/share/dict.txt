@@ -17,11 +17,14 @@ chmod
 param
 diff's
 stylua
+vscode
 keymaps
 Subgrid
 subgrid
 ChatGPT
 LazyVim
+luasnip
+cmdline
 devicons
 macchiato
 catppuccin
