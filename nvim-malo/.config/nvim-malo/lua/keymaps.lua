@@ -49,7 +49,7 @@ map({ "n", "x" }, "<Down>", "v:count == 0 ? 'gj' : 'j'", { desc = "Down", expr =
 map({ "n", "x" }, "k", "v:count == 0 ? 'gk' : 'k'", { desc = "Up", expr = true, silent = true })
 map({ "n", "x" }, "<Up>", "v:count == 0 ? 'gk' : 'k'", { desc = "Up", expr = true, silent = true })
 
--- Resize window using <ctrl> arrow keys
+-- Resize window using '<ctrl>+arrow keys'
 map("n", "<C-Up>", "<cmd>resize +2<cr>", { desc = "Increase Window Height" })
 map("n", "<C-Down>", "<cmd>resize -2<cr>", { desc = "Decrease Window Height" })
 map("n", "<C-Left>", "<cmd>vertical resize -2<cr>", { desc = "Decrease Window Width" })
@@ -122,8 +122,9 @@ map("i", ";", ";<c-g>u")
 -- save file
 map({ "i", "x", "n", "s" }, "<C-s>", "<cmd>w<cr><esc>", { desc = "Save File" })
 
---keywordprg
-map("n", "<leader>K", "<cmd>norm! K<cr>", { desc = "Keywordprg" })
+-- Run a program to lookup the keyword under the cursor. The name of the program is given with the
+-- 'keywordprg' (kp) option (default is ":Man for Neovim").
+map("n", "<leader>K", "<cmd>norm! K<cr>", { desc = "Lookup the keyword under the cursor" })
 
 -- better indenting
 map("v", "<", "<gv")
@@ -186,10 +187,8 @@ end
 
 -- lazygit
 if vim.fn.executable("lazygit") == 1 then
-  map("n", "<leader>gg", function() Snacks.lazygit( { cwd = LazyVim.root.git() }) end, { desc = "Lazygit (Root Dir)" })
-  map("n", "<leader>gG", function() Snacks.lazygit() end, { desc = "Lazygit (cwd)" })
+  map("n", "<leader>gg", function() Snacks.lazygit() end, { desc = "Lazygit (cwd)" })
   map("n", "<leader>gf", function() Snacks.lazygit.log_file() end, { desc = "Lazygit Current File History" })
-  map("n", "<leader>gl", function() Snacks.lazygit.log({ cwd = LazyVim.root.git() }) end, { desc = "Lazygit Log" })
   map("n", "<leader>gL", function() Snacks.lazygit.log() end, { desc = "Lazygit Log (cwd)" })
 end
 
@@ -203,14 +202,8 @@ end, { desc = "Git Browse (copy)" })
 map("n", "<leader>ui", vim.show_pos, { desc = "Inspect Pos" })
 map("n", "<leader>uI", "<cmd>InspectTree<cr>", { desc = "Inspect Tree" })
 
--- LazyVim Changelog
-map("n", "<leader>L", function() LazyVim.news.changelog() end, { desc = "LazyVim Changelog" })
-
 -- floating terminal
-map("n", "<leader>fT", function() Snacks.terminal() end, { desc = "Terminal (cwd)" })
-map("n", "<leader>ft", function() Snacks.terminal(nil, { cwd = LazyVim.root() }) end, { desc = "Terminal (Root Dir)" })
-map("n", "<c-/>",      function() Snacks.terminal(nil, { cwd = LazyVim.root() }) end, { desc = "Terminal (Root Dir)" })
-map("n", "<c-_>",      function() Snacks.terminal(nil, { cwd = LazyVim.root() }) end, { desc = "which_key_ignore" })
+map("n", "<leader>tt", function() Snacks.terminal() end, { desc = "Terminal (cwd)" })
 
 -- Terminal Mappings
 map("t", "<C-/>", "<cmd>close<cr>", { desc = "Hide Terminal" })
@@ -255,38 +248,38 @@ local function tc(t1, t2)
 	return vim.tbl_extend("force", t1, t2)
 end
 
-keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
+map({ "n", "v" }, "<Space>", "<Nop>", { desc = "remap space to no operation" })
 
 -- make CTRL + C behave exactly the same as ESC
-keymap.set("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
+map("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
 
 -- delete one word in insert mode (note that <C-h> sends the same ASCII escape sequence as <C-BS>)
--- keymap.set("i", "<C-h>", "<C-w>", opts)
+-- map("i", "<C-h>", "<C-w>", opts)
 --
 --
 -- remap ^ and $ to H and L, respectively
-keymap.set("n", "H", "^", tc(opts, { desc = "H goes to the beginning of line" }))
-keymap.set("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
+map("n", "H", "^", tc(opts, { desc = "H goes to the beginning of line" }))
+map("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
 
 -- open up lazy.nvim UI
--- keymap.set('n', '<leader>l', ':Lazy<CR>', opts)
+-- map('n', '<leader>l', ':Lazy<CR>', opts)
 
 -- toggle undotree
-keymap.set("n", "<F5>", vim.cmd.UndotreeToggle, opts)
+map("n", "<F5>", vim.cmd.UndotreeToggle, opts)
 
 -- toggle nvim-tree
--- keymap.set('n', '<C-n>', ':NvimTreeFindFileToggle<CR>', opts)
+-- map('n', '<C-n>', ':NvimTreeFindFileToggle<CR>', opts)
 
 -- unbind <C-d> for now
--- keymap.set('n', '<C-d>', '<nop>', opts)
+-- map('n', '<C-d>', '<nop>', opts)
 
 
 -- clear search term when centering the cursor
 opts["desc"] = "Clear search term when centering the cursor"
-keymap.set("n", "zz", "zz:noh<CR>", opts)
+map("n", "zz", "zz:noh<CR>", opts)
 
 -- replace current word
-keymap.set(
+map(
 	"n",
 	"<leader>ss",
 	[[:%s/<C-r><C-w>/<C-r><C-w>/gI<Left><Left><Left>]],
@@ -294,84 +287,86 @@ keymap.set(
 )
 
 -- make current file an executable
--- keymap.set('n', '<leader>x', '<cmd>!chmod +x %<CR>', opts)
+-- map('n', '<leader>x', '<cmd>!chmod +x %<CR>', opts)
 
 -- keep cursor at front when appending lines below
--- keymap.set("n", "J", "mzJ`z", opts)
+-- map("n", "J", "mzJ`z", opts)
 
 -- select entire file with CTRL + A
-keymap.set("n", "<C-a>", "ggVG", opts)
+map("n", "<C-a>", "ggVG", opts)
 
 -- indent and outdent lines quickly
--- keymap.set("n", "<TAB>", ">>", opts)
--- keymap.set("n", "<S-TAB>", "<<", opts)
+-- map("n", "<TAB>", ">>", opts)
+-- map("n", "<S-TAB>", "<<", opts)
 
-keymap.set("n", "<TAB>", ":bnext<CR>", opts)
-keymap.set("n", "<S-TAB>", ":bprevious<CR>", opts)
+map("n", "<TAB>", ":bnext<CR>", opts)
+map("n", "<S-TAB>", ":bprevious<CR>", opts)
 
 -- search movement keeps cursor in middle
-keymap.set("n", "n", "nzzzv", opts)
-keymap.set("n", "N", "Nzzzv", opts)
+map("n", "n", "nzzzv", opts)
+map("n", "N", "Nzzzv", opts)
 
+-- Shift arrow keys to select and extend selection
 -- go in visual line mode and extend selection when moving up and down
+map("n", "<S-Down>", "V", { desc= "Enter in visual line mode" })
+map("n", "<S-Up>", "V", { desc= "Enter in visual line mode" })
+map("i", "<S-Down>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
+map("i", "<S-Up>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
+map("v", "<S-Down>", "<Down>", { desc= "When in visual line mode move down" })
+map("v", "<S-Up>", "<Up>", { desc= "When in visual line mode move up" })
+
 -- go in visual mode and extend selection when moving left and right
-keymap.set("n", "<S-Down>", "V", opts)
-keymap.set("n", "<S-Up>", "V", opts)
-keymap.set("i", "<S-Down>", "<Esc>V", opts)
-keymap.set("i", "<S-Up>", "<Esc>V", opts)
-keymap.set("v", "<S-Down>", "<Down>", opts)
-keymap.set("v", "<S-Up>", "<Up>", opts)
+map("n", "<S-Left>", "v<Left>", { desc= "Enter in visual mode and move left" })
+map("n", "<S-Right>", "v<Right>", { desc= "Enter in visual mode and move right" })
+map("i", "<S-Left>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
+map("i", "<S-Right>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
+map("v", "<S-Left>", "<Left>", { desc= "When in visual mode move left" })
+map("v", "<S-Right>", "<Right>", { desc= "When in visual mode move right" })
 
-keymap.set("n", "<S-Left>", "v<Left>", opts)
-keymap.set("n", "<S-Right>", "v<Right>", opts)
-keymap.set("i", "<S-Left>", "<Esc>v", opts)
-keymap.set("i", "<S-Right>", "<Esc>v", opts)
-keymap.set("v", "<S-Left>", "<Left>", opts)
-keymap.set("v", "<S-Right>", "<Right>", opts)
+map("n", "<S-End>", "v$", { desc= "Enter in visual mode and move to end of line" })
 
-keymap.set("n", "<S-End>", "v$", opts)
 
 
 -- Under Windows, the * and + registers are equivalent.
 -- For X11 systems, * is the selection, and + is the cut buffer (like clipboard).
 -- copy into system clipboard with CTRL + C
-keymap.set("v", "<C-c>", '"+y', opts)
+map("v", "<C-c>", '"+y', opts)
 
-keymap.set("n", "<A-'>", 'ci"', tc({ desc = 'change text between "' }, opts))
+map("n", "<A-'>", 'ci"', tc({ desc = 'change text between "' }, opts))
 
 -- copy into host system clipboard with <leader>y
-keymap.set("v", "<leader>y", '"*y', opts)
+map("v", "<leader>y", '"*y', opts)
 
 -- prevent x from copying over Vim clipboard
-keymap.set("n", "x", '"_x', opts)
+map("n", "x", '"_x', opts)
 
 -- indent and outdent lines in visual mode
-keymap.set("v", "<TAB>", "<S->>gv", opts)
-keymap.set("v", "<S-TAB>", "<S-<>gv", opts)
+map("v", "<TAB>", "<S->>gv", opts)
+map("v", "<S-TAB>", "<S-<>gv", opts)
 
 -- the greatest remap ever (Primeagen)
-keymap.set("v", "<leader>p", '"_dP', opts)
+map("v", "<leader>p", '"_dP', opts)
 
 
 opts["desc"] = "Search the selected text"
-keymap.set("v", "/", '"fy/\\V<C-R>f<CR>', opts)
+map("v", "/", '"fy/\\V<C-R>f<CR>', opts)
 
-keymap.set("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
-keymap.set("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
+map("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
+map("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
 -- vertical movement keeps cursor in middle (visual mode)
-keymap.set("v", "<C-j>", "<C-d>zz", opts)
-keymap.set("v", "<C-k>", "<C-u>zz", opts)
+map("v", "<C-j>", "<C-d>zz", opts)
+map("v", "<C-k>", "<C-u>zz", opts)
 
 -- prevent incrementing numbers in file (this is actually horrible)
-keymap.set("v", "<C-a>", "ggVG", opts)
+map("v", "<C-a>", "ggVG", opts)
 
-keymap.set("v", "<C-d>", '"+ygvd', opts)
-
--- my mappings for custom commands
-keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
+map("v", "<C-d>", '"+ygvd', opts)
 
 -- my mappings for custom commands
-keymap.set("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
+map("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
+
+-- my mappings for custom commands
+map("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
 -- keymap.set("t", "<C-A>", [[<C-\>|]], tc(opts, { desc = "Terminal beginning of line" }))
 -- keymap.set("t", "<C-E>", [[<C-\>$]], tc(opts, { desc = "Terminal beginning of line" }))
