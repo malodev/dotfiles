@@ -31,5 +31,6 @@ return {
       -- Whether to print session path after action
       verbose = { read = false, write = true, delete = true },
     })
+    require('mini.tabline').setup()
   end
 }
