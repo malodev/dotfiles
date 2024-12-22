@@ -1,6 +1,6 @@
 #!/bin/bash
 
-calendar=(
+time=(
   icon=cal                     
   icon.color=$BLACK
   icon.font="$FONT:$Base:12.0" 
@@ -17,15 +17,26 @@ calendar=(
   script="$PLUGIN_DIR/calendar.sh"
 )
 
-sb_date() {
-	sketchybar \
-		--add item day "$1" --set day update_freq=120 icon.drawing=off padding_right=4 label="$(date '+%a')" \
-		--add item date "$1" --set date update_freq=120 icon.drawing=off padding_right=4 label="$(date '+%d' | sed s/^0//)" \
-		--add item month "$1" --set month update_freq=120 icon.drawing=off padding_right=4 label="$(date '+%b')"
+date_item_common=(
+  update_freq=60
+  icon.drawing=off
+  icon.drawing=off
+  padding_right=4
+  script="$PLUGIN_DIR/calendar.sh"
+)
+  
+date_item() {
+  sketchybar --add item "$1" "$2" --set "$1" label="$3" "${date_item_common[@]}" --subscribe "$1" system_woke  
 }
 
-sketchybar --add item calendar right       \
-           --set calendar "${calendar[@]}" \
-           --subscribe calendar system_woke
+sb_date() {
+  date_item day "$1" "$(date '+%a')"
+  date_item date "$1" "$(date '+%d' | sed s/^0//)"
+  date_item month "$1" "$(date '+%b')"
+}
 
-sb_date right
+sketchybar --add item time right       \
+           --set time "${time[@]}" \
+           --subscribe time system_woke
+
+sb_date right script="$PLUGIN_DIR/calendar.sh"

@@ -30,6 +30,7 @@ if [[ $CHARGING != "" ]]; then
   DRAWING=on
 fi
 
+echo "Plugin battery.sh called by $SENDER"
 echo "Battery:" $NAME $PERCENTAGE $ICON $COLOR 
 
 sketchybar --set $NAME drawing=$DRAWING icon="$ICON" icon.color=$COLOR

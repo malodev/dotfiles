@@ -64,7 +64,7 @@ export ORANGE=$Peach
 export MAGENTA=$Mauve
 export GREY=$Overlay2
 export TRANSPARENT=0x00000000
-export BG0=0x44dbb6ff
+export BG0=0x441e1d2e
 export BG1=0x603c3e4f
 export BG2=0x60494d64
 
