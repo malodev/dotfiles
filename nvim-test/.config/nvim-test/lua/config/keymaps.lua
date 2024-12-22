@@ -76,11 +76,17 @@ map("v", "<S-TAB>", "<S-<>gv", { desc = "" })
 
 -- the greatest remap ever (Primeagen)
 map("v", "<leader>p", '"_dP', { desc = "" })
+
+map("n", "<leader>c<leader>x", "<cmd>source %<CR>")
+map("n", "<leader>cx", ":.lua<CR>")
+map("v", "<leader>cx", ":lua<CR>")
+
 -- WhichKey mappings
 local wk = require("which-key")
 wk.add({
 	{ "<leader>", group = "<leader>" },
 	{ "<leader>c", group = "Code" },
+	{ "<leader>f", group = "Find" },
 	{ "<leader>g", group = "Git and LSP functions" },
 	{ "<leader>q", group = "Quit" },
 	{ "<leader>u", group = "Toggles" },
