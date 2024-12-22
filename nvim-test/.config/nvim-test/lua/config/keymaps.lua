@@ -32,7 +32,7 @@ map("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory" })
 -- quit
 map("n", "<leader>qq", "<cmd>qa<cr>", { desc = "Quit All" })
 map("n", "<leader>qf", ":qa!<CR>", { desc = "Force Quit All" })
-map("n", "<leader>qw", ":waqa<CR>", { desc = "Write all buffers and quit" })
+map("n", "<leader>qw", ":wa<CR>:qa<CR>", { desc = "Write all buffers and quit" })
 
 -- buffers
 map("n", "<leader>bb", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
