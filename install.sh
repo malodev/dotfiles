@@ -19,7 +19,8 @@ brew bundle
 #   curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
 # fi
 
-stow -v nvim
+stow -v nvim-malo
+stow -v nvim-test
 stow -v kitty
 stow -v tmux
 stow -v starship
