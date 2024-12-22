@@ -54,6 +54,7 @@ cask "karabiner-elements" if OS.mac?
 cask "font-hack-nerd-font" if OS.mac?
 cask "nikitabobko/tap/aerospace" if OS.mac?
 cask "amethyst" if OS.mac?
+cask "font-sketchybar-app-font" if OS.mac?
 #
 # Mac formulas
 brew "FelixKratz/formulae/sketchybar" if OS.mac?
