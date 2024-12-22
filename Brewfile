@@ -47,14 +47,15 @@ brew "node"
 brew "yarn"
 brew "deno"
 
-# Apps
+# Apps for Mac
 cask "visual-studio-code" if OS.mac?
 cask "kitty" if OS.mac?
 cask "karabiner-elements" if OS.mac?
 cask "font-hack-nerd-font" if OS.mac?
 cask "nikitabobko/tap/aerospace" if OS.mac?
-
-# Mac specific formulas
+cask "amethyst" if OS.mac?
+#
+# Mac formulas
 brew "FelixKratz/formulae/sketchybar" if OS.mac?
 brew "borders" if OS.mac?
 brew "reattach-to-user-namespace" if OS.mac?
