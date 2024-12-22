@@ -74,6 +74,8 @@ return {
 					augend.date.alias["%Y-%m-%d"],
 					augend.date.alias["%d/%m/%y"],
 					augend.date.alias["%d/%m/%Y"],
+					augend.date.alias["%H:%M"],
+					augend.constant.alias.bool,
 					augend.integer.alias.hex,
 					augend.hexcolor.new({
 						case = "lower",
@@ -81,31 +83,32 @@ return {
 					augend.constant.new({ elements = { "let", "const" } }),
 				},
 			})
-			vim.keymap.set("n", "<C-p>", function()
+			vim.keymap.set("n", "<C-=>", function()
 				require("dial.map").manipulate("increment", "normal")
 			end, { desc = "Increment symbol under cursor" })
-			vim.keymap.set("n", "<C-o>", function()
+			vim.keymap.set("n", "<C-->", function()
 				require("dial.map").manipulate("decrement", "normal")
 			end, { desc = "Increment symbol under cursor" })
-			vim.keymap.set("n", "g<C-p>", function()
+			vim.keymap.set("n", "g<C-=>", function()
 				require("dial.map").manipulate("increment", "gnormal")
 			end)
-			vim.keymap.set("n", "g<C-o>", function()
+			vim.keymap.set("n", "g<C-->", function()
 				require("dial.map").manipulate("decrement", "gnormal")
 			end)
-			vim.keymap.set("v", "<C-p>", function()
+			vim.keymap.set("v", "<C-=>", function()
 				require("dial.map").manipulate("increment", "visual")
 			end)
-			vim.keymap.set("v", "<C-o>", function()
+			vim.keymap.set("v", "<C-->", function()
 				require("dial.map").manipulate("decrement", "visual")
 			end)
-			vim.keymap.set("v", "g<C-p>", function()
+			vim.keymap.set("v", "g<C-=>", function()
 				require("dial.map").manipulate("increment", "gvisual")
 			end)
-			vim.keymap.set("v", "g<C-o>", function()
+			vim.keymap.set("v", "g<C-->", function()
 				require("dial.map").manipulate("decrement", "gvisual")
 			end)
 		end,
+		-- test dial 10 #06004a 0x00005f 07/04/2025 25/12/24 2026-10-02 12:73
 	},
 	{
 		"js-everts/cmp-tailwind-colors",
