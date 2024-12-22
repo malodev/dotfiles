@@ -40,64 +40,70 @@ map("n", "<leader>`", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
 
 -- Shift arrow keys to select and extend selection
 -- go in visual line mode and extend selection when moving up and down
-map("n", "<S-Down>", "V", { desc= "Enter in visual line mode" })
-map("n", "<S-Up>", "V", { desc= "Enter in visual line mode" })
-map("i", "<S-Down>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
-map("i", "<S-Up>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
-map("v", "<S-Down>", "<Down>", { desc= "When in visual line mode move down" })
-map("v", "<S-Up>", "<Up>", { desc= "When in visual line mode move up" })
+map("n", "<S-Down>", "V", { desc = "Enter in visual line mode" })
+map("n", "<S-Up>", "V", { desc = "Enter in visual line mode" })
+map("i", "<S-Down>", "<Esc>V", { desc = "Exit insert mode and enter in visual line mode" })
+map("i", "<S-Up>", "<Esc>V", { desc = "Exit insert mode and enter in visual line mode" })
+map("v", "<S-Down>", "<Down>", { desc = "When in visual line mode move down" })
+map("v", "<S-Up>", "<Up>", { desc = "When in visual line mode move up" })
 
 -- go in visual mode and extend selection when moving left and right
-map("n", "<S-Left>", "v<Left>", { desc= "Enter in visual mode and move left" })
-map("n", "<S-Right>", "v<Right>", { desc= "Enter in visual mode and move right" })
-map("i", "<S-Left>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
-map("i", "<S-Right>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
-map("v", "<S-Left>", "<Left>", { desc= "When in visual mode move left" })
-map("v", "<S-Right>", "<Right>", { desc= "When in visual mode move right" })
+map("n", "<S-Left>", "v<Left>", { desc = "Enter in visual mode and move left" })
+map("n", "<S-Right>", "v<Right>", { desc = "Enter in visual mode and move right" })
+map("i", "<S-Left>", "<Esc>v", { desc = "Exit insert mode and enter in visual mode" })
+map("i", "<S-Right>", "<Esc>v", { desc = "Exit insert mode and enter in visual mode" })
+map("v", "<S-Left>", "<Left>", { desc = "When in visual mode move left" })
+map("v", "<S-Right>", "<Right>", { desc = "When in visual mode move right" })
 
-map("n", "<S-End>", "v$", { desc= "Enter in visual mode and move to end of line" })
+map("n", "<S-End>", "v$", { desc = "Enter in visual mode and move to end of line" })
 
 -- Under Windows, the * and + registers are equivalent.
 -- For X11 systems, * is the selection, and + is the cut buffer (like clipboard).
 -- copy into system clipboard with CTRL + C
-map("v", "<C-c>", '"+y', { desc= "" })
+map("v", "<C-c>", '"+y', { desc = "" })
 
-map("n", "<A-'>", 'ci"', { desc= "" })
+map("n", "<A-'>", 'ci"', { desc = "" })
 
 -- copy into host system clipboard with <leader>y
-map("v", "<leader>y", '"*y', { desc= "" })
+map("v", "<leader>y", '"*y', { desc = "" })
 
 -- prevent x from copying over Vim clipboard
-map("n", "x", '"_x', { desc= "" })
+map("n", "x", '"_x', { desc = "" })
 
 -- indent and outdent lines in visual mode
-map("v", "<TAB>", "<S->>gv", { desc= "" })
-map("v", "<S-TAB>", "<S-<>gv", { desc= "" })
+map("v", "<TAB>", "<S->>gv", { desc = "" })
+map("v", "<S-TAB>", "<S-<>gv", { desc = "" })
 
 -- the greatest remap ever (Primeagen)
-map("v", "<leader>p", '"_dP', { desc= "" })
+map("v", "<leader>p", '"_dP', { desc = "" })
 -- WhichKey mappings
 local wk = require("which-key")
 wk.add({
-  { "<leader>" , group = "<leader>" },
-  { "<leader>c", group = "Work in progress" },
-  { "<leader>g", group = "Git and LSP functions" },
-  { "<leader>q", group = "Quit" },
-  { "<leader>u", group = "Toggles" },
-  { "gr" , group = "LSP functions" },
-  { "gra" , desc = "LSP action" },
-  { "gri" , desc = "LSP implementation" },
-  { "grn" , desc = "LSP rename" },
-  { "grr" , desc = "LSP reference" },
+	{ "<leader>", group = "<leader>" },
+	{ "<leader>c", group = "Code" },
+	{ "<leader>g", group = "Git and LSP functions" },
+	{ "<leader>q", group = "Quit" },
+	{ "<leader>u", group = "Toggles" },
+	{ "gr", group = "LSP functions" },
+	{ "gra", desc = "LSP action" },
+	{ "gri", desc = "LSP implementation" },
+	{ "grn", desc = "LSP rename" },
+	{ "grr", desc = "LSP reference" },
 
-  { "<leader>b", group = "Buffers", expand = function()
-      return require("which-key.extras").expand.buf()
-    end
-  },
-  { "<leader>w", group = "Windows", expand = function()
-      return require("which-key.extras").expand.win()
-    end
-  },
-  { "<C-s>", "<cmd>w<CR>", desc = "Save buffer", mode = { "n", "v", "i" } },
+	{
+		"<leader>b",
+		group = "Buffers",
+		expand = function()
+			return require("which-key.extras").expand.buf()
+		end,
+	},
+	{
+		"<leader>w",
+		group = "Windows",
+		expand = function()
+			return require("which-key.extras").expand.win()
+		end,
+	},
+	{ "<C-s>", "<cmd>w<CR>", desc = "Save buffer", mode = { "n", "v", "i" } },
 })
 -- print("KEYMAPS")
