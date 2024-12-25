@@ -43,7 +43,7 @@ return {
 
 		opts["desc"] = "Add file to Harpoon"
 		keymap.set("n", "<C-h>", function()
-			harpoon:list():append()
+			harpoon:list():add()
 		end, opts)
 
 		opts["desc"] = "Toogle Harpoon Menu"
