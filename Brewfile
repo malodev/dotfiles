@@ -39,6 +39,7 @@ brew "lynx"
 
 # Dev tools
 brew "git"
+brew "git-credential-libsecret"
 brew "gh"
 brew "git-delta"
 brew "git-lfs"
