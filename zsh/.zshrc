@@ -53,12 +53,3 @@ bindkey ^S history-incremental-search-forward # rebind ^S
 
 echo "🛠️zshrc loaded."
 source "$HOME/.zshrc_local"
-
-
-# pnpm
-export PNPM_HOME="/home/mauro/.local/share/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
-# pnpm end
