@@ -1,3 +1,4 @@
+---@diagnostic disable: missing-fields
 local lsp_language_servers = {
 	"html",
 	"tailwindcss",
@@ -13,6 +14,7 @@ local lsp_language_servers = {
 	"astro",
 	"remark_ls",
 	"harper_ls",
+	"intelephense",
 }
 
 return {
@@ -163,12 +165,6 @@ return {
 		opts = {},
 		config = function()
 			require("mason").setup({
-				ensure_installed = {
-					"stylua",
-					"prettierd",
-					"black",
-					"tree-sitter-cli",
-				},
 				ui = {
 					icons = {
 						package_installed = "✓",
@@ -181,12 +177,79 @@ return {
 		end,
 	},
 	{
+		"WhoIsSethDaniel/mason-tool-installer.nvim",
+		config = function()
+			require("mason-tool-installer").setup({
+				ensure_installed = {
+					"stylua",
+					"dprint",
+					"black",
+					"isort",
+					"prettierd",
+					"pint",
+					"php-cs-fixer",
+					"shfmt",
+					"prettier",
+				},
+			})
+		end,
+	},
+	{
 		"williamboman/mason-lspconfig.nvim",
-		lazy = false,
 		opts = {
 			automatic_installation = true,
 			ensure_installed = lsp_language_servers,
 		},
+		config = function(_, opts)
+			require("mason-lspconfig").setup(opts)
+
+			local capabilities = require("cmp_nvim_lsp").default_capabilities()
+			capabilities.textDocument.foldingRange = {
+				dynamicRegistration = false,
+				lineFoldingOnly = true,
+			}
+			require("mason-lspconfig").setup_handlers({
+				-- The first entry (without a key) will be the default handler
+				-- and will be called for each installed server that doesn't have
+				-- a dedicated handler.
+				function(server_name) -- default handler (optional)
+					require("lspconfig")[server_name].setup({
+						position_encoding = "utf-8",
+						capabilities = capabilities,
+					})
+				end,
+				["harper_ls"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.harper_ls.setup({
+						position_encoding = "utf-8",
+						settings = {
+							["harper-ls"] = {
+								userDictPath = "~/.local/share/dict.txt",
+								fileDictPath = "~/.harper/",
+								linters = {
+									spell_check = true,
+									spelled_numbers = false,
+									an_a = true,
+									sentence_capitalization = false,
+									unclosed_quotes = true,
+									wrong_quotes = false,
+									long_sentences = true,
+									repeated_words = true,
+									spaces = true,
+									matcher = true,
+									correct_number_suffix = true,
+									number_suffix_capitalization = true,
+									multiple_sequential_pronouns = true,
+									linking_verbs = false,
+									avoid_curses = true,
+									terminating_conjunctions = true,
+								},
+							},
+						},
+					})
+				end,
+			})
+		end,
 	},
 	{
 		"neovim/nvim-lspconfig",
@@ -203,53 +266,6 @@ return {
 		},
 		lazy = false,
 		config = function()
-			local capabilities = require("cmp_nvim_lsp").default_capabilities()
-			capabilities.textDocument.foldingRange = {
-				dynamicRegistration = false,
-				lineFoldingOnly = true,
-			}
-
-			local lspconfig = require("lspconfig")
-
-			local servers = lsp_language_servers
-			local excluded_servers = {
-				"harper_ls",
-			}
-			for _, lsp in ipairs(servers) do
-				if not vim.tbl_contains(excluded_servers, lsp) then
-					lspconfig[lsp].setup({
-						position_encoding = "utf-8",
-						capabilities = capabilities,
-					})
-				end
-			end
-			lspconfig.harper_ls.setup({
-				position_encoding = "utf-8",
-				settings = {
-					["harper-ls"] = {
-						userDictPath = "~/.local/share/dict.txt",
-						fileDictPath = "~/.harper/",
-						linters = {
-							spell_check = true,
-							spelled_numbers = false,
-							an_a = true,
-							sentence_capitalization = false,
-							unclosed_quotes = true,
-							wrong_quotes = false,
-							long_sentences = true,
-							repeated_words = true,
-							spaces = true,
-							matcher = true,
-							correct_number_suffix = true,
-							number_suffix_capitalization = true,
-							multiple_sequential_pronouns = true,
-							linking_verbs = false,
-							avoid_curses = true,
-							terminating_conjunctions = true,
-						},
-					},
-				},
-			})
 			---
 			-- UI settings
 			---
@@ -258,11 +274,6 @@ return {
 				border_style = "rounded"
 			end
 			if type(border_style) == "string" then
-				vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = border_style })
-
-				vim.lsp.handlers["textDocument/signatureHelp"] =
-					vim.lsp.with(vim.lsp.handlers.signature_help, { border = border_style })
-
 				vim.diagnostic.config({
 					float = { border = border_style },
 				})
@@ -346,10 +357,15 @@ return {
 			vim.keymap.set(
 				"n",
 				"[d",
-				vim.diagnostic.goto_prev,
+				"<cmd>lua vim.diagnostic.jump({ count = -1, float = true })<cr>",
 				{ desc = "Move to the previous diagnostic in the current buffer" }
 			)
-			vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Move to the next diagnostic" })
+			vim.keymap.set(
+				"n",
+				"]d",
+				"<cmd>lua vim.diagnostic.jump({ count = 1, float = true })<cr>",
+				{ desc = "Move to the next diagnostic" }
+			)
 		end,
 	},
 	{
