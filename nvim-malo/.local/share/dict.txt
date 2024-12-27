@@ -27,6 +27,7 @@ luasnip
 cmdline
 devicons
 macchiato
+Primeagen
 catppuccin
 echasnovski
 tailwindcss
