@@ -1,17 +1,9 @@
+ZSH_DISABLE_COMPFIX="true"
+
 fpath=(/usr/share/zsh/$ZSH_VERSION/functions $fpath)
 
-# Fig pre block. Keep at the top of this file.
-[[ -f $HOME/.fig/shell/zshrc.pre.zsh ]] && source "$HOME/.fig/shell/zshrc.pre.zsh"
-#export LC_ALL=it_IT.UTF-8 && export LANG=it_IT.UTF-8
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block; everything else may go below.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
-
 # If you come from bash you might have to change your $PATH.
-export PATH=$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
+export PATH=$HOME/.local/bin:$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
 
 # Zplug
 # Check if zplug is installed
@@ -20,9 +12,11 @@ if [[ ! -d ~/.zplug ]]; then
     source ~/.zplug/init.zsh && zplug update --self
 fi
 
+ZSH_DISABLE_COMPFIX="true"
 # Essential
 source ~/.zplug/init.zsh
 
+ZSH_DISABLE_COMPFIX="true"
 zplug "lib/history", from:oh-my-zsh
 
 # Make sure to use double quotes
@@ -34,6 +28,7 @@ zplug "b4b4r07/enhancd", use:enhancd.sh
 
 zplug "zsh-users/zsh-syntax-highlighting", defer:2
 
+ZSH_DISABLE_COMPFIX="true"
 zplug check || zplug install
 
 # Then, source plugins and add commands to $PATH

@@ -71,8 +71,6 @@ alias ts='tmux new-session -A -s'
 alias tl='tmux list-sessions' 
 
 export EDITOR=nvim
-# Add local binary path to PATH
-export PATH="$HOME/.local/bin:$PATH"
 
 # Radicle is a peer-to-peer stack for code collaboration https://docs.radicle.xyz/ 
 export PATH="$HOME/.radicle/bin:$PATH"
@@ -113,7 +111,8 @@ bindkey "^[[B" history-substring-search-down
 export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
 
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+export ZSH_DISABLE_COMPFIX=true
+#[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # pnpm https://pnpm.io/ 
 export PNPM_HOME="/home/mauro/.local/share/pnpm"
