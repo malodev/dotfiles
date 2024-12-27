@@ -145,6 +145,7 @@ return {
 					documentation = cmp.config.window.bordered(),
 				},
 				formatting = {
+					expandable_indicator = true,
 					fields = { "kind", "abbr", "menu" },
 					format = function(entry, item)
 						item.menu = item.kind
@@ -164,6 +165,7 @@ return {
 		lazy = false,
 		opts = {},
 		config = function()
+			---@diagnostic disable-next-line: missing-fields
 			require("mason").setup({
 				ui = {
 					icons = {
@@ -178,18 +180,20 @@ return {
 	},
 	{
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
+		lazy = false,
 		config = function()
 			require("mason-tool-installer").setup({
 				ensure_installed = {
 					"stylua",
+					"tree-sitter-cli",
+					"shfmt",
 					"dprint",
+					"prettierd",
+					"prettier",
 					"black",
 					"isort",
-					"prettierd",
 					"pint",
 					"php-cs-fixer",
-					"shfmt",
-					"prettier",
 				},
 			})
 		end,
