@@ -111,7 +111,7 @@ if not vim.g.vscode then
 		local opts = { noremap = true, silent = true, buffer = 0 }
 		vim.keymap.set("t", "<C-a>", "<A-Down>i", opts)
 		vim.keymap.set("t", "<C-e>", "<A-Up>", opts)
-		vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], opts)
+		-- vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], opts)
 		vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
 		vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], opts)
 		vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], opts)
