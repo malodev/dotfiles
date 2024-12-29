@@ -27,6 +27,8 @@ zplug "zsh-users/zsh-history-substring-search"
 zplug "b4b4r07/enhancd", use:enhancd.sh
 
 zplug "zsh-users/zsh-syntax-highlighting", defer:2
+zplug "wfxr/forgit"
+
 
 ZSH_DISABLE_COMPFIX="true"
 zplug check || zplug install
