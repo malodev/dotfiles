@@ -63,10 +63,6 @@ map("i", "<A-k>", "<esc><cmd>m .-2<cr>==gi", { desc = "Move Up" })
 map("v", "<A-j>", ":<C-u>execute \"'<,'>move '>+\" . v:count1<cr>gv=gv", { desc = "Move Down" })
 map("v", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<cr>gv=gv", { desc = "Move Up" })
 
--- move lines around
-keymap.set("v", "J", ":m '>+1<CR>gv=gv", opts)
-keymap.set("v", "K", ":m '<-2<CR>gv=gv", opts)
-
 -- buffers
 map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
 map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next Buffer" })
@@ -323,6 +319,23 @@ map("i", "<S-Right>", "<Esc>v", { desc= "Exit insert mode and enter in visual mo
 map("v", "<S-Left>", "<Left>", { desc= "When in visual mode move left" })
 map("v", "<S-Right>", "<Right>", { desc= "When in visual mode move right" })
 
+-- Shift arrow keys to select and extend selection
+-- go in visual line mode and extend selection when moving up and down
+map("n", "<C-j>", "V", { desc= "Enter in visual line mode" })
+map("n", "<C-k>", "V", { desc= "Enter in visual line mode" })
+map("i", "<C-j>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
+map("i", "<C-k>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
+map("v", "<C-j>", "<Down>", { desc= "When in visual line mode move down" })
+map("v", "<C-k>", "<Up>", { desc= "When in visual line mode move up" })
+
+-- go in visual mode and extend selection when moving left and right
+map("n", "<C-h>", "v<Left>", { desc= "Enter in visual mode and move left" })
+map("n", "<C-l>", "v<Right>", { desc= "Enter in visual mode and move right" })
+map("i", "<C-h>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
+map("i", "<C-l>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
+map("v", "<C-h>", "<Left>", { desc= "When in visual mode move left" })
+map("v", "<C-l>", "<Right>", { desc= "When in visual mode move right" })
+
 map("n", "<S-End>", "v$", { desc= "Enter in visual mode and move to end of line" })
 
 
@@ -353,9 +366,6 @@ map("v", "/", '"fy/\\V<C-R>f<CR>', opts)
 
 map("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
 map("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
--- vertical movement keeps cursor in middle (visual mode)
-map("v", "<C-j>", "<C-d>zz", opts)
-map("v", "<C-k>", "<C-u>zz", opts)
 
 -- prevent incrementing numbers in file (this is actually horrible)
 map("v", "<C-a>", "ggVG", opts)
