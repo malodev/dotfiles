@@ -36,6 +36,14 @@ local function snippet_stop()
 	end
 end
 
+-- surround composition keymaps
+map(
+	"n",
+	"<leader>c`",
+	'<Plug>(nvim-surround-change)"`<Plug>(nvim-surround-normal)a`{',
+	{ desc = "React: change string to interpolation" }
+)
+
 -- Clear search and stop snippet on escape
 map({ "i", "n", "s" }, "<esc>", function()
 	vim.cmd("noh")
