@@ -364,13 +364,13 @@ map("v", "<leader>p", '"_dP', opts)
 opts["desc"] = "Search the selected text"
 map("v", "/", '"fy/\\V<C-R>f<CR>', opts)
 
-map("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
-map("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
+-- map("n", "<C-d>", "<C-d>zz", tc(opts, { desc = "Down and recenter" }))
+-- map("n", "<C-u>", "<C-u>zz", tc(opts, { desc = "Up and recenter" }))
+
+map("v", "<C-a>", "ggVG", tc(opts, { desc = "Select all" })) -- select all on visual mode
 
 -- prevent incrementing numbers in file (this is actually horrible)
-map("v", "<C-a>", "ggVG", opts)
-
-map("v", "<C-d>", '"+ygvd', opts)
+-- map("v", "<C-d>", '"+ygvd', tc(opts, { desc = "Yank and delete" })) -- yank and delete on visual mode
 
 -- my mappings for custom commands
 map("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
@@ -398,17 +398,17 @@ if not vim.g.vscode then
 		{ "<leader>x", group = "Trouble" },
 		{
 			mode = { "n", "v" },
-			{ "<leader>ca", "<cmd>ChatGPTRun add_tests<CR>", desc = "Add Tests (GPT)" },
-			{ "<leader>cd", "<cmd>ChatGPTRun docstring<CR>", desc = "Docstring (GPT)" },
-			{ "<leader>cf", "<cmd>ChatGPTRun fix_bugs<CR>", desc = "Fix Bugs (GPT)" },
-			{ "<leader>cg", "<cmd>ChatGPTRun grammar_correction<CR>", desc = "Grammar Correction (GPT)" },
-			{ "<leader>ck", "<cmd>ChatGPTRun keywords<CR>", desc = "Keywords (GPT)" },
-			{ "<leader>cl", "<cmd>ChatGPTRun code_readability_analysis<CR>", desc = "Code Readability Analysis (GPT)" },
-			{ "<leader>co", "<cmd>ChatGPTRun optimize_code<CR>", desc = "Optimize Code (GPT)" },
-			{ "<leader>cr", "<cmd>ChatGPTRun roxygen_edit<CR>", desc = "Roxygen Edit (GPT)" },
-			{ "<leader>cs", "<cmd>ChatGPTRun summarize<CR>", desc = "Summarize (GPT)" },
-			{ "<leader>ct", "<cmd>ChatGPTRun translate<CR>", desc = "Translate (GPT)" },
-			{ "<leader>cx", "<cmd>ChatGPTRun explain_code<CR>", desc = "Explain Code (GPT)" },
+			-- { "<leader>ca", "<cmd>ChatGPTRun add_tests<CR>", desc = "Add Tests (GPT)" },
+			-- { "<leader>cd", "<cmd>ChatGPTRun docstring<CR>", desc = "Docstring (GPT)" },
+			-- { "<leader>cf", "<cmd>ChatGPTRun fix_bugs<CR>", desc = "Fix Bugs (GPT)" },
+			-- { "<leader>cg", "<cmd>ChatGPTRun grammar_correction<CR>", desc = "Grammar Correction (GPT)" },
+			-- { "<leader>ck", "<cmd>ChatGPTRun keywords<CR>", desc = "Keywords (GPT)" },
+			-- { "<leader>cl", "<cmd>ChatGPTRun code_readability_analysis<CR>", desc = "Code Readability Analysis (GPT)" },
+			-- { "<leader>co", "<cmd>ChatGPTRun optimize_code<CR>", desc = "Optimize Code (GPT)" },
+			-- { "<leader>cr", "<cmd>ChatGPTRun roxygen_edit<CR>", desc = "Roxygen Edit (GPT)" },
+			-- { "<leader>cs", "<cmd>ChatGPTRun summarize<CR>", desc = "Summarize (GPT)" },
+			-- { "<leader>ct", "<cmd>ChatGPTRun translate<CR>", desc = "Translate (GPT)" },
+			-- { "<leader>cx", "<cmd>ChatGPTRun explain_code<CR>", desc = "Explain Code (GPT)" },
 		},
 	}, { prefix = "<leader>" })
 end
