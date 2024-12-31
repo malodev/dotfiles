@@ -15,6 +15,7 @@ local lsp_language_servers = {
 	"remark_ls",
 	"harper_ls",
 	"intelephense",
+	"denols",
 }
 
 return {
@@ -125,6 +126,21 @@ return {
 								},
 							},
 						},
+					})
+				end,
+				["denols"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.denols.setup({
+						capabilities = capabilities,
+						root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
+					})
+				end,
+				["ts_ls"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.ts_ls.setup({
+						capabilities = capabilities,
+						root_dir = lspconfig.util.root_pattern("package.json"),
+						single_file_support = false,
 					})
 				end,
 			})
