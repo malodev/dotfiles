@@ -11,7 +11,7 @@ return {
 			-- See Configuration section for rest
 		},
 		keys = {
-			{ "<leader>cc", "<cmd>CopilotChatToggle<CR>" },
+			{ "<leader>cc", "<cmd>CopilotChatToggle<CR>", desc = "Open Copilot Chat" },
 		},
 		-- See Commands section for default commands if you want to lazy load on them
 	},
