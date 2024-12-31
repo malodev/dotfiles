@@ -19,146 +19,6 @@ local lsp_language_servers = {
 
 return {
 
-	-- Completion part
-	{
-		"L3MON4D3/LuaSnip",
-		lazy = false,
-		dependencies = {
-			"rafamadriz/friendly-snippets",
-			"saadparwaiz1/cmp_luasnip",
-		},
-		config = function()
-			local ls = require("luasnip")
-
-			vim.keymap.set({ "i" }, "<C-K>", function()
-				ls.expand()
-			end, { silent = true })
-			vim.keymap.set({ "i", "s" }, "<C-L>", function()
-				ls.jump(1)
-			end, { silent = true })
-			vim.keymap.set({ "i", "s" }, "<C-J>", function()
-				ls.jump(-1)
-			end, { silent = true })
-
-			vim.keymap.set({ "i", "s" }, "<C-E>", function()
-				if ls.choice_active() then
-					ls.change_choice(1)
-				end
-			end, { silent = true })
-			require("luasnip.loaders.from_vscode").lazy_load()
-		end,
-	},
-	{
-		"hrsh7th/cmp-nvim-lsp",
-		lazy = false,
-		config = true,
-	},
-	{
-		"zbirenbaum/copilot-cmp",
-		config = function()
-			require("copilot_cmp").setup({
-				fix_pairs = true,
-			})
-		end,
-	},
-	{
-		"hrsh7th/nvim-cmp",
-		dependencies = {
-			"hrsh7th/cmp-buffer",
-			"hrsh7th/cmp-path",
-			"hrsh7th/cmp-cmdline",
-			"hrsh7th/cmp-nvim-lua",
-		},
-		lazy = false,
-		config = function()
-			local cmp = require("cmp")
-			local cmp_select_opts = { behavior = cmp.SelectBehavior.Select }
-			local kind_icons = {
-				Text = "",
-				Method = "󰆧",
-				Function = "󰊕",
-				Constructor = "",
-				Field = "󰇽",
-				Variable = "󰂡",
-				Class = "󰠱",
-				Interface = "",
-				Module = "",
-				Property = "󰜢",
-				Unit = "",
-				Value = "󰎠",
-				Enum = "",
-				Keyword = "󰌋",
-				Snippet = "",
-				Color = "󰏘",
-				File = "󰈙",
-				Reference = "",
-				Folder = "󰉋",
-				EnumMember = "",
-				Constant = "󰏿",
-				Struct = "",
-				Event = "",
-				Operator = "󰆕",
-				TypeParameter = "󰅲",
-			}
-
-			cmp.setup({
-				sources = cmp.config.sources({
-					{ name = "copilot" },
-					{ name = "codeium" },
-					{ name = "nvim_lsp" },
-					{ name = "nvim_lua" },
-					{ name = "luasnip" },
-					{ name = "buffer" },
-					{ name = "path" },
-				}),
-				mapping = cmp.mapping.preset.insert({
-					["<C-\\>"] = cmp.mapping.complete(),
-					["<C-u>"] = cmp.mapping.scroll_docs(-4),
-					["<C-d>"] = cmp.mapping.scroll_docs(4),
-					-- ["<C-f>"] = cmp_action.luasnip_jump_forward(),
-					-- ["<C-b>"] = cmp_action.luasnip_jump_backward(),
-					["<CR>"] = cmp.mapping.confirm({ select = false }),
-					["<Up>"] = cmp.mapping.select_prev_item(cmp_select_opts),
-					["<Down>"] = cmp.mapping.select_next_item(cmp_select_opts),
-					["<C-p>"] = cmp.mapping(function()
-						if cmp.visible() then
-							cmp.select_prev_item(cmp_select_opts)
-						else
-							cmp.complete()
-						end
-					end),
-					["<C-n>"] = cmp.mapping(function()
-						if cmp.visible() then
-							cmp.select_next_item(cmp_select_opts)
-						else
-							cmp.complete()
-						end
-					end),
-				}),
-				snippet = {
-					expand = function(args)
-						require("luasnip").lsp_expand(args.body)
-					end,
-				},
-				window = {
-					completion = cmp.config.window.bordered(),
-					documentation = cmp.config.window.bordered(),
-				},
-				formatting = {
-					expandable_indicator = true,
-					fields = { "kind", "abbr", "menu" },
-					format = function(entry, item)
-						item.menu = item.kind
-						item = require("cmp-tailwind-colors").format(entry, item)
-						if kind_icons[item.kind] then
-							item.kind = kind_icons[item.kind] .. " "
-						end
-						return item
-					end,
-				},
-			})
-		end,
-	},
 	-- LSP part
 	{
 		"williamboman/mason.nvim",
@@ -200,14 +60,29 @@ return {
 	},
 	{
 		"williamboman/mason-lspconfig.nvim",
+		dependencies = {
+			{
+				"hrsh7th/nvim-cmp",
+				enabled = not useBlink,
+			},
+			{ "saghen/blink.cmp", enabled = useBlink },
+		},
 		opts = {
 			automatic_installation = true,
 			ensure_installed = lsp_language_servers,
 		},
 		config = function(_, opts)
 			require("mason-lspconfig").setup(opts)
+			local useBlink = require("config").is_enabled.blink
 
-			local capabilities = require("cmp_nvim_lsp").default_capabilities()
+			local capabilities
+
+			if useBlink then
+				capabilities = require("blink.cmp").get_lsp_capabilities()
+			else
+				capabilities = require("cmp_nvim_lsp").default_capabilities()
+			end
+
 			capabilities.textDocument.foldingRange = {
 				dynamicRegistration = false,
 				lineFoldingOnly = true,

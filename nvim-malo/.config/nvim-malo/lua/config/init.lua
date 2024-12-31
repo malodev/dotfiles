@@ -7,5 +7,6 @@ return {
 		neogit = true,
 		telescope_tabs = true,
 		bufferline = true,
+		blink = true,
 	},
 }
