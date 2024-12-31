@@ -27,9 +27,9 @@ return {
 		},
 		custom_highlights = function(colors)
 			return {
-				LineNrAbove = { fg = colors.surface0 },
+				LineNrAbove = { fg = colors.overlay0 },
 				LineNr = { fg = colors.peach, bold = true },
-				LineNrBelow = { fg = colors.surface0 },
+				LineNrBelow = { fg = colors.overlay0 },
 				SignColumn = { bg = colors.none },
 			}
 		end,
