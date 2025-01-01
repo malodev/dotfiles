@@ -1,5 +1,6 @@
 return {
 	"zbirenbaum/copilot.lua",
+	dependencies = { "zbirenbaum/copilot-cmp", "AndreM222/copilot-lualine" },
 	-- Lazy load when event occurs. Events are triggered
 	-- as mentioned in:
 	-- https://vi.stackexchange.com/a/4495/20389

@@ -33,7 +33,7 @@ return {
 						icon = "",
 						fg = "#428890",
 					},
-					"copilot",
+					{ "copilot", show_colors = true, show_loading = true },
 					"encoding",
 					"fileformat",
 					"filetype",
