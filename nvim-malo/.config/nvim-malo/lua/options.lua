@@ -30,6 +30,12 @@ if not vim.g.vscode then
 	-- the following lines are for relative number to be disabled in insert mode
 	local number_toggle = augroup("numbertoggle", { clear = true })
 
+	-- set filetype for .denoflare to jsonc
+	autocmd({ "BufNewFile", "BufRead" }, {
+		pattern = "*.denoflare",
+		command = "set filetype=jsonc",
+	})
+
 	autocmd({ "InsertLeave" }, {
 		pattern = "*",
 		command = "setlocal relativenumber",
