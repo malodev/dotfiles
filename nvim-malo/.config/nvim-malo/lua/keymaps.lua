@@ -303,8 +303,8 @@ map("n", "<C-a>", "ggVG", opts)
 -- map("n", "<TAB>", ">>", opts)
 -- map("n", "<S-TAB>", "<<", opts)
 
-map("n", "<TAB>", ":bnext<CR>", opts)
-map("n", "<S-TAB>", ":bprevious<CR>", opts)
+-- map("n", "<TAB>", ":bnext<CR>", opts)
+-- map("n", "<S-TAB>", ":bprevious<CR>", opts)
 
 -- search movement keeps cursor in middle
 map("n", "n", "nzzzv", opts)
