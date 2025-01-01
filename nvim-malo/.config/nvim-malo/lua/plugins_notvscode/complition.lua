@@ -41,7 +41,6 @@ return {
 					end,
 				},
 			},
-
 			appearance = {
 				nerd_font_variant = "mono",
 				-- Blink does not expose its default kind icons so you must copy them all (or set your custom ones) and add Copilot
@@ -122,7 +121,32 @@ return {
 				list = {
 					selection = "manual",
 				},
-				documentation = { auto_show = true, auto_show_delay_ms = 500 },
+				menu = {
+					border = "rounded",
+					auto_show = false,
+				},
+				documentation = {
+					window = {
+						min_width = 10,
+						max_width = 80,
+						max_height = 20,
+						border = "rounded",
+
+						winblend = 0,
+						winhighlight = "Normal:BlinkCmpDoc,FloatBorder:BlinkCmpDocBorder,EndOfBuffer:BlinkCmpDoc",
+						-- Note that the gutter will be disabled when border ~= 'none'
+						scrollbar = true,
+						-- Which directions to show the documentation window,
+						-- for each of the possible menu window directions,
+						-- falling back to the next direction when there's not enough space
+						direction_priority = {
+							menu_north = { "e", "w", "n", "s" },
+							menu_south = { "e", "w", "s", "n" },
+						},
+					},
+					auto_show = true,
+					auto_show_delay_ms = 500,
+				},
 
 				-- Display a preview of the selected item on the current line
 				ghost_text = { enabled = true },
