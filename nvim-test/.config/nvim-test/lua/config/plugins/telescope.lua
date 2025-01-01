@@ -9,6 +9,7 @@ return {
 			"nvim-telescope/telescope-media-files.nvim",
 			"nvim-tree/nvim-web-devicons",
 			{ "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
+			"andrew-george/telescope-themes",
 		},
 		config = function()
 			require("telescope").setup({
@@ -54,6 +55,12 @@ return {
 			-- vim.keymap.set("n", "<leader>fc", builtin.lsp_code_actions, { desc = "lsp code actions" })
 			vim.keymap.set("n", "<leader>fr", builtin.lsp_references, { desc = "lsp references" })
 			vim.keymap.set("n", "<leader>fk", builtin.keymaps, { desc = "Find keymaps" })
+			vim.keymap.set(
+				"n",
+				"<leader>tp",
+				":Telescope themes<CR>",
+				{ noremap = true, silent = true, desc = "Theme Switcher" }
+			)
 		end,
 	},
 }
