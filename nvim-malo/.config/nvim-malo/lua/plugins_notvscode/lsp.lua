@@ -16,6 +16,7 @@ local lsp_language_servers = {
 	"harper_ls",
 	"intelephense",
 	"denols",
+	"sqlls",
 }
 
 return {
