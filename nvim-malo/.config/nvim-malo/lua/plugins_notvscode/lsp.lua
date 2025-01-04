@@ -17,6 +17,7 @@ local lsp_language_servers = {
 	"intelephense",
 	"denols",
 	"sqlls",
+	"bashls",
 }
 
 return {
