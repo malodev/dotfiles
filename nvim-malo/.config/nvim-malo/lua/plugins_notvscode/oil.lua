@@ -23,7 +23,7 @@ return {
 			columns = { "icon" },
 			keymaps = {
 				["<C-o>"] = { "actions.select", opts = { vertical = true } },
-				["<C-s>"] = nil,
+				["<C-s>"] = { "<CMD>w<CR>", desc = "Save changes" },
 				["gd"] = {
 					desc = "Toggle file detail view",
 					callback = function()
