@@ -1,45 +1,40 @@
+-- Declare a global function to retrieve the current directory
+function _G.get_oil_winbar()
+	local dir = require("oil").get_current_dir()
+	if dir then
+		return vim.fn.fnamemodify(dir, ":~")
+	else
+		-- If there is no current directory (e.g. over ssh), just show the buffer name
+		return vim.api.nvim_buf_get_name(0)
+	end
+end
+
 return {
 	"stevearc/oil.nvim",
 	-- dependencies = { "echasnovski/mini.icons" },
 	dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
 	config = function()
+		local detail = false
 		require("oil").setup({
+			show_hidden = true,
+			win_options = {
+				winbar = "%!v:lua.get_oil_winbar()",
+			},
 			columns = { "icon" },
 			keymaps = {
-				insert = {
-					["<C-l>"] = "<cmd>lua require('oil').expand()<CR>",
-					["<C-h>"] = false,
-					["<M-h>"] = "actions.select_split",
-					["g."] = "actions.toogle_hidden",
+				["<C-o>"] = { "actions.select", opts = { vertical = true } },
+				["<C-s>"] = nil,
+				["gd"] = {
+					desc = "Toggle file detail view",
+					callback = function()
+						detail = not detail
+						if detail then
+							require("oil").set_columns({ "icon", "permissions", "size", "mtime" })
+						else
+							require("oil").set_columns({ "icon" })
+						end
+					end,
 				},
-			},
-			view_options = {
-				-- Show files and directories that start with "."
-				show_hidden = true,
-				-- This function defines what is considered a "hidden" file
-				is_hidden_file = function(name, bufnr)
-					local m = name:match("^%.")
-					return m ~= nil
-				end,
-				-- This function defines what will never be shown, even when `show_hidden` is set
-				is_always_hidden = function(name, bufnr)
-					return false
-				end,
-				-- Sort file names with numbers in a more intuitive order for humans.
-				-- Can be "fast", true, or false. "fast" will turn it off for large directories.
-				natural_order = "fast",
-				-- Sort file and directory names case insensitive
-				case_insensitive = false,
-				sort = {
-					-- sort order can be "asc" or "desc"
-					-- see :help oil-columns to see which columns are sortable
-					{ "type", "asc" },
-					{ "name", "asc" },
-				},
-				-- Customize the highlight group for the file name
-				highlight_filename = function(entry, is_hidden, is_link_target, is_link_orphan)
-					return nil
-				end,
 			},
 		})
 		-- Open parent directory in current window
