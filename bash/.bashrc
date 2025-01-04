@@ -62,6 +62,7 @@ export IBUS_ENABLE_SYNC_MODE=1
 # http://stackoverflow.com/questions/9457233/unlimited-bash-history
 export HISTFILESIZE=
 export HISTSIZE=
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 # Force prompt to write history after every command. See 'help history'
 PROMPT_COMMAND="history -a; history -c; history -r; ${PROMPT_COMMAND}"
 export HISTFILE=$HOME/.bash_eternal_history
