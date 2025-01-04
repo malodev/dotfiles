@@ -1,6 +1,7 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 palette = "catppuccin_mocha"
 right_format = """$battery $time"""
+command_timeout = 5000
 # Starship modules
 [character]
 # Note the use of Catppuccin color 'peach'
