@@ -6,8 +6,39 @@ vim.cmd("set ignorecase")
 vim.cmd("set smartcase")
 vim.cmd("set mousemodel=extend")
 
+_G.IS_WSL = nil
+if pcall(require, "uname") then
+	local distro = uname()
+	-- print("-------------- TABLE --------------")
+	-- print('Sysname', distro.sysname)
+	-- print('Nodename', distro.nodename)
+	-- print('Release', distro.release)
+	-- print('Version', distro.version)
+	-- print('Machine', distro.machine)
+	_G.OS = distro.sysname
+	_G.IS_MAC = OS == "Darwin"
+	_G.IS_LINUX = OS == "Linux"
+	_G.IS_WINDOWS = OS:find("Windows") and true or false
+	_G.IS_WSL = IS_LINUX and distro.release:lower():find("microsoft") and true or false
+end
+
 vim.keymap.set("n", "<Space>", "<Nop>", { silent = true, remap = false })
 vim.opt.clipboard = "unnamedplus" -- use system clipboard
+if IS_WSL then
+	vim.g.clipboard = {
+		name = "win32yank-wsl",
+		copy = {
+			["+"] = "win32yank.exe -i --crlf",
+			["*"] = "win32yank.exe -i --crlf",
+		},
+		paste = {
+			["+"] = "win32yank.exe -o --lf",
+			["*"] = "win32yank.exe -o --lf",
+		},
+		cache_enabled = true,
+	}
+end
+
 vim.opt.number = true -- show absolute number
 vim.opt.relativenumber = true -- add numbers to each line on the left side
 
