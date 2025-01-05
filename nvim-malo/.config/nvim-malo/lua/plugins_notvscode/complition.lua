@@ -119,19 +119,24 @@ return {
 					-- or a function, similar to show_on_blocked_trigger_character
 				},
 				list = {
-					selection = "manual",
+					selection = function(ctx)
+						return ctx.mode == "cmdline" and "auto_insert" or "manual"
+					end,
 				},
 				menu = {
 					border = "rounded",
-					auto_show = false,
+					-- auto_show = function(ctx)
+					-- 	return ctx.mode == "cmdline"
+					-- end,
 				},
+
 				documentation = {
 					window = {
 						min_width = 10,
 						max_width = 80,
 						max_height = 20,
 						border = "rounded",
-
+						-- border = { "╭", "─", "╮", "│", "╯", "─", "╰", "│" },
 						winblend = 0,
 						winhighlight = "Normal:BlinkCmpDoc,FloatBorder:BlinkCmpDocBorder,EndOfBuffer:BlinkCmpDoc",
 						-- Note that the gutter will be disabled when border ~= 'none'
