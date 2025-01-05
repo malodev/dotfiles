@@ -1,3 +1,8 @@
+export startup_trace="$startup_trace\n~/.zshrc_local"
+echo "\n=====  ~/.zshrc_local  =====\n" >> /tmp/zsh_startup_trace.log
+initial_path=$PATH
+initial_fpath=$fpath
+
 export DEFAULT_USER="$USER"
 
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -119,7 +124,6 @@ PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
 export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
 
-export ZSH_DISABLE_COMPFIX=true
 #[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # pnpm https://pnpm.io/ 
@@ -134,10 +138,10 @@ esac
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 
 # deno path
-source "$HOME/.deno/env"
+[ -f "$HOME/.deno/env" ] && source "$HOME/.deno/env"
 
 # rust cargo
-source "$HOME/.cargo/env"
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
 # Fuzzy Finder
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
@@ -153,6 +157,12 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 eval "$(zoxide init zsh)"
 
 echo "🛠️zshrc_local loaded."
+# Log of changes:
+diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
+diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
+echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
+echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
+
 [[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
