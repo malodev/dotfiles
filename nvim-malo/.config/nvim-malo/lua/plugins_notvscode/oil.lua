@@ -16,7 +16,6 @@ return {
 	config = function()
 		local detail = false
 		require("oil").setup({
-			show_hidden = true,
 			win_options = {
 				winbar = "%!v:lua.get_oil_winbar()",
 			},
@@ -24,6 +23,7 @@ return {
 			keymaps = {
 				["<C-o>"] = { "actions.select", opts = { vertical = true } },
 				["<C-s>"] = { "<CMD>w<CR>", desc = "Save changes" },
+				["<C-.>"] = { "actions.toggle_hidden", desc = "Toggle hidden files" },
 				["gd"] = {
 					desc = "Toggle file detail view",
 					callback = function()
@@ -36,13 +36,16 @@ return {
 					end,
 				},
 			},
+			view_options = {
+				show_hidden = true,
+			},
 		})
 		-- Open parent directory in current window
 		vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory in current window" })
 		-- Open parent directory in floating window
 		vim.keymap.set(
 			"n",
-			"<leader>l",
+			"<leader>fl",
 			require("oil").toggle_float,
 			{ desc = "Oil: Open parent directory in floating window" }
 		)
