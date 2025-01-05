@@ -8,18 +8,18 @@ return {
 		filetypes = { "*" },
 		user_default_options = {
 			names = true, -- "Name" codes like Blue or blue
-			RGB = true, -- #RGB hex codes
-			RRGGBB = true, -- #RRGGBB hex codes
-			RRGGBBAA = true, -- #RRGGBBAA hex codes
-			AARRGGBB = true, -- 0xAARRGGBB hex codes
-			rgb_fn = true, -- CSS rgb() and rgba() functions
-			hsl_fn = false, -- CSS hsl() and hsla() functions
+			RGB = true, --      #523 hex codes
+			RRGGBB = true, --   #345621 hex codes
+			RRGGBBAA = true, -- #55887788 hex codes
+			AARRGGBB = true, -- 0x88558877 hex codes
+			rgb_fn = true, -- CSS rgb(44, 69, 44)  and rgba(55, 69, 55, 0.3) functions
+			hsl_fn = true, -- CSS hsl(180, 50%, 50%) and hsla(180, 50%, 50%, 0.3) functions
 			css = true, -- Enable all CSS features: rgb_fn, hsl_fn, names, RGB, RRGGBB
-			css_fn = false, -- Enable all CSS *functions*: rgb_fn, hsl_fn
-			-- Highlighting mode.  'background'|'foreground'|'virtualtext'
-			mode = "virtualtext", -- Set the display mode
-			-- Tailwind colors.  boolean|'normal'|'lsp'|'both'.  True is same as normal
-			tailwind = true, -- Enable tailwind colors
+			css_fn = true, -- Enable all CSS *functions*: rgb_fn, hsl_fn
+			-- Highlighting mode. 'background'|'foreground'|'virtualtext'
+			mode = "background", -- Set the display mode
+			-- Tailwind colors. boolean|'normal'|'lsp'|'both'. True is same as normal
+			tailwind = "both", -- Enable tailwind colors text-purple-500
 			-- parsers can contain values used in |user_default_options|
 			sass = { enable = false, parsers = { "css" } }, -- Enable sass colors
 			-- Virtualtext character to use
