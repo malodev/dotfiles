@@ -6,12 +6,14 @@ return {
 		"AndreM222/copilot-lualine",
 	},
 	config = function()
+		local icons = require("config").icons
 		require("lualine").setup({
 			options = {
-				theme = "palenight",
+				theme = "auto",
 				section_separators = { left = "", right = "" },
 				-- section_separators = { "", "" },
-				component_separators = { left = "", right = "" },
+				-- component_separators = { left = "", right = "" },
+				component_separators = { left = "", right = "" },
 				icons_enabled = true,
 				globalstatus = false,
 				ignore_focus = { "NvimTree" },
@@ -20,6 +22,16 @@ return {
 				lualine_a = { { "mode", icons_enabled = true, icon = "" } },
 				lualine_b = { "branch" },
 				lualine_c = {
+					{
+						"diagnostics",
+						symbols = {
+							error = icons.diagnostics.Error,
+							warn = icons.diagnostics.Warn,
+							info = icons.diagnostics.Info,
+							hint = icons.diagnostics.Hint,
+						},
+					},
+					{ "filetype", icon_only = true, separator = "", padding = { left = 1, right = 0 } },
 					"filename",
 					-- {
 					-- 	require("noice").api.statusline.mode.get,
@@ -37,17 +49,42 @@ return {
 					"encoding",
 					"fileformat",
 					"filetype",
+					{
+						"diff",
+						symbols = {
+							added = icons.git.added,
+							modified = icons.git.modified,
+							removed = icons.git.removed,
+						},
+						source = function()
+							local gitsigns = vim.b.gitsigns_status_dict
+							if gitsigns then
+								return {
+									added = gitsigns.added,
+									modified = gitsigns.changed,
+									removed = gitsigns.removed,
+								}
+							end
+						end,
+					},
 				},
-				lualine_y = { "progress" },
-				lualine_z = { "location" },
+				lualine_y = {
+					{ "progress", separator = " ", padding = { left = 1, right = 0 } },
+					{ "location", padding = { left = 0, right = 1 } },
+				},
+				lualine_z = {
+					function()
+						return " " .. os.date("%R")
+					end,
+				},
 			},
 			inactive_sections = {
-				lualine_a = { "mode" },
-				lualine_b = { "branch" },
-				lualine_c = { "filename" },
-				lualine_x = { "copilot", "encoding", "fileformat", "filetype" },
-				lualine_y = { "progress" },
-				lualine_z = { "location" },
+				-- lualine_a = { "mode" },
+				-- lualine_b = { "branch" },
+				-- lualine_c = { "filename" },
+				-- lualine_x = { "copilot", "encoding", "fileformat", "filetype" },
+				-- lualine_y = { "progress" },
+				-- lualine_z = { "location" },
 			},
 			-- winbar = {
 			-- 	lualine_a = {
