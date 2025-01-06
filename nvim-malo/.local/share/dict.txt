@@ -26,6 +26,7 @@ LazyVim
 luasnip
 cmdline
 devicons
+WhichKey
 macchiato
 Primeagen
 catppuccin
