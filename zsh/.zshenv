@@ -6,6 +6,8 @@ initial_fpath=$fpath
 export TERM="xterm-256color"
 skip_global_compinit=1
 
+
+
 # Log of changes:
 diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
 diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
