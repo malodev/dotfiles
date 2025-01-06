@@ -29,10 +29,7 @@ return {
 			width = { min = 20 }, -- min and max width of the columns
 			spacing = 3, -- spacing between columns
 		},
-		keys = {
-			scroll_down = "<c-j>", -- binding to scroll down inside the popup
-			scroll_up = "<c-k>", -- binding to scroll up inside the popup
-		},
+		keys = {},
 	},
 	keys = {
 		{

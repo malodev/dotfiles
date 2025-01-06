@@ -22,7 +22,6 @@ if pcall(require, "uname") then
 	_G.IS_WSL = IS_LINUX and distro.release:lower():find("microsoft") and true or false
 end
 
-vim.keymap.set("n", "<Space>", "<Nop>", { silent = true, remap = false })
 vim.opt.clipboard = "unnamedplus" -- use system clipboard
 if IS_WSL then
 	vim.g.clipboard = {

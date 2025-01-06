@@ -78,12 +78,6 @@ map("n", "[b", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
 map("n", "]b", "<cmd>bnext<cr>", { desc = "Next Buffer" })
 map("n", "<leader>bb", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
 map("n", "<leader>`", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
-map("n", "<leader>bd", function()
-	Snacks.bufdelete()
-end, { desc = "Delete Buffer" })
-map("n", "<leader>bo", function()
-	Snacks.bufdelete.other()
-end, { desc = "Delete Other Buffers" })
 map("n", "<leader>bD", "<cmd>:bd<cr>", { desc = "Delete Buffer and Window" })
 
 map("n", "<C-x>", ":bd<CR>", { desc = "Close current buffer" })
@@ -252,7 +246,7 @@ local function tc(t1, t2)
 	return vim.tbl_extend("force", t1, t2)
 end
 
-map({ "n", "v" }, "<Space>", "<Nop>", { desc = "remap space to no operation" })
+map({ "n", "v" }, "<Space>", "<Nop>", { desc = "Leader key" })
 
 -- make CTRL + C behave exactly the same as ESC
 map("i", "<C-c>", "<ESC>", tc(opts, { desc = "Make CTRL + C behave exactly the same as ESC" }))
