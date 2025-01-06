@@ -1,5 +1,11 @@
 # dotfiles
 
+<!--toc:start-->
+
+- [dotfiles](#dotfiles)
+  - [Inspiration](#inspiration)
+  <!--toc:end-->
+
 Clone the repo using:
 
 ```sh
@@ -32,6 +38,6 @@ stow nvim
 
 The inspiration for this configuration comes from
 
-- https://github.com/dreamsofcode-io/dotfiles
-- https://github.com/typecraft-dev/dotfiles
-- https://learn.typecraft.dev/tutorial/never-lose-your-configs-again/
+- [dreamsofcode-io/dotfiles](https://github.com/dreamsofcode-io/dotfiles)
+- [typecraft-dev/dotfiles](https://github.com/typecraft-dev/dotfiles)
+- [never-lose-your-configs-again](https://learn.typecraft.dev/tutorial/never-lose-your-configs-again/)
