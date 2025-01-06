@@ -43,6 +43,15 @@ return {
 			vim.keymap.set("n", "<leader>mc", "<cmd>PeekClose<cr>", { desc = "Peek Close" })
 		end,
 	},
+	{
+		"MeanderingProgrammer/render-markdown.nvim",
+		dependencies = { "nvim-treesitter/nvim-treesitter", "echasnovski/mini.nvim" }, -- if you use the mini.nvim suite
+		---@module 'render-markdown'
+		---@type render.md.UserConfig
+		opts = {
+      preset = true,
+    },
+	},
 	-- install with yarn or npm
 	{
 		"iamcco/markdown-preview.nvim",

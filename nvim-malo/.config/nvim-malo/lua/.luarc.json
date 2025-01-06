@@ -8,6 +8,7 @@
         "_floatTerm_toggle",
         "_lazygit_toggle",
         "Snacks",
+        "require",
     ],
     "diagnostics.disable": [
         "undefined-doc-name"
