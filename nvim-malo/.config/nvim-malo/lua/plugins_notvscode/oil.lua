@@ -11,8 +11,8 @@ end
 
 return {
 	"stevearc/oil.nvim",
-	-- dependencies = { "echasnovski/mini.icons" },
-	dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
+	dependencies = { "echasnovski/mini.nvim" },
+	-- dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
 	config = function()
 		local detail = false
 		require("oil").setup({
