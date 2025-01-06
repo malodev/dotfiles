@@ -143,7 +143,11 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 # rust cargo
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
-# Fuzzy Finder
+#  Fuzzy Finder
+# If zsh-vim-mode is installed the plugin will auto execute this zvm_after_init function
+function zvm_after_init() {
+  [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+}
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # ~/.zshrc
@@ -163,6 +167,5 @@ diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
 echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
 echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
 
-[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
