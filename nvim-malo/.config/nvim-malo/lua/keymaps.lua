@@ -388,13 +388,17 @@ map("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
 -- keymap.set("t", "<C-A>", [[<C-\>|]], tc(opts, { desc = "Terminal beginning of line" }))
 -- keymap.set("t", "<C-E>", [[<C-\>$]], tc(opts, { desc = "Terminal beginning of line" }))
--- ChatGPT mappings
+
+local is_virtual_text_enabled = function()
+  return vim.diagnostic.config().virtual_text
+end
+
 if not vim.g.vscode then
 	-- WhichKey mappings
 	local wk = require("which-key")
 	wk.add({
 		{ "<leader>b", group = "Buffers" },
-		{ "<leader>c", group = "ChatGPT" },
+		{ "<leader>c", group = "Coding Stuff" },
 		{ "<leader>d", group = "Debugging" },
 		{ "<leader>f", group = "Telescope and force" },
 		{ "<leader>g", group = "LSP Go to and git" },
@@ -418,5 +422,22 @@ if not vim.g.vscode then
 			-- { "<leader>ct", "<cmd>ChatGPTRun translate<CR>", desc = "Translate (GPT)" },
 			-- { "<leader>cx", "<cmd>ChatGPTRun explain_code<CR>", desc = "Explain Code (GPT)" },
 		},
+    {
+      mode = { "n", "x" },
+      { "<leader>uv",
+        function()
+          vim.diagnostic.config({ virtual_text = not is_virtual_text_enabled() })
+        end,
+        desc = is_virtual_text_enabled() and "Disable Virtual Text Diagnostic" or "Enable Virtual Text Diagnostic",
+        icon = function ()
+            if is_virtual_text_enabled() then
+              return {icon = " ", hl = "DiagnosticInfo"}
+            else
+              return {icon = " ", hl = "DiagnosticWarn"}
+            end
+          end,
+      },
+    },
+
 	}, { prefix = "<leader>" })
 end

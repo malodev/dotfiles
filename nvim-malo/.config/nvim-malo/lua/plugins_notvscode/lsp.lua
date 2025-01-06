@@ -19,7 +19,7 @@ local lsp_language_servers = {
 	"sqlls",
 	"bashls",
 }
-
+vim.diagnostic.config({ virtual_text = false })
 return {
 
 	-- LSP part
