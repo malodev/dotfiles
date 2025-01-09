@@ -10,6 +10,7 @@ return {
 	config = function()
 		require("codeium").setup({
 			-- Optionally disable cmp source if using virtual text only
+			enable_chat = true,
 			enable_cmp_source = false,
 			virtual_text = {
 				enabled = true,
@@ -32,7 +33,7 @@ return {
 				map_keys = true,
 				-- The key to press when hitting the accept keybinding but no completion is showing.
 				-- Defaults to \t normally or <c-n> when a popup is showing.
-				accept_fallback = nil,
+				accept_fallback = "<Tab>",
 				-- Key bindings for managing completions in virtual text mode.
 				key_bindings = {
 					-- Accept the current completion.
@@ -40,13 +41,13 @@ return {
 					-- Accept the next word.
 					accept_word = "<C-;>",
 					-- Accept the next line.
-					accept_line = false,
+					accept_line = "<C-'>",
 					-- Clear the virtual text.
 					clear = false,
 					-- Cycle to the next completion.
-					next = "<M-]>",
+					next = "<C-.>",
 					-- Cycle to the previous completion.
-					prev = "<M-[>",
+					prev = "<C-,>",
 				},
 			},
 		})
