@@ -145,6 +145,12 @@ return {
 						single_file_support = false,
 					})
 				end,
+				["bashls"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.bashls.setup({
+						filetypes = { "bash", "sh", "zsh" },
+					})
+				end,
 			})
 		end,
 	},
