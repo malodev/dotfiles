@@ -1,3 +1,4 @@
 nushell/.config/nushell/generated.nu
 *.disabled
 *.ignore/**/*
+.nvim
