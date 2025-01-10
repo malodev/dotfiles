@@ -25,6 +25,7 @@ ChatGPT
 LazyVim
 luasnip
 cmdline
+proxied
 devicons
 WhichKey
 macchiato
