@@ -14,6 +14,8 @@ return {
 		config = function()
 			require("telescope").setup({
 				defaults = {
+					path_display = { "truncate" },
+					dynamic_preview_title = true,
 					mappings = {
 						i = {
 							["<c-j>"] = require("telescope.actions").cycle_history_next,
