@@ -17,7 +17,8 @@ require("lazy").setup({
 	{
 		import = "plugins_notvscode",
 		cond = function()
-			return not vim.g.vscode
+			return true
+			-- return not vim.g.vscode
 		end,
 	},
 	{ import = "plugins_always", cond = true },
