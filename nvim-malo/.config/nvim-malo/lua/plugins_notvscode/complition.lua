@@ -17,7 +17,17 @@ return {
 		"saghen/blink.cmp",
 		enabled = useBlink,
 		-- optional: provides snippets for the snippet source
-		dependencies = { "rafamadriz/friendly-snippets", "giuxtaposition/blink-cmp-copilot" },
+		dependencies = {
+			"rafamadriz/friendly-snippets",
+			"giuxtaposition/blink-cmp-copilot",
+			{
+				"L3MON4D3/LuaSnip",
+				-- follow latest release.
+				version = "v2.*", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
+				-- install jsregexp (optional!).
+				build = "make install_jsregexp",
+			},
+		},
 
 		-- use a release tag to download pre-built binaries
 		version = "*",
@@ -159,7 +169,7 @@ return {
 				},
 
 				-- Display a preview of the selected item on the current line
-				ghost_text = { enabled = true },
+				ghost_text = { enabled = false },
 			},
 
 			-- Default list of enabled providers defined so that you can extend it
