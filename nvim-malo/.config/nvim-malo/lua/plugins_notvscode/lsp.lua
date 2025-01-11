@@ -20,6 +20,7 @@ local lsp_language_servers = {
 	"bashls",
 }
 vim.diagnostic.config({ virtual_text = false })
+local useBlink = require("config").is_enabled.blink
 return {
 
 	-- LSP part
@@ -76,8 +77,6 @@ return {
 		},
 		config = function(_, opts)
 			require("mason-lspconfig").setup(opts)
-			local useBlink = require("config").is_enabled.blink
-
 			local capabilities
 
 			if useBlink then
@@ -97,6 +96,100 @@ return {
 				function(server_name) -- default handler (optional)
 					require("lspconfig")[server_name].setup({
 						position_encoding = "utf-8",
+						capabilities = capabilities,
+					})
+				end,
+				["lua_ls"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.lua_ls.setup({
+						position_encoding = "utf-8",
+						settings = {
+							Lua = {
+								hint = {
+									enable = true,
+								},
+								diagnostics = {
+									globals = { "vim" },
+								},
+								workspace = {
+									library = {
+										[vim.fn.expand("$VIMRUNTIME/lua")] = true,
+										[vim.fn.expand("$VIMRUNTIME/lua/vim/lsp")] = true,
+									},
+								},
+							},
+						},
+						capabilities = capabilities,
+					})
+				end,
+				["ts_ls"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.ts_ls.setup({
+						position_encoding = "utf-8",
+						settings = {
+							tsserver_file_preferences = {
+								-- Inlay hints
+								includeInlayParameterNameHints = "all",
+								includeInlayParameterNameHintsWhenArgumentMatchesName = true,
+								includeInlayVariableTypeHintsWhenTypeMatchesName = true,
+								includeInlayFunctionParameterTypeHints = true,
+								includeInlayVariableTypeHints = true,
+								includeInlayPropertyDeclarationTypeHints = true,
+								includeInlayFunctionLikeReturnTypeHints = true,
+								includeInlayEnumMemberValueHints = true,
+							},
+							typescript = {
+								inlayHints = {
+									includeInlayParameterNameHints = "all",
+									includeInlayParameterNameHintsWhenArgumentMatchesName = true,
+									includeInlayVariableTypeHintsWhenTypeMatchesName = true,
+									includeInlayFunctionParameterTypeHints = true,
+									includeInlayVariableTypeHints = true,
+									includeInlayPropertyDeclarationTypeHints = true,
+									includeInlayFunctionLikeReturnTypeHints = true,
+									includeInlayEnumMemberValueHints = true,
+								},
+							},
+							javascript = {
+								inlayHints = {
+									includeInlayVariableTypeHintsWhenTypeMatchesName = true,
+									includeInlayParameterNameHints = "all",
+									includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+									includeInlayFunctionParameterTypeHints = true,
+									includeInlayVariableTypeHints = true,
+									includeInlayPropertyDeclarationTypeHints = true,
+									includeInlayFunctionLikeReturnTypeHints = true,
+									includeInlayEnumMemberValueHints = true,
+								},
+							},
+						},
+						capabilities = capabilities,
+						inlay_hints = {
+							enabled = false,
+						},
+						root_dir = lspconfig.util.root_pattern("package.json"),
+						single_file_support = false,
+					})
+				end,
+				["basedpyright"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.basedpyright.setup({
+						inlay_hints = {
+							enabled = true,
+						},
+						settings = {
+							basedpyright = {
+								analysis = {
+									typeCheckingMode = "off",
+									inlayHints = {
+										variableTypes = true,
+										callArgumentNames = true,
+										functionReturnTypes = true,
+										genericTypes = true,
+									},
+								},
+							},
+						},
 						capabilities = capabilities,
 					})
 				end,
@@ -135,14 +228,6 @@ return {
 					lspconfig.denols.setup({
 						capabilities = capabilities,
 						root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
-					})
-				end,
-				["ts_ls"] = function()
-					local lspconfig = require("lspconfig")
-					lspconfig.ts_ls.setup({
-						capabilities = capabilities,
-						root_dir = lspconfig.util.root_pattern("package.json"),
-						single_file_support = false,
 					})
 				end,
 				["bashls"] = function()
