@@ -278,27 +278,43 @@ return {
 			)
 			vim.keymap.set(
 				"n",
-				"<leader>gd",
-				vim.lsp.buf.definition,
-				{ desc = " Jumps to the definition of the symbol under the cursor" }
-			)
-			vim.keymap.set(
-				"n",
-				"<leader>gr",
-				vim.lsp.buf.references,
-				{ desc = "Lists all the references to the symbol under the cursor in the quickfix window." }
-			)
-			vim.keymap.set(
-				"n",
 				"<leader>ca",
 				vim.lsp.buf.code_action,
 				{ desc = "Selects a code action available at the current cursor position." }
 			)
 			vim.keymap.set(
 				"n",
+				"<leader>cr",
+				vim.lsp.buf.rename,
+				{ desc = "Renames all references to the symbol under the cursor" }
+			)
+			vim.keymap.set("n", "<leader>ci", "<cmd>LspInfo<cr>", { desc = "Lsp Info" })
+			vim.keymap.set(
+				"n",
+				"gd",
+				vim.lsp.buf.definition,
+				{ desc = " Jumps to the definition of the symbol under the cursor" }
+			)
+			vim.keymap.set(
+				"n",
+				"gr",
+				vim.lsp.buf.references,
+				{ desc = "Lists all the references to the symbol under the cursor in the quickfix window." }
+			)
+			vim.keymap.set(
+				"n",
 				"gD",
-				"<cmd>lua vim.lsp.buf.declaration()<cr>",
+				vim.lsp.buf.declaration,
 				{ desc = "Jumps to the declaration of the symbol under the cursor" }
+			)
+			vim.keymap.set("n", "gK", function()
+				return vim.lsp.buf.signature_help()
+			end, { desc = "Displays signature help for the symbol under the cursor" })
+			vim.keymap.set(
+				"n",
+				"gy",
+				vim.lsp.buf.type_definition,
+				{ desc = "Jumps to the definition of the type of the symbol under the cursor" }
 			)
 			vim.keymap.set(
 				"n",
