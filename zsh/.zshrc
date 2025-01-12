@@ -1,5 +1,5 @@
 export startup_trace="$startup_trace\n~/.zshrc"
-echo "\n=====  ~/.zshrc  =====\n" >> /tmp/zsh_startup_trace.log
+echo "\n=====  ~/.zshrc  =====\n" >>/tmp/zsh_startup_trace.log
 echo "Initial fpath: $fpath" >>/tmp/zsh_startup_trace.log
 echo "" >>/tmp/zsh_startup_trace.log
 initial_path=$PATH
@@ -20,13 +20,13 @@ autoload -Uz compinit && compinit
 # Zplug
 # Check if zplug is installed
 if [[ ! -d ~/.zplug ]]; then
-    git clone https://github.com/zplug/zplug ~/.zplug
-    source ~/.zplug/init.zsh && zplug update --self
+  git clone https://github.com/zplug/zplug ~/.zplug
+  source ~/.zplug/init.zsh && zplug update --self
 fi
 
 # if you encounter problem with zplug and compinit
-# do the following (also valid for other folders): 
-# compaudit | xargs chmod -R go-w 
+# do the following (also valid for other folders):
+# compaudit | xargs chmod -R go-w
 # chown mauro:mauro ~/.zplug -R
 # chmod go-w ~/.zplug -R
 # chmod u+rwX ~/.zplug -R
@@ -61,15 +61,19 @@ zplug load
 # uninstall by removing these lines or running `tabtab uninstall sls`
 ##[[ -f /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh ]] && . /usr/local/lib/node_modules/serverless/node_modules/tabtab/.completions/sls.zsh
 
-bindkey -v # vi mode
-bindkey ^R history-incremental-search-backward # rebind ^R 
-bindkey ^S history-incremental-search-forward # rebind ^S
+bindkey -v                                     # vi mode
+bindkey ^R history-incremental-search-backward # rebind ^R
+bindkey ^S history-incremental-search-forward  # rebind ^S
 
 echo "🛠️zshrc loaded."
- # Log of changes:
-diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
-diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
-echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
-echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
-echo "\nNew fpath:\n$fpath" >>/tmp/zsh_startup_trace.log
+# Log of changes:
+if command -v ccdiff &>/dev/null; then
+  diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
+  diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
+  echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
+  echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
+  echo "\nNew fpath:\n$fpath" >>/tmp/zsh_startup_trace.log
+fi
 source "$HOME/.zshrc_local"
+
+alias gam="/Users/mauro/bin/gamadv-xtd3/gam"
