@@ -22,11 +22,32 @@ return {
 							["<c-k>"] = require("telescope.actions").cycle_history_prev,
 						},
 					},
+					layout_strategy = "vertical",
+					layout_config = {
+						center = {
+							width = function(_, max_columns)
+								local percentage = 0.8
+								local max = 70
+								return math.min(math.floor(percentage * max_columns), max)
+							end,
+							height = function(_, _, max_lines)
+								local percentage = 0.8
+								local min = 25
+								return math.max(math.floor(percentage * max_lines), min)
+							end,
+							preview_cutoff = 0,
+						},
+						vertical = {
+							width = 0.9,
+							height = 0.9,
+							preview_height = 0.5,
+							preview_cutoff = 1,
+						},
+					},
 				},
 				pickers = {
 					find_files = {
 						hidden = true,
-						theme = "dropdown",
 					},
 					grep_string = {
 						additional_args = { "--hidden" },
