@@ -12,7 +12,6 @@ local lsp_language_servers = {
 	"basedpyright",
 	"marksman",
 	"astro",
-	"remark_ls",
 	"harper_ls",
 	"intelephense",
 	"denols",
