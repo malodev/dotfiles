@@ -9,9 +9,10 @@ skip_global_compinit=1
 
 
 # Log of changes:
-diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
-diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
-echo "Diff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
-echo "" >>/tmp/zsh_startup_trace.log
-echo "Diff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
-
+if command -v ccdiff &>/dev/null; then
+  diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
+  diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
+  echo "Diff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
+  echo "" >>/tmp/zsh_startup_trace.log
+  echo "Diff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
+fi

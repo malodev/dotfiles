@@ -10,8 +10,9 @@ initial_fpath=$fpath
 export PATH="$PATH:/home/mauro/.local/share/JetBrains/Toolbox/scripts"
 
 # Log of changes:
-diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
-diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
-echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
-echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
-
+if command -v ccdiff &>/dev/null; then
+  diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
+  diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
+  echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
+  echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
+fi
