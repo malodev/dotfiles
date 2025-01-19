@@ -1,0 +1,3 @@
+theme = "mellow"
+[editor.cursor-shape]
+insert = "bar"
