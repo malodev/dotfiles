@@ -43,8 +43,10 @@ return {
 			-- 'super-tab' for mappings similar to vscode (tab to accept, arrow keys to navigate)
 			-- 'enter' for mappings similar to 'super-tab' but with 'enter' to accept
 			-- See the full "keymap" documentation for information on defining your own keymap.
+			-- https://cmp.saghen.dev/configuration/keymap.html#presets
 			keymap = {
-				preset = "enter",
+				preset = "super-tab",
+				["<CR>"] = { "accept", "fallback" },
 				["<C-c>"] = {
 					function(cmp)
 						cmp.show({ providers = { "copilot" } })
@@ -134,7 +136,8 @@ return {
 							return ctx.mode ~= "cmdline"
 						end,
 						auto_insert = function(ctx)
-							return ctx.mode ~= "cmdline"
+							return true
+							-- return ctx.mode ~= "cmdline"
 						end,
 					},
 				},
