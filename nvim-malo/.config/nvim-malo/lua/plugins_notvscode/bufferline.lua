@@ -53,10 +53,6 @@ return {
 				},
 			})
 		end,
-		keys = {
-			{ "<leader>bl", "<cmd>BufferLineCloseLeft<CR>", desc = "BufferLine: Close Left" },
-			{ "<leader>br", "<cmd>BufferLineCloseRight<CR>", desc = "BufferLine: Close Right" },
-			{ "<leader>bo", "<cmd>BufferLineCloseOthers<CR>", desc = "BufferLine: Close Others" },
-		},
+		keys = {},
 	},
 }

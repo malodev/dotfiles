@@ -72,23 +72,30 @@ map("v", "<A-j>", ":<C-u>execute \"'<,'>move '>+\" . v:count1<cr>gv=gv", { desc 
 map("v", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<cr>gv=gv", { desc = "Move Up" })
 
 -- buffers
-map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
-map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next Buffer" })
+map("n", "<C-x>", ":bd<CR>", { desc = "Close current buffer" })
+map("n", "<C-s>", ":w<CR>", { desc = "Save current buffer" })
+map("i", "<C-s>", "<Esc>:w<CR>", { desc = "Save current buffer" })
+map("n", "<C-h>", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
+map("n", "<C-l>", "<cmd>bnext<cr>", { desc = "Next Buffer" })
 map("n", "[b", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
 map("n", "]b", "<cmd>bnext<cr>", { desc = "Next Buffer" })
 map("n", "<leader>bb", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
 map("n", "<leader>`", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
-map("n", "<leader>bD", "<cmd>:bd<cr>", { desc = "Delete Buffer and Window" })
 
-map("n", "<C-x>", ":bd<CR>", { desc = "Close current buffer" })
 map("n", "<leader>bf", ":lua delete_current_file()<CR>", { desc = "Delete current file and close the buffer" })
 
-map("n", "<leader>bp", ":BufferLineTogglePin<CR>", { desc = "Pin current buffer" })
+map("n", "<leader>bl", "<cmd>BufferLineCloseLeft<CR>", { desc = "BufferLine: Close Left" })
+map("n", "<leader>br", "<cmd>BufferLineCloseRight<CR>", { desc = "BufferLine: Close Right" })
+map("n", "<leader>bo", "<cmd>BufferLineCloseOthers<CR>", { desc = "BufferLine: Close Others" })
+map("n", "<leader>bp", "<cmd>BufferLineTogglePin<CR>", { desc = "Toggle Pin current buffer" })
+map("n", "<leader>bc", "<cmd>BufferLinePick<CR>", { desc = "Choose a buffer by letter" })
+map("n", "<leader>bD", "<cmd>bd<cr>", { desc = "Delete Buffer and Window" })
+-- stylua: ignore start
+map("n", "<leader>bd", function() Snacks.bufdelete() end, { desc = "Delete Buffer" })
+map("n", "<leader>ba", function() Snacks.bufdelete.all() end, { desc = "Delete All Buffer" })
+map("n", "<leader>bo", function() Snacks.bufdelete.other() end, { desc = "Delete Other Buffer" })
+-- stylua: ignore end
 
-map("n", "<leader>pb", ":BufferLinePick<CR>", { desc = "Pick a buffer by letter" })
-
-map("n", "<C-s>", ":w<CR>", { desc = "Save current buffer" })
-map("i", "<C-s>", "<Esc>:w<CR>", { desc = "Save current buffer" })
 map("n", "<leader>w", ":wa<CR>", { desc = "Write all buffers" })
 
 -- quit
@@ -168,10 +175,12 @@ Snacks.toggle.option("wrap", { name = "Wrap" }):map("<leader>uw")
 Snacks.toggle.option("relativenumber", { name = "Relative Number" }):map("<leader>uL")
 Snacks.toggle.diagnostics():map("<leader>ud")
 Snacks.toggle.line_number():map("<leader>ul")
-Snacks.toggle.option("conceallevel", { off = 0, on = vim.o.conceallevel > 0 and vim.o.conceallevel or 2, name = "Conceal Level" }):map("<leader>uc")
-Snacks.toggle.option("showtabline", { off = 0, on = vim.o.showtabline > 0 and vim.o.showtabline or 2, name = "Tabline" }):map("<leader>uA")
+Snacks.toggle.option("conceallevel",
+  { off = 0, on = vim.o.conceallevel > 0 and vim.o.conceallevel or 2, name = "Conceal Level" }):map("<leader>uc")
+Snacks.toggle.option("showtabline", { off = 0, on = vim.o.showtabline > 0 and vim.o.showtabline or 2, name = "Tabline" })
+    :map("<leader>uA")
 Snacks.toggle.treesitter():map("<leader>uT")
-Snacks.toggle.option("background", { off = "light", on = "dark" , name = "Dark Background" }):map("<leader>ub")
+Snacks.toggle.option("background", { off = "light", on = "dark", name = "Dark Background" }):map("<leader>ub")
 Snacks.toggle.dim():map("<leader>uD")
 Snacks.toggle.animate():map("<leader>ua")
 Snacks.toggle.indent():map("<leader>ug")
@@ -192,7 +201,7 @@ end
 
 map("n", "<leader>gb", function() Snacks.git.blame_line() end, { desc = "Git Blame Line" })
 map({ "n", "x" }, "<leader>gB", function() Snacks.gitbrowse() end, { desc = "Git Browse (open)" })
-map({"n", "x" }, "<leader>gY", function()
+map({ "n", "x" }, "<leader>gY", function()
   Snacks.gitbrowse({ open = function(url) vim.fn.setreg("+", url) end, notify = false })
 end, { desc = "Git Browse (copy)" })
 
@@ -226,24 +235,24 @@ map("n", "<leader><tab>[", "<cmd>tabprevious<cr>", { desc = "Previous Tab" })
 
 -- Define the function to delete the current file with confirmation
 function _G.delete_current_file()
-	-- Get the name of the current file
-	local file = vim.fn.expand("%")
-	-- Ask for confirmation
-	local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
+  -- Get the name of the current file
+  local file = vim.fn.expand("%")
+  -- Ask for confirmation
+  local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
 
-	if confirm == 1 then
-		-- If confirmed, delete the file
-		os.remove(file)
-		-- Close the buffer without saving
-		vim.api.nvim_command("bdelete!")
-		print("File deleted: " .. file)
-	else
-		print("Operation cancelled.")
-	end
+  if confirm == 1 then
+    -- If confirmed, delete the file
+    os.remove(file)
+    -- Close the buffer without saving
+    vim.api.nvim_command("bdelete!")
+    print("File deleted: " .. file)
+  else
+    print("Operation cancelled.")
+  end
 end
 
 local function tc(t1, t2)
-	return vim.tbl_extend("force", t1, t2)
+  return vim.tbl_extend("force", t1, t2)
 end
 
 map({ "n", "v" }, "<Space>", "<Nop>", { desc = "Leader key" })
@@ -278,10 +287,10 @@ map("n", "zz", "zz:noh<CR>", opts)
 
 -- replace current word
 map(
-	"n",
-	"<leader>ss",
-	[[:%s/<C-r><C-w>/<C-r><C-w>/gI<Left><Left><Left>]],
-	tc(opts, { desc = "Search and replace current word" })
+  "n",
+  "<leader>ss",
+  [[:%s/<C-r><C-w>/<C-r><C-w>/gI<Left><Left><Left>]],
+  tc(opts, { desc = "Search and replace current word" })
 )
 
 -- make current file an executable
@@ -306,39 +315,39 @@ map("n", "N", "Nzzzv", opts)
 
 -- Shift arrow keys to select and extend selection
 -- go in visual line mode and extend selection when moving up and down
-map("n", "<S-Down>", "V", { desc= "Enter in visual line mode" })
-map("n", "<S-Up>", "V", { desc= "Enter in visual line mode" })
-map("i", "<S-Down>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
-map("i", "<S-Up>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
-map("v", "<S-Down>", "<Down>", { desc= "When in visual line mode move down" })
-map("v", "<S-Up>", "<Up>", { desc= "When in visual line mode move up" })
+map("n", "<S-Down>", "V", { desc = "Enter in visual line mode" })
+map("n", "<S-Up>", "V", { desc = "Enter in visual line mode" })
+map("i", "<S-Down>", "<Esc>V", { desc = "Exit insert mode and enter in visual line mode" })
+map("i", "<S-Up>", "<Esc>V", { desc = "Exit insert mode and enter in visual line mode" })
+map("v", "<S-Down>", "<Down>", { desc = "When in visual line mode move down" })
+map("v", "<S-Up>", "<Up>", { desc = "When in visual line mode move up" })
 
 -- go in visual mode and extend selection when moving left and right
-map("n", "<S-Left>", "v<Left>", { desc= "Enter in visual mode and move left" })
-map("n", "<S-Right>", "v<Right>", { desc= "Enter in visual mode and move right" })
-map("i", "<S-Left>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
-map("i", "<S-Right>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
-map("v", "<S-Left>", "<Left>", { desc= "When in visual mode move left" })
-map("v", "<S-Right>", "<Right>", { desc= "When in visual mode move right" })
+map("n", "<S-Left>", "v<Left>", { desc = "Enter in visual mode and move left" })
+map("n", "<S-Right>", "v<Right>", { desc = "Enter in visual mode and move right" })
+map("i", "<S-Left>", "<Esc>v", { desc = "Exit insert mode and enter in visual mode" })
+map("i", "<S-Right>", "<Esc>v", { desc = "Exit insert mode and enter in visual mode" })
+map("v", "<S-Left>", "<Left>", { desc = "When in visual mode move left" })
+map("v", "<S-Right>", "<Right>", { desc = "When in visual mode move right" })
 
 -- Shift arrow keys to select and extend selection
 -- go in visual line mode and extend selection when moving up and down
-map("n", "<C-j>", "V", { desc= "Enter in visual line mode" })
-map("n", "<C-k>", "V", { desc= "Enter in visual line mode" })
-map("i", "<C-j>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
-map("i", "<C-k>", "<Esc>V", { desc= "Exit insert mode and enter in visual line mode" })
-map("v", "<C-j>", "<Down>", { desc= "When in visual line mode move down" })
-map("v", "<C-k>", "<Up>", { desc= "When in visual line mode move up" })
+map("n", "<C-j>", "V", { desc = "Enter in visual line mode" })
+map("n", "<C-k>", "V", { desc = "Enter in visual line mode" })
+map("i", "<C-j>", "<Esc>V", { desc = "Exit insert mode and enter in visual line mode" })
+map("i", "<C-k>", "<Esc>V", { desc = "Exit insert mode and enter in visual line mode" })
+map("v", "<C-j>", "<Down>", { desc = "When in visual line mode move down" })
+map("v", "<C-k>", "<Up>", { desc = "When in visual line mode move up" })
 
 -- go in visual mode and extend selection when moving left and right
-map("n", "<C-h>", "v<Left>", { desc= "Enter in visual mode and move left" })
-map("n", "<C-l>", "v<Right>", { desc= "Enter in visual mode and move right" })
-map("i", "<C-h>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
-map("i", "<C-l>", "<Esc>v", { desc= "Exit insert mode and enter in visual mode" })
-map("v", "<C-h>", "<Left>", { desc= "When in visual mode move left" })
-map("v", "<C-l>", "<Right>", { desc= "When in visual mode move right" })
+map("n", "<C-h>", "v<Left>", { desc = "Enter in visual mode and move left" })
+map("n", "<C-l>", "v<Right>", { desc = "Enter in visual mode and move right" })
+map("i", "<C-h>", "<Esc>v", { desc = "Exit insert mode and enter in visual mode" })
+map("i", "<C-l>", "<Esc>v", { desc = "Exit insert mode and enter in visual mode" })
+map("v", "<C-h>", "<Left>", { desc = "When in visual mode move left" })
+map("v", "<C-l>", "<Right>", { desc = "When in visual mode move right" })
 
-map("n", "<S-End>", "v$", { desc= "Enter in visual mode and move to end of line" })
+map("n", "<S-End>", "v$", { desc = "Enter in visual mode and move to end of line" })
 
 
 
@@ -388,36 +397,37 @@ local is_virtual_text_enabled = function()
 end
 
 if not vim.g.vscode then
-	-- WhichKey mappings
-	local wk = require("which-key")
-	wk.add({
-		{ "<leader>b", group = "Buffers" },
-		{ "<leader>c", group = "Coding Stuff" },
-		{ "<leader>d", group = "Debugging" },
-		{ "<leader>f", group = "Telescope and force" },
-		{ "<leader>g", group = "LSP Go to and git" },
-		{ "<leader>h", group = "Gitsign hunk" },
-		{ "<leader>m", group = "Markdown" },
-		{ "<leader>p", group = "Persistence (session)" },
-		{ "<leader>r", group = "Rest client" },
-		{ "<leader>u", group = "Toggles" },
-		{ "<leader>x", group = "Trouble" },
+  -- WhichKey mappings
+  local wk = require("which-key")
+  wk.add({
+    { "<leader>b", group = "Buffers" },
+    { "<leader>c", group = "Coding Stuff" },
+    { "<leader>d", group = "Debugging" },
+    { "<leader>f", group = "Telescope and force" },
+    { "<leader>g", group = "LSP Go to and git" },
+    { "<leader>h", group = "Gitsign hunk" },
+    { "<leader>m", group = "Markdown" },
+    { "<leader>p", group = "Persistence (session)" },
+    { "<leader>r", group = "Rest client" },
+    { "<leader>u", group = "Toggles" },
+    { "<leader>x", group = "Trouble" },
     {
       mode = { "n", "x" },
-      { "<leader>uv",
+      {
+        "<leader>uv",
         function()
           vim.diagnostic.config({ virtual_text = not is_virtual_text_enabled() })
         end,
         desc = is_virtual_text_enabled() and "Disable Virtual Text Diagnostic" or "Enable Virtual Text Diagnostic",
-        icon = function ()
-            if is_virtual_text_enabled() then
-              return {icon = " ", hl = "DiagnosticInfo"}
-            else
-              return {icon = " ", hl = "DiagnosticWarn"}
-            end
-          end,
+        icon = function()
+          if is_virtual_text_enabled() then
+            return { icon = " ", hl = "DiagnosticInfo" }
+          else
+            return { icon = " ", hl = "DiagnosticWarn" }
+          end
+        end,
       },
     },
 
-	}, { prefix = "<leader>" })
+  }, { prefix = "<leader>" })
 end

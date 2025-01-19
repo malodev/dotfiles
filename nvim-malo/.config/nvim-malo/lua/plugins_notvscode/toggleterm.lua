@@ -108,11 +108,5 @@ return {
 			"<cmd>lua _floatTerm_toggle()<CR>",
 			{ noremap = true, silent = true, desc = "Toggle float terminal" }
 		)
-		vim.api.nvim_set_keymap(
-			"n",
-			"<leader>gl",
-			"<cmd>lua _lazygit_toggle()<CR>",
-			{ noremap = true, silent = true, desc = "Toggle lazygit" }
-		)
 	end,
 }
