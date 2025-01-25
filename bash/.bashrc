@@ -34,6 +34,10 @@ esac
 [ -d ~/.local/bin ] && export PATH="~/.local/bin:$PATH"
 [ -d ~/bin ] && export PATH="~/bin:$PATH"
 
+if command -v -- gdircolors > /dev/null 2>&1; then
+  alias dircolors='gdircolors'
+fi
+
 # enable color support of ls and also add handy aliases
 if [ "$TERM" != "dumb" ]; then
     eval "`dircolors -b`"
