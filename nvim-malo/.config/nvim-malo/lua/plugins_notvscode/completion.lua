@@ -3,16 +3,6 @@ local useBlink = function()
 end
 
 return {
-	-- blink completion
-	{
-		"saghen/blink.compat",
-		-- use the latest release, via version = '*', if you also use the latest release for blink.cmp
-		version = "*",
-		-- lazy.nvim will automatically load the plugin when it's required by blink.cmp
-		lazy = true,
-		-- make sure to set opts so that lazy.nvim calls blink.compat's setup
-		opts = {},
-	},
 	{
 		"saghen/blink.cmp",
 		enabled = useBlink,
@@ -45,8 +35,7 @@ return {
 			-- See the full "keymap" documentation for information on defining your own keymap.
 			-- https://cmp.saghen.dev/configuration/keymap.html#presets
 			keymap = {
-				preset = "super-tab",
-				["<CR>"] = { "accept", "fallback" },
+				preset = "enter",
 				["<C-c>"] = {
 					function(cmp)
 						cmp.show({ providers = { "copilot" } })
@@ -133,7 +122,8 @@ return {
 				list = {
 					selection = {
 						preselect = function(ctx)
-							return ctx.mode ~= "cmdline"
+							-- return ctx.mode ~= "cmdline"
+							return false
 						end,
 						auto_insert = function(ctx)
 							return true
@@ -179,7 +169,8 @@ return {
 			-- elsewhere in your config, without redefining it, due to `opts_extend`
 			-- sources = { "lsp", "path", "snippets", "buffer", "copilot", "luasni
 			sources = {
-				default = { "lsp", "path", "snippets", "buffer", "copilot" },
+				default = { "lsp", "path", "snippets", "buffer", "copilot", "codecompanion" },
+
 				providers = {
 					copilot = {
 						name = "copilot",
