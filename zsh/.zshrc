@@ -1,7 +1,7 @@
 export startup_trace="$startup_trace\n~/.zshrc"
-echo "\n=====  ~/.zshrc  =====\n" >>/tmp/zsh_startup_trace.log
-echo "Initial fpath: $fpath" >>/tmp/zsh_startup_trace.log
-echo "" >>/tmp/zsh_startup_trace.log
+# echo "\n=====  ~/.zshrc  =====\n" >>/tmp/zsh_startup_trace.log
+# echo "Initial fpath: $fpath" >>/tmp/zsh_startup_trace.log
+# echo "" >>/tmp/zsh_startup_trace.log
 initial_path=$PATH
 initial_fpath=$fpath
 # If you come from bash you might have to change your $PATH.
@@ -67,13 +67,11 @@ bindkey ^S history-incremental-search-forward  # rebind ^S
 
 echo "🛠️zshrc loaded."
 # Log of changes:
-if command -v ccdiff &>/dev/null; then
-  diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
-  diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
-  echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
-  echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
-  echo "\nNew fpath:\n$fpath" >>/tmp/zsh_startup_trace.log
-fi
+# if command -v ccdiff &>/dev/null; then
+#   diff_path=$(ccdiff <(echo $initial_path) <(echo $PATH))
+#   diff_fpath=$(ccdiff <(echo $initial_fpath) <(echo $fpath))
+#   echo "\nDiff fpath:\n$diff_fpath" >>/tmp/zsh_startup_trace.log
+#   echo "\nDiff PATH:\n$diff_path" >>/tmp/zsh_startup_trace.log
+#   echo "\nNew fpath:\n$fpath" >>/tmp/zsh_startup_trace.log
+# fi
 source "$HOME/.zshrc_local"
-
-alias gam="/Users/mauro/bin/gamadv-xtd3/gam"
