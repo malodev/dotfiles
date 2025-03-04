@@ -6,6 +6,8 @@ vim.cmd("set ignorecase")
 vim.cmd("set smartcase")
 vim.cmd("set mousemodel=extend")
 
+vim.opt.signcolumn = "yes"
+
 _G.IS_WSL = nil
 if pcall(require, "uname") then
 	local distro = uname()
@@ -67,6 +69,12 @@ if not vim.g.vscode then
 	-- the following lines are for relative number to be disabled in insert mode
 	local number_toggle = augroup("numbertoggle", { clear = true })
 
+	-- set filetype for .http and .rest to http
+	autocmd({ "BufNewFile", "BufRead" }, {
+		pattern = "*.http",
+		command = "set filetype=http",
+	})
+	--
 	-- set filetype for .denoflare to jsonc
 	autocmd({ "BufNewFile", "BufRead" }, {
 		pattern = "*.denoflare",

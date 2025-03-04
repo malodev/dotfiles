@@ -70,7 +70,7 @@ return {
 			telescope.load_extension("fzf")
 			-- telescope.load_extension("prosession")
 			telescope.load_extension("media_files")
-			telescope.load_extension("rest")
+			-- telescope.load_extension("rest")
 			telescope.load_extension("themes")
 			local builtin = require("telescope.builtin")
 			vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "buffers" })
