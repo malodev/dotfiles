@@ -12,6 +12,7 @@ jpg
 src
 CLI
 cli
+LLM
 nvim
 html
 rgba
@@ -42,6 +43,8 @@ WhichKey
 macchiato
 Primeagen
 catppuccin
+Middleware
+middleware
 echasnovski
 tailwindcss
 colorscheme
