@@ -2,4 +2,5 @@ nushell/.config/nushell/generated.nu
 *.disabled
 *.ignore/**/*
 .nvim
-nvim/.config/nvim/lazy-lock.json
+lazy-lock.json
+lazyvim.json
