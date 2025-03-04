@@ -3,6 +3,7 @@ export startup_trace="$startup_trace\n~/.zshrc_local"
 # initial_path=$PATH
 # initial_fpath=$fpath
 
+export PATH="$HOME/.local/bin:$PATH"
 export DEFAULT_USER="$USER"
 
 if [[ "$(uname)" == "Darwin" ]]; then
