@@ -235,6 +235,12 @@ return {
 						filetypes = { "bash", "sh", "zsh" },
 					})
 				end,
+				["html"] = function()
+					local lspconfig = require("lspconfig")
+					lspconfig.html.setup({
+						filetypes = { "html", "templ", "svg" },
+					})
+				end,
 			})
 		end,
 	},
