@@ -379,18 +379,12 @@ return {
 	},
 	{
 		"nvimdev/lspsaga.nvim",
+		enabled = true,
 		after = "nvim-lspconfig",
 		config = function()
 			require("lspsaga").setup({
-				code_action_lightbulb = {
-					enable = true,
-					enable_in_insert = true,
-					sign = true,
-					sign_priority = 20,
-					virtual_text = true,
-				},
-				ui = {
-					border_style = "round",
+				lightbulb = {
+					enable = false,
 				},
 			})
 		end,
