@@ -49,8 +49,8 @@ return {
 		---@module 'render-markdown'
 		---@type render.md.UserConfig
 		opts = {
-      preset = true,
-    },
+			preset = "obsidian",
+		},
 	},
 	-- install with yarn or npm
 	{
