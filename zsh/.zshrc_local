@@ -1,4 +1,5 @@
 export startup_trace="$startup_trace\n~/.zshrc_local"
+echo "🛠️zshrc_local init."
 # echo "\n=====  ~/.zshrc_local  =====\n" >> /tmp/zsh_startup_trace.log
 # initial_path=$PATH
 # initial_fpath=$fpath
@@ -25,42 +26,13 @@ fi
 [[ "$LINUX" == "1" ]] && export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
  
 eval "$(starship init zsh)"
+echo "🛠️zshrc_local: starship loaded."
 
-gitlab_group_members_id() { [[ $1 != "" ]] && gitlab group_members $1|awk -F "|" '{print $5}'|grep -E '\d+' }
-gitlab_users() {
-        tmpfile=$(mktemp /tmp/gitlab_users.XXXXXX)
-        exec 3>"$tmpfile"
-        exec 4<"$tmpfile"
-        rm "$tmpfile"
-    gitlab users "{per_page: 100, page: 1}"|grep -E 'active' >& 3
-    gitlab users "{per_page: 100, page: 2}"|grep -E 'active' >& 3
-
-        if [[ $1 != "" ]]; then
-                cat <& 4 >$1
-    else
-                cat <& 4
-    fi
-}
-gitlab_users_match() {
-        if [[ $1 != "" ]]; then
-                awk -F '|' 'NR==FNR {seen[$1]=1; next} gsub(/ /, "", $10) && $10!="" && seen[$10]==1 { print $12}' $1 <(gitlab_users)
-        fi
-}
-# group_id=$(gitlab create_group "4bi-2016" "4bi-2016" "{ visibility_level: 0 }" | tail -2|head -1|awk -F '|' '{print $4}')
-# for i in $(gitlab_users_match 4bi.txt); do gitlab add_group_member 225 $i 30; done
-#
-export GITLAB_API_PRIVATE_TOKEN=Q7oVX1DkeLBsfCRJX1qr
-export GITLAB_API_ENDPOINT=http://gitlab.marconirovereto.it/api/v3
 alias git_for_cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias cfg='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias cfglazy='lazygit --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 alias cfgls='config ls-tree --full-tree --name-only -r HEAD'
-
-totp() { 
-	oathtool --totp -b $(<~/".totp_${1:-coinbase}") | pbcopy; 
-}
-
 
 if [[ "$OSX" == "1" ]]; then
    export CLICOLOR=1
@@ -150,11 +122,13 @@ function zvm_after_init() {
   [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 }
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+echo "🛠️zshrc_local: fzf loaded."
 
 # ~/.zshrc
 export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense' # optional
 zstyle ':completion:*' format $'\e[2;37mCompleting %d\e[m'
 source <(carapace _carapace)
+echo "🛠️zshrc_local: carapace loaded."
 
 # Order of groups can be configured with the zstyle [group-order](https://zsh.sourceforge.io/Guide/zshguide06.html).
 zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'external commands'
