@@ -18,6 +18,7 @@ return {
 	},
 	{
 		"lukas-reineke/indent-blankline.nvim",
+		requires = { "HiPhish/rainbow-delimiters.nvim", "nvim-treesitter/nvim-treesitter" }, -- optional for treesitter
 		main = "ibl",
 		config = function()
 			local highlight = {
@@ -47,15 +48,18 @@ return {
 				vim.api.nvim_set_hl(0, "RainbowCyan", { fg = "#56B6C2" })
 			end)
 
+			vim.g.rainbow_delimiters = { highlight = highlight }
 			require("ibl").setup({
+				scope = { highlight = highlight },
 				-- indent = { highlight = highlight, char = "" },
-				indent = { highlight = highlight, char = "" },
-				whitespace = {
-					highlight = spc_highlight,
-					remove_blankline_trail = false,
-				},
-				scope = { enabled = false },
+				-- indent = { highlight = highlight, char = "" },
+				-- whitespace = {
+				-- 	highlight = spc_highlight,
+				-- 	remove_blankline_trail = false,
+				-- },
+				-- scope = { enabled = false },
 			})
+			hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
 		end,
 	},
 	-- {
