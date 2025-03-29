@@ -37,10 +37,27 @@ sketchybar --add item space_separator left    \
            --subscribe space_separator space_windows_change
 
 RED=0xffed8796
-SPACE_ICONS=("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")
+#SPACE_ICONS=("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")
+# Extend to support up to 20 spaces
+SPACE_ICONS=("1" "2" "3" "4" "5" "6" "7" "8" "9" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20")
+
+# Key codes for number keys 1-0 on keyboard
+KEY_CODES=(18 19 20 21 23 22 26 28 25 29)
+
 for i in "${!SPACE_ICONS[@]}"
 do
   sid="$(($i+1))"
+  # Determine which method to use based on space number
+  if [ $sid -le 10 ]; then
+    # Use Option+number for spaces 1-10
+    key_index=$(($sid - 1))
+    click_script="osascript -e 'tell application \"System Events\" to key code ${KEY_CODES[$key_index]} using option down'"
+  else
+    # For spaces 11-20, use Ctrl+Option+number
+    # We map spaces 11-20 to keys 1-0 (with Ctrl+Option modifier)
+    new_index=$(( ($sid - 11) % 10 ))
+    click_script="osascript -e 'tell application \"System Events\" to key code ${KEY_CODES[$new_index]} using {control down, option down}'"
+  fi
   space=(
     space="$sid"
     label="${SPACE_ICONS[i]}"
@@ -60,6 +77,7 @@ do
     icon.padding_left=6 \
     icon.padding_right=0 \
     script="$PLUGIN_DIR/space.sh"
+    click_script="$click_script"
     #click_script="yabai -m space --focus $sid"
   )
   sketchybar --add space space."$sid" left --set space."$sid" "${space[@]}"
