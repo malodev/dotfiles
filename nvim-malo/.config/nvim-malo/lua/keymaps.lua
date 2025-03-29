@@ -73,6 +73,8 @@ map("v", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<cr>gv=gv", {
 
 -- buffers
 map("n", "<C-x>", ":bd<CR>", { desc = "Close current buffer" })
+map("n", "<D-s>", ":w<CR>", { desc = "Save current buffer" })
+map("i", "<D-s>", "<Esc>:w<CR>", { desc = "Save current buffer" })
 map("n", "<C-s>", ":w<CR>", { desc = "Save current buffer" })
 map("i", "<C-s>", "<Esc>:w<CR>", { desc = "Save current buffer" })
 map("n", "<C-h>", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
