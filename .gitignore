@@ -4,3 +4,8 @@ nushell/.config/nushell/generated.nu
 .nvim
 lazy-lock.json
 lazyvim.json
+.tmp*
+*.bak
+zed/.config/zed/conversations
+zed/.config/zed/embeddings
+zed/.config/zed/prompts
