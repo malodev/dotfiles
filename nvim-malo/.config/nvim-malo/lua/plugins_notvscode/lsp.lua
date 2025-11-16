@@ -73,9 +73,10 @@ return {
     opts = {
       automatic_installation = true,
       ensure_installed = lsp_language_servers,
+      automatic_enable = true, -- This replaces setup_handlers for basic setups
     },
     config = function(_, opts)
-      require("mason-lspconfig").setup(opts)
+      -- Set up capabilities first
       local capabilities
 
       if useBlink then
@@ -88,160 +89,148 @@ return {
         dynamicRegistration = false,
         lineFoldingOnly = true,
       }
-      require("mason-lspconfig").setup_handlers({
-        -- The first entry (without a key) will be the default handler
-        -- and will be called for each installed server that doesn't have
-        -- a dedicated handler.
-        function(server_name) -- default handler (optional)
-          require("lspconfig")[server_name].setup({
-            position_encoding = "utf-8",
-            capabilities = capabilities,
-          })
-        end,
-        ["lua_ls"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.lua_ls.setup({
-            position_encoding = "utf-8",
-            settings = {
-              Lua = {
-                hint = {
-                  enable = true,
-                },
-                diagnostics = {
-                  globals = { "vim" },
-                },
-                workspace = {
-                  library = {
-                    [vim.fn.expand("$VIMRUNTIME/lua")] = true,
-                    [vim.fn.expand("$VIMRUNTIME/lua/vim/lsp")] = true,
-                  },
-                },
+      -- Configure servers using vim.lsp.config() BEFORE mason-lspconfig.setup()
+      -- This is the new way in Neovim 0.11+
+
+      -- Lua LS
+      vim.lsp.config("lua_ls", {
+        cmd = { "lua-language-server" },
+        root_markers = {
+          ".luarc.json",
+          ".luarc.jsonc",
+          ".luacheckrc",
+          ".stylua.toml",
+          "stylua.toml",
+          "selene.toml",
+          "selene.yml",
+          ".git",
+        },
+        capabilities = capabilities,
+        settings = {
+          Lua = {
+            hint = {
+              enable = true,
+            },
+            diagnostics = {
+              globals = { "vim" },
+            },
+            workspace = {
+              library = {
+                [vim.fn.expand("$VIMRUNTIME/lua")] = true,
+                [vim.fn.expand("$VIMRUNTIME/lua/vim/lsp")] = true,
               },
             },
-            capabilities = capabilities,
-          })
-        end,
-        ["ts_ls"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.ts_ls.setup({
-            position_encoding = "utf-8",
-            settings = {
-              tsserver_file_preferences = {
-                -- Inlay hints
-                includeInlayParameterNameHints = "all",
-                includeInlayParameterNameHintsWhenArgumentMatchesName = true,
-                includeInlayVariableTypeHintsWhenTypeMatchesName = true,
-                includeInlayFunctionParameterTypeHints = true,
-                includeInlayVariableTypeHints = true,
-                includeInlayPropertyDeclarationTypeHints = true,
-                includeInlayFunctionLikeReturnTypeHints = true,
-                includeInlayEnumMemberValueHints = true,
-              },
-              typescript = {
-                inlayHints = {
-                  includeInlayParameterNameHints = "all",
-                  includeInlayParameterNameHintsWhenArgumentMatchesName = true,
-                  includeInlayVariableTypeHintsWhenTypeMatchesName = true,
-                  includeInlayFunctionParameterTypeHints = true,
-                  includeInlayVariableTypeHints = true,
-                  includeInlayPropertyDeclarationTypeHints = true,
-                  includeInlayFunctionLikeReturnTypeHints = true,
-                  includeInlayEnumMemberValueHints = true,
-                },
-              },
-              javascript = {
-                inlayHints = {
-                  includeInlayVariableTypeHintsWhenTypeMatchesName = true,
-                  includeInlayParameterNameHints = "all",
-                  includeInlayParameterNameHintsWhenArgumentMatchesName = false,
-                  includeInlayFunctionParameterTypeHints = true,
-                  includeInlayVariableTypeHints = true,
-                  includeInlayPropertyDeclarationTypeHints = true,
-                  includeInlayFunctionLikeReturnTypeHints = true,
-                  includeInlayEnumMemberValueHints = true,
-                },
-              },
-            },
-            capabilities = capabilities,
-            inlay_hints = {
-              enabled = false,
-            },
-            root_dir = lspconfig.util.root_pattern("package.json"),
-            single_file_support = false,
-          })
-        end,
-        ["basedpyright"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.basedpyright.setup({
-            inlay_hints = {
-              enabled = true,
-            },
-            settings = {
-              basedpyright = {
-                analysis = {
-                  typeCheckingMode = "off",
-                  inlayHints = {
-                    variableTypes = true,
-                    callArgumentNames = true,
-                    functionReturnTypes = true,
-                    genericTypes = true,
-                  },
-                },
-              },
-            },
-            capabilities = capabilities,
-          })
-        end,
-        ["harper_ls"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.harper_ls.setup({
-            position_encoding = "utf-8",
-            settings = {
-              ["harper-ls"] = {
-                userDictPath = "~/.local/share/dict.txt",
-                fileDictPath = "~/.harper/",
-                linters = {
-                  spell_check = true,
-                  spelled_numbers = false,
-                  an_a = true,
-                  sentence_capitalization = false,
-                  unclosed_quotes = true,
-                  wrong_quotes = false,
-                  long_sentences = true,
-                  repeated_words = true,
-                  spaces = true,
-                  matcher = true,
-                  correct_number_suffix = true,
-                  number_suffix_capitalization = true,
-                  multiple_sequential_pronouns = true,
-                  linking_verbs = false,
-                  avoid_curses = true,
-                  terminating_conjunctions = true,
-                },
-              },
-            },
-          })
-        end,
-        ["denols"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.denols.setup({
-            capabilities = capabilities,
-            root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
-          })
-        end,
-        ["bashls"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.bashls.setup({
-            filetypes = { "bash", "sh", "zsh" },
-          })
-        end,
-        ["html"] = function()
-          local lspconfig = require("lspconfig")
-          lspconfig.html.setup({
-            filetypes = { "html", "templ", "svg" },
-          })
-        end,
+          },
+        },
       })
+
+      -- TypeScript/JavaScript
+      vim.lsp.config("ts_ls", {
+        cmd = { "typescript-language-server", "--stdio" },
+        root_markers = { "package.json" },
+        single_file_support = false,
+        capabilities = capabilities,
+        settings = {
+          typescript = {
+            inlayHints = {
+              includeInlayParameterNameHints = "all",
+              includeInlayParameterNameHintsWhenArgumentMatchesName = true,
+              includeInlayVariableTypeHintsWhenTypeMatchesName = true,
+              includeInlayFunctionParameterTypeHints = true,
+              includeInlayVariableTypeHints = true,
+              includeInlayPropertyDeclarationTypeHints = true,
+              includeInlayFunctionLikeReturnTypeHints = true,
+              includeInlayEnumMemberValueHints = true,
+            },
+          },
+          javascript = {
+            inlayHints = {
+              includeInlayVariableTypeHintsWhenTypeMatchesName = true,
+              includeInlayParameterNameHints = "all",
+              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+              includeInlayFunctionParameterTypeHints = true,
+              includeInlayVariableTypeHints = true,
+              includeInlayPropertyDeclarationTypeHints = true,
+              includeInlayFunctionLikeReturnTypeHints = true,
+              includeInlayEnumMemberValueHints = true,
+            },
+          },
+        },
+      })
+
+      -- Basedpyright
+      vim.lsp.config("basedpyright", {
+        cmd = { "basedpyright-langserver", "--stdio" },
+        capabilities = capabilities,
+        settings = {
+          basedpyright = {
+            analysis = {
+              typeCheckingMode = "off",
+              inlayHints = {
+                variableTypes = true,
+                callArgumentNames = true,
+                functionReturnTypes = true,
+                genericTypes = true,
+              },
+            },
+          },
+        },
+      })
+
+      -- Harper LS
+      vim.lsp.config("harper_ls", {
+        cmd = { "harper-ls", "--stdio" },
+        capabilities = capabilities,
+        settings = {
+          ["harper-ls"] = {
+            userDictPath = "~/.local/share/dict.txt",
+            fileDictPath = "~/.harper/",
+            linters = {
+              spell_check = true,
+              spelled_numbers = false,
+              an_a = true,
+              sentence_capitalization = false,
+              unclosed_quotes = true,
+              wrong_quotes = false,
+              long_sentences = true,
+              repeated_words = true,
+              spaces = true,
+              matcher = true,
+              correct_number_suffix = true,
+              number_suffix_capitalization = true,
+              multiple_sequential_pronouns = true,
+              linking_verbs = false,
+              avoid_curses = true,
+              terminating_conjunctions = true,
+            },
+          },
+        },
+      })
+
+      -- Deno
+      vim.lsp.config("denols", {
+        cmd = { "deno", "lsp" },
+        root_markers = { "deno.json", "deno.jsonc" },
+        capabilities = capabilities,
+      })
+
+      -- Bash LS
+      vim.lsp.config("bashls", {
+        cmd = { "bash-language-server", "start" },
+        filetypes = { "bash", "sh", "zsh" },
+        capabilities = capabilities,
+      })
+
+      -- HTML
+      vim.lsp.config("html", {
+        cmd = { "vscode-html-language-server", "--stdio" },
+        filetypes = { "html", "templ", "svg" },
+        capabilities = capabilities,
+      })
+
+      -- Now setup mason-lspconfig
+      -- automatic_enable will call vim.lsp.enable() for installed servers
+      require("mason-lspconfig").setup(opts)
     end,
   },
   {
