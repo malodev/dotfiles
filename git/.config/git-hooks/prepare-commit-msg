@@ -4,7 +4,7 @@ set -eo pipefail
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="${2:-}"
 SHA1="${3:-}"
-
+echo "START AI COMMIT"
 # Respect manual: only handle normal commits with an empty message.
 # Sources:
 #   message   -> -m / -F
@@ -12,18 +12,25 @@ SHA1="${3:-}"
 #   merge     -> MERGE_MSG
 #   squash    -> SQUASH_MSG
 #   commit    -> -c / -C / --amend
+if [[ -n $COMMIT_SOURCE ]]; then
+  echo "Commit source is $COMMIT_SOURCE"
+fi
 case "$COMMIT_SOURCE" in
   message|template|merge|squash|commit)
     # Don't override these by default
+    echo "Skipping ai-commit for $COMMIT_SOURCE commit."
     exit 0
     ;;
 esac
 
 # If the message file already has content (e.g., from a template), don't touch it.
-if echo $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
-  exit 0
-fi
+# if [[ -f $COMMIT_MSG_FILE ]] && echo $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
+#   echo "Skipping ai-commit for existing commit message."
+#   exit 0
+# fi
 
+
+echo "CHOOSE AI COMMIT MODEL"
 # You can override this per-repo or globally:
 # export AI_COMMIT_MODEL="gpt-4o"          # OpenAI
 # export AI_COMMIT_MODEL="local-llama3"    # Ollama
@@ -35,7 +42,12 @@ if  [[ -n "$AI_COMMIT_MODEL" ]]; then
   echo "AI_COMMIT_MODEL is set to $AI_COMMIT_MODEL"
   MODEL="--model $AI_COMMIT_MODEL"
 fi
-echo "Generating commit message with model: ${MODEL-default}"
+
+if [[ -n "$MODEL" ]]; then
+  echo "Generating commit message with llm model: ${MODEL}"
+else
+  echo "Generating commit message with llm default model: $(llm models default)"
+fi
 
 # If no staged changes, nothing to do
 DIFF=$(git diff --cached)
@@ -143,9 +155,16 @@ USER_PROMPT="Analyze this git diff of $STAGED_FILES and generate a conventional 
 Diff to analyze:
 $DIFF"
 
-# if AI_COMMIT_MODEL is set, use it
-# otherwise, use the default llm model
-llm prompt $MODEL \
-  --system "$SYSTEM_PROMPT" \
-  --no-stream \
-  "$USER_PROMPT" > "$COMMIT_MSG_FILE"
+# ---------- Call LLM ----------
+MSG=$(llm prompt $MODEL --system "$SYSTEM_PROMPT" --no-stream "$USER_PROMPT")
+
+if [[ -n "$COMMIT_MSG_FILE" ]]; then
+  echo "$MSG" > "$COMMIT_MSG_FILE"
+else
+  # ---------- Open in editor before committing ----------
+  TMPFILE=$(mktemp /tmp/ai-commit-msg.XXXXXX)
+  printf "%s\n" "$MSG" > "$TMPFILE"
+  # -e: open in $EDITOR; -F: use file as initial message
+  git commit -e -F "$TMPFILE"
+  rm -f "$TMPFILE"
+fi
