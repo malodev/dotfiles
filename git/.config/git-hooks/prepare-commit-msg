@@ -4,14 +4,23 @@ set -eo pipefail
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="${2:-}"
 SHA1="${3:-}"
-echo "COMMIT_MSG_FILE: $COMMIT_MSG_FILE"
-echo "COMMIT_SOURCE: $COMMIT_SOURCE"
 
-# Only act for normal commits with an empty message file
-if [ -n "$COMMIT_SOURCE" ]; then
-  exit 0
-fi
-if $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
+# Respect manual: only handle normal commits with an empty message.
+# Sources:
+#   message   -> -m / -F
+#   template  -> commit.template or -t
+#   merge     -> MERGE_MSG
+#   squash    -> SQUASH_MSG
+#   commit    -> -c / -C / --amend
+case "$COMMIT_SOURCE" in
+  message|template|merge|squash|commit)
+    # Don't override these by default
+    exit 0
+    ;;
+esac
+
+# If the message file already has content (e.g., from a template), don't touch it.
+if echo $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
   exit 0
 fi
 
@@ -26,25 +35,112 @@ if  [[ -n "$AI_COMMIT_MODEL" ]]; then
   echo "AI_COMMIT_MODEL is set to $AI_COMMIT_MODEL"
   MODEL="--model $AI_COMMIT_MODEL"
 fi
-echo "MODEL: ${MODEL-default}"
+echo "Generating commit message with model: ${MODEL-default}"
+
+# If no staged changes, nothing to do
 DIFF=$(git diff --cached)
 if [ -z "$DIFF" ]; then
   exit 0
 fi
 
-SYSTEM_PROMPT="You are an assistant that writes Conventional Commit messages.
+STAGED_FILES=$(git diff --cached --name-only)
+SCOPE=""
+
+# ---------- Scope heuristics (same logic as your ai-commit script) ----------
+
+# Frontend (Astro, Next.js, React, Angular, generic SPA)
+if echo "$STAGED_FILES" | grep -Eq '(^|/)(src/pages|pages|app)/'; then
+  SCOPE="pages"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(src/components|components)/'; then
+  SCOPE="components"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(src/layouts|layouts)/'; then
+  SCOPE="layout"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(src/hooks|hooks)/'; then
+  SCOPE="hooks"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(src/context|context)/'; then
+  SCOPE="state"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(src/styles|styles)/'; then
+  SCOPE="style"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(public|static)/'; then
+  SCOPE="assets"
+
+# Angular-specific
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)src/app/'; then
+  SCOPE="app"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)src/environments/'; then
+  SCOPE="config"
+
+# Backend (Express, Flask, generic API)
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(src/server|server|backend|api)/'; then
+  SCOPE="api"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(routes|controllers)/'; then
+  SCOPE="api"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(models|schemas)/'; then
+  SCOPE="model"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)middleware/'; then
+  SCOPE="middleware"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(config|settings)/'; then
+  SCOPE="config"
+
+# Flask-specific
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(app\.py|wsgi\.py)'; then
+  SCOPE="app"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)blueprints?/'; then
+  SCOPE="api"
+
+# Java (Maven/Gradle, Spring, etc.)
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)src/main/java/'; then
+  SCOPE="java"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)src/main/resources/'; then
+  SCOPE="config"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)src/test/java/'; then
+  SCOPE="test"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)src/integrationTest/java/'; then
+  SCOPE="it"
+
+# Cross-cutting / generic
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(tests?|__tests__|spec|specs)/'; then
+  SCOPE="test"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(docs|documentation)/'; then
+  SCOPE="docs"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(scripts|tools)/'; then
+  SCOPE="scripts"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)\.github/'; then
+  SCOPE="ci"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)(.husky|.github|.gitlab-ci\.yml|.circleci|ci)/'; then
+  SCOPE="ci"
+elif echo "$STAGED_FILES" | grep -Eq '(^|/)package\.json|pnpm-lock\.yaml|yarn\.lock|pom\.xml|build\.gradle'; then
+  SCOPE="deps"
+fi
+
+SCOPE_INSTRUCTION=""
+if [ -n "$SCOPE" ]; then
+  SCOPE_INSTRUCTION="- Prefer using the scope \"$SCOPE\" unless it clearly does not fit."
+fi
+
+read -r -d '' SYSTEM_PROMPT <<EOF || true
+You are a commit message generator that strictly follows Conventional Commits.
+
 
 Rules:
+- Format: type(scope): subject
 - Format: <type>(<scope>): <short summary>
-- Types: feat, fix, docs, style, refactor, test, chore, ci, build, perf
-- Scope is optional but preferred when clear.
-- Summary <= 72 chars, imperative mood.
-- Also include a short body if necessary, wrapped at 72 chars.
-- Only output the commit message, nothing else."
+- <type>: feat|fix|docs|style|refactor|perf|test|chore|ci|build
+- The <scope> should reflect the area of the codebase touched by this change.
+- <short summary>: imperative mood (e.g. 'add', 'fix', 'refactor'), no period at the end.
+- <short summary>: max 72 characters.
+- If needed, add a body:
+  - Separate by a blank line after the subject line.
+  - Wrap body lines at 72 characters.
+- Do NOT include anything other than the final commit message.
+$SCOPE_INSTRUCTION
+EOF
 
-USER_PROMPT="Generate a Conventional Commit message for the following staged diff.
 
-Staged diff:
+
+USER_PROMPT="Analyze this git diff of $STAGED_FILES and generate a conventional commit message.
+
+Diff to analyze:
 $DIFF"
 
 # if AI_COMMIT_MODEL is set, use it
