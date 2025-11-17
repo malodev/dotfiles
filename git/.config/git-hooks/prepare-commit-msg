@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="${2:-}"
+SHA1="${3:-}"
+echo "COMMIT_MSG_FILE: $COMMIT_MSG_FILE"
+echo "COMMIT_SOURCE: $COMMIT_SOURCE"
+
+# Only act for normal commits with an empty message file
+if [ -n "$COMMIT_SOURCE" ]; then
+  exit 0
+fi
+if $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
+  exit 0
+fi
+
+# You can override this per-repo or globally:
+# export AI_COMMIT_MODEL="gpt-4o"          # OpenAI
+# export AI_COMMIT_MODEL="local-llama3"    # Ollama
+# export AI_COMMIT_MODEL="msty-llama3"     # Msty
+
+# check if AI_COMMIT_MODEL is set
+MODEL=""
+if  [[ -n "$AI_COMMIT_MODEL" ]]; then
+  echo "AI_COMMIT_MODEL is set to $AI_COMMIT_MODEL"
+  MODEL="--model $AI_COMMIT_MODEL"
+fi
+echo "MODEL: ${MODEL-default}"
+DIFF=$(git diff --cached)
+if [ -z "$DIFF" ]; then
+  exit 0
+fi
+
+SYSTEM_PROMPT="You are an assistant that writes Conventional Commit messages.
+
+Rules:
+- Format: <type>(<scope>): <short summary>
+- Types: feat, fix, docs, style, refactor, test, chore, ci, build, perf
+- Scope is optional but preferred when clear.
+- Summary <= 72 chars, imperative mood.
+- Also include a short body if necessary, wrapped at 72 chars.
+- Only output the commit message, nothing else."
+
+USER_PROMPT="Generate a Conventional Commit message for the following staged diff.
+
+Staged diff:
+$DIFF"
+
+# if AI_COMMIT_MODEL is set, use it
+# otherwise, use the default llm model
+llm prompt $MODEL \
+  --system "$SYSTEM_PROMPT" \
+  --no-stream \
+  "$USER_PROMPT" > "$COMMIT_MSG_FILE"

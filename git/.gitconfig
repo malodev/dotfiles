@@ -10,7 +10,8 @@
 	clean = git-lfs clean -- %f
 [core]
 	editor = nvim
-  pager = delta
+        pager = delta
+	hooksPath = /home/mauro/.config/git-hooks
 
 [interactive]
     diffFilter = delta --color-only
@@ -29,3 +30,5 @@
 
 [merge]
     conflictstyle = zdiff3
+[url "https://"]
+	insteadOf = git://
