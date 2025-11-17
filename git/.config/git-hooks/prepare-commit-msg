@@ -4,7 +4,6 @@ set -eo pipefail
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="${2:-}"
 SHA1="${3:-}"
-echo "START AI COMMIT"
 # Respect manual: only handle normal commits with an empty message.
 # Sources:
 #   message   -> -m / -F
@@ -24,13 +23,11 @@ case "$COMMIT_SOURCE" in
 esac
 
 # If the message file already has content (e.g., from a template), don't touch it.
-# if [[ -f $COMMIT_MSG_FILE ]] && echo $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
-#   echo "Skipping ai-commit for existing commit message."
-#   exit 0
-# fi
+if [[ -f $COMMIT_MSG_FILE ]] && echo $(head -5 $COMMIT_MSG_FILE) | grep -q '^[[:space:]]*[^#[:space:]]'; then
+  echo "Skipping ai-commit for existing commit message."
+  exit 0
+fi
 
-
-echo "CHOOSE AI COMMIT MODEL"
 # You can override this per-repo or globally:
 # export AI_COMMIT_MODEL="gpt-4o"          # OpenAI
 # export AI_COMMIT_MODEL="local-llama3"    # Ollama
@@ -43,16 +40,18 @@ if  [[ -n "$AI_COMMIT_MODEL" ]]; then
   MODEL="--model $AI_COMMIT_MODEL"
 fi
 
-if [[ -n "$MODEL" ]]; then
-  echo "Generating commit message with llm model: ${MODEL}"
-else
-  echo "Generating commit message with llm default model: $(llm models default)"
-fi
 
 # If no staged changes, nothing to do
 DIFF=$(git diff --cached)
 if [ -z "$DIFF" ]; then
+  echo "No staged changes, skipping commit."
   exit 0
+fi
+
+if [[ -n "$MODEL" ]]; then
+  echo "Generating commit message with llm model: ${MODEL}"
+else
+  echo "Generating commit message with llm default model: $(llm models default)"
 fi
 
 STAGED_FILES=$(git diff --cached --name-only)
