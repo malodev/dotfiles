@@ -32,3 +32,5 @@
     conflictstyle = zdiff3
 [url "https://"]
 	insteadOf = git://
+[credential]
+	helper = store

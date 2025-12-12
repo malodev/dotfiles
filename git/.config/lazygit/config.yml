@@ -1,16 +1,22 @@
 customCommands:
-  - key: "C"
+  - key: "Z"
     command: "git cz"
     description: "commit with commitizen"
     context: "files"
     loadingText: "opening commitizen commit tool"
-    subprocess: true
+    output: terminal
 
-# for nvim terminal integration
+# Remote model, e.g. OpenRouter / OpenAI / Msty – whatever you configured as "my-remote"
+  - key: '<c-a>'
+    description: 'AI commit'
+    context: 'files'
+    command: 'ai-commit'
+    loadingText: 'Generating commit message with remote model...'
+
+    # for nvim terminal integration
 keybinding:
   universal:
     return: <esc>
-
 gui:
   theme:
     activeBorderColor:
@@ -33,13 +39,10 @@ gui:
       - "#cdd6f4"
     searchingActiveBorderColor:
       - "#f9e2af"
-
   authorColors:
     "*": "#b4befe"
-
   nerdFontsVersion: "3"
-
 git:
-  paging:
-    colorArg: never
-    pager: delta --dark --paging=never
+  pagers:
+    - colorArg: never
+      pager: delta --dark --paging=never
