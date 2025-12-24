@@ -5,9 +5,10 @@ local height = 50
 -- Volume icon on the vertical bar
 local volume_icon = sbar.add("item", "volume.icon", {
   position = "center",
+  padding_left = -32,
   icon = {
     string = icons.volume[100],
-    font = { size = 16 },
+    font = { size = settings.icon_size },
     color = colors.blue,
   },
   label = { drawing = false },
@@ -28,13 +29,13 @@ local volume_icon = sbar.add("item", "volume.icon", {
 local volume_label = sbar.add("item", "volume.label", {
   position = "center",
   icon = { drawing = false },
-  padding_left = -23,
+  padding_left = -62,
   label = {
     string = "50%",
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 14,
+      size = settings.label_size,
     },
     color = colors.subtext1,
     align = "center",

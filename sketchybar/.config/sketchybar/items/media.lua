@@ -9,7 +9,7 @@ local is_playing = false
 local current_artwork_url = ""
 local height = 50
 
-for i = 1, 7 do -- Assuming 10 spaces
+for i = 1, 12 do -- Assuming 10 spaces
   local sid = tostring(i)
   -- Spacer before media section
   sbar.add("item", "media.spacer" .. sid, {
@@ -27,7 +27,7 @@ local media = sbar.add("item", "media", {
   icon = {
     string = icons.media.music,
     color = colors.mauve,
-    font = { size = 16 },
+    font = { size = settings.icon_size },
   },
   label = { drawing = false },
   background = {
@@ -49,14 +49,14 @@ local media = sbar.add("item", "media", {
 local media_label = sbar.add("item", "media.label", {
   position = "center",
   icon = { drawing = false },
-  padding_left = -23,
+  padding_left = -22,
   scroll_texts = true,
   label = {
     string = "—",
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 12,
+      size = settings.label_size,
     },
     color = colors.subtext1,
     max_chars = 6,

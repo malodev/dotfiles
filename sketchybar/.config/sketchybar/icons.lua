@@ -5,7 +5,7 @@ return {
   activity = "􀒓",
   lock = "􀒳",
   bell = "􀋚",
-  
+
   media = {
     music = "􀑖",
     play = "􀊄",
@@ -23,7 +23,7 @@ return {
     [0] = "􀛪",
     charging = "􀢋",
   },
-  
+
   volume = {
     [100] = "􀊩",
     [66] = "􀊧",
@@ -31,11 +31,11 @@ return {
     [10] = "􀊡",
     [0] = "􀊣",
   },
-  
+
   wifi = {
     connected = "􀙇",
     disconnected = "􀙈",
   },
 
-  cpu = "󰻠",
+  cpu = "",
 }

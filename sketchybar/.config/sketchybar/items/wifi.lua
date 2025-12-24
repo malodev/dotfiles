@@ -3,15 +3,21 @@ local icons = require("icons")
 local settings = require("settings")
 
 local height = 50
+
 -- Start network traffic monitor
 sbar.exec("killall network_load 2>/dev/null; $CONFIG_DIR/helpers/event_providers/network_load/bin/network_load en0 network_update 2.0 &")
+
+-- Track current traffic values
+local current_upload = "0 B/s"
+local current_download = "0 B/s"
 
 -- WiFi icon on the vertical bar
 local wifi = sbar.add("item", "wifi", {
   position = "center",
+  padding_left = -72,
   icon = {
     string = icons.wifi.connected,
-    font = { size = 16 },
+    font = { size = settings.icon_size },
     color = colors.blue,
   },
   label = { drawing = false },
@@ -31,10 +37,10 @@ local wifi = sbar.add("item", "wifi", {
 -- Traffic display below icon (upload)
 local wifi_up = sbar.add("item", "wifi.up", {
   position = "center",
-  padding_left = -25,
+  padding_left = -104,
   icon = {
     string = "↑",
-    font = { size = 8 },
+    font = { size = 14 },
     color = colors.red,
     padding_right = 0,
   },
@@ -59,10 +65,10 @@ local wifi_up = sbar.add("item", "wifi.up", {
 -- Traffic display below icon (download)
 local wifi_down = sbar.add("item", "wifi.down", {
   position = "center",
-  padding_left = -51,
+  padding_left = -138,
   icon = {
     string = "↓",
-    font = { size = 8 },
+    font = { size = 14 },
     color = colors.green,
     padding_right = 0,
   },
@@ -84,12 +90,12 @@ local wifi_down = sbar.add("item", "wifi.down", {
   width = settings.item_width,
 })
 
--- Popup: SSID header
-local popup_ssid = sbar.add("item", "wifi.popup.ssid", {
+-- Popup: Header (SSID)
+local popup_header = sbar.add("item", "wifi.popup.header", {
   position = "popup." .. wifi.name,
   icon = {
     string = "􁓤",
-    font = { size = 14 },
+    font = { size = 18 },
     color = colors.blue,
   },
   label = {
@@ -97,82 +103,67 @@ local popup_ssid = sbar.add("item", "wifi.popup.ssid", {
     font = {
       family = settings.font.text,
       style = "Bold",
-      size = 13,
+      size = 18,
     },
     color = colors.text,
     max_chars = 20,
   },
-  width = 220,
-  padding_left = 10,
-  padding_right = 10,
+  padding_left = 6,
+  padding_right = 6,
 })
 
--- Separator
-sbar.add("item", "wifi.popup.sep1", {
-  position = "popup." .. wifi.name,
-  icon = { drawing = false },
-  label = { drawing = false },
-  background = {
-    color = colors.surface1,
-    height = 1,
-  },
-  width = 200,
-  padding_left = 10,
-  padding_right = 10,
-})
-
--- Popup: Traffic section header
-local popup_traffic_header = sbar.add("item", "wifi.popup.traffic_header", {
+-- Popup: Status row
+local popup_status = sbar.add("item", "wifi.popup.status", {
   position = "popup." .. wifi.name,
   icon = {
-    string = "􀙬",
-    font = { size = 12 },
-    color = colors.peach,
+    string = "􀆅",
+    font = { size = 16 },
+    color = colors.green,
   },
   label = {
-    string = "Network Traffic",
+    string = "Connected",
     font = {
       family = settings.font.text,
-      style = "Semibold",
-      size = 11,
+      style = "Regular",
+      size = 16,
     },
     color = colors.subtext1,
   },
-  width = 220,
-  padding_left = 10,
-  padding_right = 10,
+  padding_left = 6,
+  padding_right = 6,
 })
 
 -- Helper: create info row
-local function add_row(name, label_left, icon_str, icon_color)
+local function add_row(name, icon_str, icon_color, label_text)
   return sbar.add("item", name, {
     position = "popup." .. wifi.name,
     icon = {
-      string = icon_str or "",
-      font = { size = 10 },
-      color = icon_color or colors.subtext1,
-      width = icon_str and 20 or 0,
+      string = icon_str,
+      font = { size = 16 },
+      color = icon_color,
+      width = 20,
+      padding_right = 0,
     },
     label = {
-      string = label_left .. ": —",
+      string = label_text,
       font = {
         family = settings.font.text,
         style = "Regular",
-        size = 11,
+        size = 16,
       },
       color = colors.text,
+      padding_left = 2,
     },
-    width = 220,
-    padding_left = 10,
-    padding_right = 10,
+    padding_left = 6,
+    padding_right = 6,
   })
 end
 
-local popup_upload = add_row("wifi.popup.upload", "Upload", "↑", colors.red)
-local popup_download = add_row("wifi.popup.download", "Download", "↓", colors.green)
+local popup_ip = add_row("wifi.popup.ip", "􀆪", colors.teal, "IP: —")
+local popup_router = add_row("wifi.popup.router", "􀤆", colors.peach, "Router: —")
 
 -- Separator
-sbar.add("item", "wifi.popup.sep2", {
+sbar.add("item", "wifi.popup.sep", {
   position = "popup." .. wifi.name,
   icon = { drawing = false },
   label = { drawing = false },
@@ -181,14 +172,13 @@ sbar.add("item", "wifi.popup.sep2", {
     height = 1,
   },
   width = 200,
-  padding_left = 10,
-  padding_right = 10,
+  padding_left = 6,
+  padding_right = 6,
 })
 
--- Network info rows
-local popup_ip = add_row("wifi.popup.ip", "IP Address")
-local popup_router = add_row("wifi.popup.router", "Router")
-local popup_hostname = add_row("wifi.popup.hostname", "Hostname")
+-- Traffic rows
+local popup_upload = add_row("wifi.popup.upload", "↑", colors.red, "Upload: 0 B/s")
+local popup_download = add_row("wifi.popup.download", "↓", colors.green, "Download: 0 B/s")
 
 -- Handle network traffic updates
 wifi_up:subscribe("network_update", function(env)
@@ -226,6 +216,16 @@ local function update_wifi_status()
         color = connected and colors.blue or colors.red,
       },
     })
+    popup_status:set({
+      icon = {
+        string = connected and "􀆅" or "􀅾",
+        color = connected and colors.green or colors.red,
+      },
+      label = {
+        string = connected and "Connected" or "Disconnected",
+        color = connected and colors.subtext1 or colors.red,
+      },
+    })
   end)
 end
 
@@ -244,14 +244,14 @@ local function refresh_popup()
   ]], function(ssid)
     ssid = (ssid or ""):gsub("%s+$", "")
     if ssid == "" then ssid = "Not Connected" end
-    popup_ssid:set({ label = { string = ssid } })
+    popup_header:set({ label = { string = ssid } })
   end)
 
   -- Get IP
   sbar.exec("ipconfig getifaddr en0 2>/dev/null", function(ip)
     ip = (ip or ""):gsub("%s+$", "")
     if ip == "" then ip = "—" end
-    popup_ip:set({ label = { string = "IP Address: " .. ip } })
+    popup_ip:set({ label = { string = "IP: " .. ip } })
   end)
 
   -- Get Router
@@ -261,16 +261,11 @@ local function refresh_popup()
     popup_router:set({ label = { string = "Router: " .. router } })
   end)
 
-  -- Get Hostname
-  sbar.exec("scutil --get ComputerName 2>/dev/null", function(hostname)
-    hostname = (hostname or ""):gsub("%s+$", "")
-    if hostname == "" then hostname = "—" end
-    popup_hostname:set({ label = { string = "Hostname: " .. hostname } })
-  end)
-
   -- Update traffic in popup
   popup_upload:set({ label = { string = "Upload: " .. current_upload } })
   popup_download:set({ label = { string = "Download: " .. current_download } })
+
+  update_wifi_status()
 end
 
 -- Toggle popup on click
@@ -293,7 +288,7 @@ popup_ip:subscribe("mouse.clicked", function()
 end)
 
 -- Close popup when mouse exits
-popup_hostname:subscribe("mouse.exited.global", function()
+popup_download:subscribe("mouse.exited.global", function()
   wifi:set({ popup = { drawing = false } })
 end)
 

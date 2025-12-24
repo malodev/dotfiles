@@ -13,12 +13,12 @@ sbar.add("event", "cpu_update")
 -- CPU icon on the vertical bar
 local cpu = sbar.add("item", "cpu", {
   position = "center",
-  padding_left = -55,
+  padding_left = -224,
   icon = {
     string = icons.cpu,
     font = {
       family = settings.font.nerd,
-      size = 16,
+      size = settings.icon_size,
     },
     color = colors.blue,
   },
@@ -39,14 +39,14 @@ local cpu = sbar.add("item", "cpu", {
 -- CPU percentage label below icon
 local cpu_label = sbar.add("item", "cpu.label", {
   position = "center",
-  padding_left = -80,
+  padding_left = -254,
   icon = { drawing = false },
   label = {
     string = "—",
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 10,
+      size = settings.label_size,
     },
     color = colors.subtext1,
     align = "center",

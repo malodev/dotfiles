@@ -5,6 +5,7 @@ local app_icons = require("helpers.app_icons")
 local height = 50
 local front_app = sbar.add("item", "front_app", {
   position = "left", -- Top of vertical bar
+  padding_left = -10,
   display = "active",
   icon = {
     drawing = true,
