@@ -9,6 +9,18 @@ local is_playing = false
 local current_artwork_url = ""
 local height = 50
 
+for i = 1, 7 do -- Assuming 10 spaces
+  local sid = tostring(i)
+  -- Spacer before media section
+  sbar.add("item", "media.spacer" .. sid, {
+    position = "center",
+    width = 20,
+    icon = { drawing = false },
+    label = { drawing = false },
+    background = { drawing = false },
+  })
+end
+
 -- Media Item (Icon on vertical bar)
 local media = sbar.add("item", "media", {
   position = "center",

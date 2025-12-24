@@ -5,6 +5,8 @@ local height = 50
 -- Weather icon on the vertical bar
 local weather = sbar.add("item", "weather", {
   position = "center",
+  padding_left = -28,
+
   icon = {
     string = "􀇃",
     font = { size = 16 },
@@ -28,7 +30,7 @@ local weather = sbar.add("item", "weather", {
 -- Temperature label below icon
 local weather_label = sbar.add("item", "weather.label", {
   position = "center",
-  padding_left = -22,
+  padding_left = -55,
   icon = { drawing = false },
   label = {
     string = "—°",
