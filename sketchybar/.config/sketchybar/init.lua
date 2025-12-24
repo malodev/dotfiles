@@ -80,6 +80,7 @@ require("items.volume")
 require("items.wifi")
 require("items.weather")
 require("items.git")
+require("items.cpu")
 
 -- Bottom Section
 require("items.widgets") -- Battery, Clock
