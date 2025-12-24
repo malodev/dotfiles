@@ -4,125 +4,348 @@ local settings = require("settings")
 
 local whitelist = { ["Spotify"] = true, ["Music"] = true }
 
--- Media Item (Icon Only on Bar)
+-- Track state
+local is_playing = false
+local current_artwork_url = ""
+
+-- Media Item (Icon on vertical bar)
 local media = sbar.add("item", "media", {
   position = "center",
-  icon = { string = icons.media.music, color = colors.mauve },
-  label = { drawing = false }, -- Hide label on bar
+  icon = {
+    string = icons.media.music,
+    color = colors.mauve,
+    font = { size = 18 },
+  },
+  label = { drawing = false },
   background = { drawing = false },
-  popup = { align = "right" }, -- Align popup for vertical bar
+  popup = {
+    align = "center",
+    horizontal = true,
+  },
   updates = true,
-  update_freq = 3, -- Poll every 3 seconds
-  click_script = "sketchybar --set media popup.drawing=toggle"
+  update_freq = 5,
 })
 
 -- Popup: Cover Art
-local cover = sbar.add("item", {
+local cover = sbar.add("item", "media.cover", {
   position = "popup." .. media.name,
-  background = { image = { string = "media.artwork", scale = 0.8 } },
+  background = {
+    image = {
+      string = "media.artwork",
+      scale = 0.12,
+      corner_radius = 7,
+    },
+    color = colors.transparent,
+    height = 60,
+    corner_radius = 7,
+  },
   icon = { drawing = false },
   label = { drawing = false },
-  align = "center"
+  width = 60,
+  padding_left = 3,
+  padding_right = 20,
 })
 
 -- Popup: Title
-local title_item = sbar.add("item", {
+local title_item = sbar.add("item", "media.title", {
   position = "popup." .. media.name,
   icon = { drawing = false },
-  label = { string = "Not Playing", width = 150, align = "center", font = { style = "Bold" } },
-  width = 160,
-  align = "center"
+  label = {
+    string = "Not Playing",
+    font = {
+      family = settings.font.text,
+      style = "Bold",
+      size = 13,
+    },
+    color = colors.text,
+    max_chars = 22,
+    scroll_duration = 100,
+  },
+  padding_left = 0,
+  padding_right = 0,
 })
 
 -- Popup: Artist
-local artist_item = sbar.add("item", {
+local artist_item = sbar.add("item", "media.artist", {
   position = "popup." .. media.name,
   icon = { drawing = false },
-  label = { string = "", width = 150, align = "center", color = colors.subtext1, font = { size = 11 } },
-  width = 160,
-  align = "center"
+  label = {
+    string = "",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 11,
+    },
+    color = colors.subtext1,
+    max_chars = 22,
+  },
+  padding_left = 5,
+  padding_right = 8,
 })
 
--- Popup: Controls Container (Vertical stack is standard for Sketchybar popups without advanced layout)
--- But we can try to make them look compact.
-
--- Controls
-local prev = sbar.add("item", {
+-- Popup: Controls (Previous)
+local prev = sbar.add("item", "media.prev", {
   position = "popup." .. media.name,
-  icon = { string = icons.media.back },
+  icon = {
+    string = icons.media.back,
+    font = { size = 14 },
+    color = colors.text,
+  },
   label = { drawing = false },
-  click_script = "nowplaying-cli previous",
-  width = 50,
-  align = "center"
+  background = {
+    color = colors.surface1,
+    corner_radius = 5,
+    height = 24,
+  },
+  padding_left = 3,
+  padding_right = 1,
 })
 
-local play_pause = sbar.add("item", {
+-- Popup: Controls (Play/Pause)
+local play_pause = sbar.add("item", "media.play_pause", {
   position = "popup." .. media.name,
-  icon = { string = icons.media.play_pause },
+  icon = {
+    string = icons.media.play,
+    font = { size = 14 },
+    color = colors.green,
+  },
   label = { drawing = false },
-  click_script = "nowplaying-cli togglePlayPause",
-  width = 50,
-  align = "center"
+  background = {
+    color = colors.surface1,
+    corner_radius = 5,
+    height = 24,
+  },
+  padding_left = 1,
+  padding_right = 1,
 })
 
-local next = sbar.add("item", {
+-- Popup: Controls (Next)
+local next_btn = sbar.add("item", "media.next", {
   position = "popup." .. media.name,
-  icon = { string = icons.media.next },
+  icon = {
+    string = icons.media.forward,
+    font = { size = 14 },
+    color = colors.text,
+  },
   label = { drawing = false },
-  click_script = "nowplaying-cli next",
-  width = 50,
-  align = "center"
+  background = {
+    color = colors.surface1,
+    corner_radius = 5,
+    height = 24,
+  },
+  padding_left = 1,
+  padding_right = 3,
 })
 
+-- Click handlers for controls
+prev:subscribe("mouse.clicked", function()
+  sbar.exec("nowplaying-cli previous")
+end)
 
--- Logic
-local function update_media()
-  -- Fetch Cover Art (Spotify only)
-  sbar.exec("osascript -e 'tell application \"Spotify\" to get artwork url of current track'", function(url)
-    if url and url ~= "" and not url:find("error") then
-      sbar.exec("curl -s -o /tmp/cover.jpg " .. url, function()
-        cover:set({ background = { image = "/tmp/cover.jpg" } })
-      end)
-    else
-      cover:set({ background = { image = "media.artwork" } })
+play_pause:subscribe("mouse.clicked", function()
+  sbar.exec("nowplaying-cli togglePlayPause")
+end)
+
+next_btn:subscribe("mouse.clicked", function()
+  sbar.exec("nowplaying-cli next")
+end)
+
+-- Toggle popup on media icon click
+media:subscribe("mouse.clicked", function()
+  media:set({ popup = { drawing = "toggle" } })
+end)
+
+-- Click on cover, title, or artist opens Spotify
+cover:subscribe("mouse.clicked", function()
+  sbar.exec("open -a Spotify")
+end)
+
+title_item:subscribe("mouse.clicked", function()
+  sbar.exec("open -a Spotify")
+end)
+
+artist_item:subscribe("mouse.clicked", function()
+  sbar.exec("open -a Spotify")
+end)
+
+-- Close popup when clicking outside (with delay to avoid accidental closes)
+local popup_closing = false
+next_btn:subscribe("mouse.exited.global", function()
+  if not popup_closing then
+    popup_closing = true
+    sbar.delay(0.3, function()
+      media:set({ popup = { drawing = false } })
+      popup_closing = false
+    end)
+  end
+end)
+
+-- Cancel close if mouse re-enters
+cover:subscribe("mouse.entered", function()
+  popup_closing = false
+end)
+
+-- Fetch and update Spotify artwork
+local function update_spotify_artwork()
+  -- Check if Spotify is running first
+  sbar.exec([[pgrep -x Spotify]], function(pid)
+    if not pid or pid == "" then
+      return
     end
-  end)
-
-  -- Use formatted command for simpler parsing
-  sbar.exec("nowplaying-cli get title artist playbackRate", function(out)
-      local lines = {}
-      for line in string.gmatch(out, "[^\r\n]+") do
-          table.insert(lines, line)
-      end
-
-      if #lines >= 2 then
-          local title = lines[1]
-          local artist = lines[2]
-          local rate = tonumber(lines[3]) or 0
-          local playing = (rate > 0)
-
-          media:set({
-              drawing = true,
-              icon = { color = playing and colors.green or colors.mauve }
-          })
-          title_item:set({ label = title })
-          artist_item:set({ label = artist })
-
-           if playing then
-              play_pause:set({ icon = icons.media.pause })
-            else
-              play_pause:set({ icon = icons.media.play })
-            end
+    -- Spotify is running, get artwork URL
+    sbar.exec([[osascript -e 'tell application "Spotify"
+      if player state is playing then
+        return artwork url of current track
       else
-           -- Not playing or error
-           media:set({ drawing = true, icon = { color = colors.mauve } })
-           title_item:set({ label = "Not Playing" })
-           artist_item:set({ label = "" })
-           cover:set({ background = { image = "media.artwork" } })
+        return ""
+      end if
+    end tell' 2>/dev/null]], function(url)
+      url = (url or ""):gsub("%s+", "")
+      if url ~= "" and url ~= current_artwork_url then
+        current_artwork_url = url
+        -- Download artwork to temp file
+        sbar.exec("curl -s -o /tmp/spotify_cover.jpg '" .. url .. "'", function()
+          cover:set({
+            background = {
+              image = {
+                string = "/tmp/spotify_cover.jpg",
+                scale = 0.12,
+                corner_radius = 7,
+              },
+            },
+          })
+        end)
       end
+    end)
   end)
 end
 
-media:subscribe({ "routine", "media_change", "system_woke" }, update_media)
--- Also run on load
-update_media()
+-- Update media info using osascript (more reliable for Spotify)
+local function update_media_info()
+  -- Check if Spotify is running first
+  sbar.exec([[pgrep -x Spotify]], function(pid)
+    if not pid or pid == "" then
+      -- Spotify not running
+      media:set({
+        drawing = true,
+        icon = { color = colors.mauve },
+      })
+      title_item:set({ label = { string = "Not Playing" } })
+      artist_item:set({ label = { string = "" } })
+      play_pause:set({
+        icon = {
+          string = icons.media.play,
+          color = colors.green,
+        },
+      })
+      is_playing = false
+      return
+    end
+
+    -- Get Spotify info via osascript
+    sbar.exec([[osascript -e 'tell application "Spotify"
+      set trackName to name of current track
+      set artistName to artist of current track
+      set playerStatus to player state as string
+      return trackName & "|||" & artistName & "|||" & playerStatus
+    end tell' 2>/dev/null]], function(out)
+      out = out or ""
+      local parts = {}
+      for part in string.gmatch(out, "[^|]+") do
+        -- Skip empty parts from |||
+        if part ~= "" then
+          table.insert(parts, part)
+        end
+      end
+
+      if #parts >= 3 then
+        local title = parts[1]:gsub("^%s+", ""):gsub("%s+$", "")
+        local artist = parts[2]:gsub("^%s+", ""):gsub("%s+$", "")
+        local state = parts[3]:gsub("^%s+", ""):gsub("%s+$", "")
+        is_playing = (state == "playing")
+
+        -- Update bar icon color
+        media:set({
+          drawing = true,
+          icon = { color = is_playing and colors.green or colors.mauve },
+        })
+
+        -- Update popup info
+        title_item:set({ label = { string = title } })
+        artist_item:set({ label = { string = artist } })
+
+        -- Update play/pause button
+        play_pause:set({
+          icon = {
+            string = is_playing and icons.media.pause or icons.media.play,
+            color = is_playing and colors.peach or colors.green,
+          },
+        })
+
+        -- Fetch Spotify artwork if playing
+        if is_playing then
+          update_spotify_artwork()
+        end
+      else
+        -- Error or no track
+        media:set({
+          drawing = true,
+          icon = { color = colors.mauve },
+        })
+        title_item:set({ label = { string = "Not Playing" } })
+        artist_item:set({ label = { string = "" } })
+        play_pause:set({
+          icon = {
+            string = icons.media.play,
+            color = colors.green,
+          },
+        })
+        is_playing = false
+      end
+    end)
+  end)
+end
+
+-- Subscribe to media change event (from SketchyBar)
+media:subscribe("media_change", function(env)
+  if whitelist[env.INFO.app] then
+    local playing = (env.INFO.state == "playing")
+    is_playing = playing
+
+    -- Update bar icon
+    media:set({
+      drawing = true,
+      icon = { color = playing and colors.green or colors.mauve },
+    })
+
+    -- Update popup info
+    title_item:set({ label = { string = env.INFO.title or "Unknown" } })
+    artist_item:set({ label = { string = env.INFO.artist or "" } })
+
+    -- Update play/pause button
+    play_pause:set({
+      icon = {
+        string = playing and icons.media.pause or icons.media.play,
+        color = playing and colors.peach or colors.green,
+      },
+    })
+
+    -- Fetch Spotify artwork
+    if playing and env.INFO.app == "Spotify" then
+      update_spotify_artwork()
+    end
+  end
+end)
+
+-- Also poll periodically for state changes (backup)
+media:subscribe("routine", function()
+  update_media_info()
+end)
+
+-- System wake handler
+media:subscribe("system_woke", function()
+  sbar.delay(2, update_media_info)
+end)
+
+-- Initial update
+update_media_info()

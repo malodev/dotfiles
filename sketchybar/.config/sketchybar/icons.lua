@@ -8,10 +8,10 @@ return {
   
   media = {
     music = "􀑖",
-    play = "􀊈",
-    pause = "􀊈",
-    back = "􀊎",
-    next = "􀊐",
+    play = "􀊄",
+    pause = "􀊆",
+    back = "􀊊",
+    forward = "􀊌",
     play_pause = "􀊈",
   },
 
