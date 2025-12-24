@@ -7,7 +7,7 @@ local volume_icon = sbar.add("item", "volume.icon", {
   position = "center",
   icon = {
     string = icons.volume[100],
-    font = { size = 18 },
+    font = { size = 16 },
     color = colors.blue,
   },
   label = { drawing = false },
@@ -16,6 +16,26 @@ local volume_icon = sbar.add("item", "volume.icon", {
     align = "center",
     horizontal = true,
   },
+  padding_left = 5,
+  padding_right = 5,
+})
+
+-- Volume level label below icon
+local volume_label = sbar.add("item", "volume.label", {
+  position = "center",
+  icon = { drawing = false },
+  label = {
+    string = "50%",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 9,
+    },
+    color = colors.subtext1,
+  },
+  background = { drawing = false },
+  padding_left = 5,
+  padding_right = 5,
 })
 
 -- Popup: Volume percentage label
@@ -84,6 +104,7 @@ local function update_volume(volume)
   volume_icon:set({ icon = { string = icon } })
   volume_percent:set({ label = { string = lead .. volume .. "%" } })
   volume_slider:set({ slider = { percentage = volume } })
+  volume_label:set({ label = { string = volume .. "%" } })
 end
 
 -- Subscribe to volume changes
