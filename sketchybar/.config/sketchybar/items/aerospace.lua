@@ -31,7 +31,7 @@ local function update_windows()
     -- Update all space items
     for i = 1, 10 do -- Assuming 10 spaces
       local sid = tostring(i)
-      local icon_strip = workspace_apps[sid] or " —"
+      local icon_strip = workspace_apps[sid] or " "
 
       sbar.animate("tanh", 10, function()
         sbar.set("space." .. sid, { label = icon_strip })
@@ -51,7 +51,7 @@ for sid = 1, 10 do
       font = { family = settings.font.text, style = "Bold", size = 18.0 },
     },
     label = {
-      string = " —",
+      string = " ",
       font = "sketchybar-app-font:Regular:16.0",
       padding_right = 8,
       color = colors.text,
