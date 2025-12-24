@@ -44,11 +44,11 @@ end
 for sid = 1, 10 do
   local space = sbar.add("item", "space." .. sid, {
     position = "left", -- Center area (after Front App)
+    scroll_texts = true,
+    padding_left = sid * -28,
     icon = {
       string = tostring(sid),
       font = { family = settings.font.text, style = "Bold", size = 18.0 },
-      padding_left = 6,
-      padding_right = 6,
     },
     label = {
       string = " —",
@@ -61,12 +61,10 @@ for sid = 1, 10 do
       color = colors.surface0,
       border_width = 1,
       border_color = colors.transparent,
-      height = 35,
+      height = 49,
       drawing = true,
     },
-    -- Fixed paddings: padding_top/bottom are invalid
-    padding_left = 2,
-    padding_right = 2,
+    width = settings.item_width,
     click_script = "aerospace workspace " .. sid,
   })
 
