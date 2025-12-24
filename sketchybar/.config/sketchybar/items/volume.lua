@@ -1,7 +1,7 @@
 local colors = require("colors")
 local icons = require("icons")
 local settings = require("settings")
-
+local height = 50
 -- Volume icon on the vertical bar
 local volume_icon = sbar.add("item", "volume.icon", {
   position = "center",
@@ -11,31 +11,41 @@ local volume_icon = sbar.add("item", "volume.icon", {
     color = colors.blue,
   },
   label = { drawing = false },
-  background = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 8,
+    height = height,
+    drawing = true,
+  },
   popup = {
     align = "center",
     horizontal = true,
   },
-  padding_left = 5,
-  padding_right = 5,
+  width = settings.item_width,
 })
 
 -- Volume level label below icon
 local volume_label = sbar.add("item", "volume.label", {
   position = "center",
   icon = { drawing = false },
+  padding_left = -23,
   label = {
     string = "50%",
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 9,
+      size = 14,
     },
     color = colors.subtext1,
+    align = "center",
   },
-  background = { drawing = false },
-  padding_left = 5,
-  padding_right = 5,
+  background = {
+    color = colors.surface0,
+    corner_radius = 8,
+    height = height,
+    drawing = true,
+  },
+  width = settings.item_width,
 })
 
 -- Popup: Volume percentage label
@@ -102,9 +112,9 @@ local function update_volume(volume)
   local lead = volume < 10 and "0" or ""
 
   volume_icon:set({ icon = { string = icon } })
+  volume_label:set({ label = { string = volume .. "%" } })
   volume_percent:set({ label = { string = lead .. volume .. "%" } })
   volume_slider:set({ slider = { percentage = volume } })
-  volume_label:set({ label = { string = volume .. "%" } })
 end
 
 -- Subscribe to volume changes
@@ -128,7 +138,7 @@ volume_icon:subscribe("mouse.scrolled", function(env)
   if delta == 0 then return end
 
   -- Normalize large trackpad deltas (they can be 10-100+)
-  local direction = delta > 0 and 1 or -1
+  local direction = delta > 0 and -1 or 1
   local step = math.min(math.abs(delta), 10)
   local change = direction * step
 

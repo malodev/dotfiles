@@ -6,7 +6,8 @@ return {
     nerd = "Hack Nerd Font",
   },
   dim = {
-    h = 50, 
+    h = 50,
     padding = 3,
   },
+  item_width = 65, -- Width of center items (adjust to match bar width)
 }

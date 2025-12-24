@@ -7,6 +7,7 @@ local whitelist = { ["Spotify"] = true, ["Music"] = true }
 -- Track state
 local is_playing = false
 local current_artwork_url = ""
+local height = 50
 
 -- Media Item (Icon on vertical bar)
 local media = sbar.add("item", "media", {
@@ -17,13 +18,17 @@ local media = sbar.add("item", "media", {
     font = { size = 16 },
   },
   label = { drawing = false },
-  background = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 8,
+    height = height,
+    drawing = true,
+  },
   popup = {
     align = "center",
     horizontal = true,
   },
-  padding_left = 5,
-  padding_right = 5,
+  width = settings.item_width,
   updates = true,
   update_freq = 5,
 })
@@ -32,20 +37,27 @@ local media = sbar.add("item", "media", {
 local media_label = sbar.add("item", "media.label", {
   position = "center",
   icon = { drawing = false },
+  padding_left = -23,
+  scroll_texts = true,
   label = {
     string = "—",
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 9,
+      size = 12,
     },
     color = colors.subtext1,
-    max_chars = 10,
+    max_chars = 6,
     scroll_duration = 100,
+    align = "center",
   },
-  background = { drawing = false },
-  padding_left = 5,
-  padding_right = 5,
+  background = {
+    color = colors.surface0,
+    corner_radius = 8,
+    height = height,
+    drawing = true,
+  },
+  width = settings.item_width,
 })
 
 -- Popup: Cover Art
@@ -296,7 +308,7 @@ local function update_media_info()
         -- Update popup info
         title_item:set({ label = { string = title } })
         artist_item:set({ label = { string = artist } })
-        media_label:set({ label = { string = title } })
+        media_label:set({ label = { string = title .. " - " .. artist } })
 
         -- Update play/pause button
         play_pause:set({

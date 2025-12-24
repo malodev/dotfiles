@@ -23,7 +23,7 @@ sbar.bar({
   blur_radius = 20,
   padding_left = 10,
   padding_right = 10,
-  color = colors.bg,
+  color = colors.transparent,
   shadow = true,
   sticky = true,
   topmost = true,

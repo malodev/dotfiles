@@ -2,6 +2,7 @@ local colors = require("colors")
 local icons = require("icons")
 local settings = require("settings")
 
+local height = 50
 -- Start network traffic monitor
 sbar.exec("killall network_load 2>/dev/null; $CONFIG_DIR/helpers/event_providers/network_load/bin/network_load en0 network_update 2.0 &")
 
@@ -14,18 +15,23 @@ local wifi = sbar.add("item", "wifi", {
     color = colors.blue,
   },
   label = { drawing = false },
-  background = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 9,
+    height = height,
+    drawing = true,
+  },
   popup = {
     align = "center",
     horizontal = false,
   },
-  padding_left = 5,
-  padding_right = 5,
+  width = settings.item_width,
 })
 
 -- Traffic display below icon (upload)
 local wifi_up = sbar.add("item", "wifi.up", {
   position = "center",
+  padding_left = -25,
   icon = {
     string = "↑",
     font = { size = 8 },
@@ -36,19 +42,24 @@ local wifi_up = sbar.add("item", "wifi.up", {
     string = "0B/s",
     font = {
       family = settings.font.text,
-      size = 8,
+      size = 10,
     },
-    color = colors.subtext1,
+    color = colors.red,
     padding_left = 2,
   },
-  padding_left = 5,
-  padding_right = 5,
-  background = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 9,
+    height = height,
+    drawing = true,
+  },
+  width = settings.item_width,
 })
 
 -- Traffic display below icon (download)
 local wifi_down = sbar.add("item", "wifi.down", {
   position = "center",
+  padding_left = -51,
   icon = {
     string = "↓",
     font = { size = 8 },
@@ -59,14 +70,18 @@ local wifi_down = sbar.add("item", "wifi.down", {
     string = "0B/s",
     font = {
       family = settings.font.text,
-      size = 8,
+      size = 10,
     },
-    color = colors.subtext1,
+    color = colors.green,
     padding_left = 2,
   },
-  padding_left = 5,
-  padding_right = 5,
-  background = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 9,
+    height = height,
+    drawing = true,
+  },
+  width = settings.item_width,
 })
 
 -- Popup: SSID header
@@ -175,10 +190,6 @@ local popup_ip = add_row("wifi.popup.ip", "IP Address")
 local popup_router = add_row("wifi.popup.router", "Router")
 local popup_hostname = add_row("wifi.popup.hostname", "Hostname")
 
--- Track current traffic for popup
-local current_upload = "0 B/s"
-local current_download = "0 B/s"
-
 -- Handle network traffic updates
 wifi_up:subscribe("network_update", function(env)
   local up = env.upload or "0 B/s"
@@ -187,6 +198,7 @@ wifi_up:subscribe("network_update", function(env)
   current_upload = up
   current_download = down
 
+  -- Dim colors when no traffic
   local up_color = (up == "000 Bps" or up == "0 B/s") and colors.surface2 or colors.red
   local down_color = (down == "000 Bps" or down == "0 B/s") and colors.surface2 or colors.green
 

@@ -1,6 +1,7 @@
 local colors = require("colors")
 local settings = require("settings")
 
+local height = 50
 -- Weather icon on the vertical bar
 local weather = sbar.add("item", "weather", {
   position = "center",
@@ -10,33 +11,42 @@ local weather = sbar.add("item", "weather", {
     color = colors.yellow,
   },
   label = { drawing = false },
-  background = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 9,
+    height = height,
+    drawing = true,
+  },
   popup = {
     align = "center",
     horizontal = false,
-    height = 40,
   },
-  padding_left = 5,
-  padding_right = 5,
+  width = settings.item_width,
   update_freq = 600,
 })
 
 -- Temperature label below icon
 local weather_label = sbar.add("item", "weather.label", {
   position = "center",
+  padding_left = -22,
   icon = { drawing = false },
   label = {
     string = "—°",
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 9,
+      size = 16,
     },
     color = colors.subtext1,
+    align = "center",
   },
-  background = { drawing = false },
-  padding_left = 5,
-  padding_right = 5,
+  background = {
+    color = colors.surface0,
+    corner_radius = 9,
+    height = height,
+    drawing = true,
+  },
+  width = settings.item_width,
 })
 
 -- Popup: Header (city + temp)
@@ -198,7 +208,7 @@ local function refresh_weather()
 
       local icon = get_weather_icon(condition)
 
-      -- Update bar icon
+      -- Update bar icon and label
       weather:set({ icon = { string = icon } })
       weather_label:set({ label = { string = temp .. "°" } })
 
