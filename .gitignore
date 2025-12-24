@@ -9,3 +9,4 @@ lazyvim.json
 zed/.config/zed/conversations
 zed/.config/zed/embeddings
 zed/.config/zed/prompts
+.DS_Store
