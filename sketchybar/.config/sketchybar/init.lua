@@ -77,10 +77,11 @@ require("items.front_app")
 require("items.aerospace")
 require("items.media")
 require("items.volume")
+require("items.wifi")
+require("items.weather")
 
 -- Bottom Section
 require("items.widgets") -- Battery, Clock
-require("items.weather")
 
 
 sbar.end_config()
