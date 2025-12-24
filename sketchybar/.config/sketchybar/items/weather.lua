@@ -6,7 +6,7 @@ local weather = sbar.add("item", "weather", {
   position = "center",
   icon = {
     string = "􀇃",
-    font = { size = 18 },
+    font = { size = 16 },
     color = colors.yellow,
   },
   label = { drawing = false },
@@ -14,8 +14,29 @@ local weather = sbar.add("item", "weather", {
   popup = {
     align = "center",
     horizontal = false,
+    height = 40,
   },
+  padding_left = 5,
+  padding_right = 5,
   update_freq = 600,
+})
+
+-- Temperature label below icon
+local weather_label = sbar.add("item", "weather.label", {
+  position = "center",
+  icon = { drawing = false },
+  label = {
+    string = "—°",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 9,
+    },
+    color = colors.subtext1,
+  },
+  background = { drawing = false },
+  padding_left = 5,
+  padding_right = 5,
 })
 
 -- Popup: Header (city + temp)
@@ -26,26 +47,24 @@ local popup_header = sbar.add("item", "weather.popup.header", {
     font = {
       family = settings.font.text,
       style = "Bold",
-      size = 14,
+      size = 18,
     },
     color = colors.text,
     align = "left",
-    width = 140,
   },
   label = {
     string = "—°C",
     font = {
       family = settings.font.text,
       style = "Bold",
-      size = 14,
+      size = 18,
     },
     color = colors.blue,
     align = "right",
-    width = 60,
+    width = 50,
   },
-  width = 220,
-  padding_left = 10,
-  padding_right = 10,
+  padding_left = 6,
+  padding_right = 6,
 })
 
 -- Popup: Condition
@@ -53,7 +72,7 @@ local popup_cond = sbar.add("item", "weather.popup.cond", {
   position = "popup." .. weather.name,
   icon = {
     string = "􀇃",
-    font = { size = 14 },
+    font = { size = 16 },
     color = colors.yellow,
   },
   label = {
@@ -61,14 +80,13 @@ local popup_cond = sbar.add("item", "weather.popup.cond", {
     font = {
       family = settings.font.text,
       style = "Regular",
-      size = 12,
+      size = 16,
     },
     color = colors.subtext1,
-    max_chars = 25,
+    max_chars = 20,
   },
-  width = 220,
-  padding_left = 10,
-  padding_right = 10,
+  padding_left = 6,
+  padding_right = 6,
 })
 
 -- Helper: create info row
@@ -77,26 +95,27 @@ local function add_row(name, icon_str, icon_color, label_text)
     position = "popup." .. weather.name,
     icon = {
       string = icon_str,
-      font = { size = 12 },
+      font = { size = 16 },
       color = icon_color,
-      width = 25,
+      width = 20,
+      padding_right = 0,
     },
     label = {
       string = label_text,
       font = {
         family = settings.font.text,
         style = "Regular",
-        size = 11,
+        size = 16,
       },
       color = colors.text,
+      padding_left = 2,
     },
-    width = 220,
-    padding_left = 10,
-    padding_right = 10,
+    padding_left = 6,
+    padding_right = 6,
   })
 end
 
-local popup_feels = add_row("weather.popup.feels", "􀇬", colors.peach, "Feels like: —°C")
+local popup_feels = add_row("weather.popup.feels", "􀇬", colors.peach, "Feels: —°C")
 local popup_humidity = add_row("weather.popup.humidity", "􀌢", colors.sky, "Humidity: —%")
 local popup_wind = add_row("weather.popup.wind", "􀇤", colors.teal, "Wind: — km/h")
 
@@ -110,8 +129,8 @@ sbar.add("item", "weather.popup.sep", {
     height = 1,
   },
   width = 200,
-  padding_left = 10,
-  padding_right = 10,
+  padding_left = 6,
+  padding_right = 6,
 })
 
 -- Forecast rows
@@ -142,7 +161,7 @@ end
 -- Refresh weather data
 local function refresh_weather()
   local cmd = [[/opt/homebrew/bin/jq -r '
-    def h(i): .weather[0].hourly[i] | "\(.tempC)°C \(.weatherDesc[0].value)";
+    def h(i): .weather[0].hourly[i] | "\(.tempC)° \(.weatherDesc[0].value)";
     [
       .nearest_area[0].areaName[0].value,
       .current_condition[0].temp_C,
@@ -181,6 +200,7 @@ local function refresh_weather()
 
       -- Update bar icon
       weather:set({ icon = { string = icon } })
+      weather_label:set({ label = { string = temp .. "°" } })
 
       -- Update popup
       popup_header:set({
@@ -191,7 +211,7 @@ local function refresh_weather()
         icon = { string = icon },
         label = { string = condition },
       })
-      popup_feels:set({ label = { string = "Feels like: " .. feels .. "°C" } })
+      popup_feels:set({ label = { string = "Feels: " .. feels .. "°C" } })
       popup_humidity:set({ label = { string = "Humidity: " .. humidity .. "%" } })
       popup_wind:set({ label = { string = "Wind: " .. wind .. " km/h" } })
       popup_h1:set({ label = { string = "1h: " .. h1 } })
