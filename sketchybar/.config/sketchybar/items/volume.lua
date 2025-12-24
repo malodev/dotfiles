@@ -114,7 +114,9 @@ volume_icon:subscribe("mouse.scrolled", function(env)
   -- Get current volume and set new
   sbar.exec("osascript -e 'output volume of (get volume settings)'", function(current)
     local cur_vol = tonumber(current) or 50
-    local new_vol = math.max(0, math.min(100, cur_vol + change))
+    local new_vol = cur_vol + change
+    if new_vol > 100 then new_vol = 100 end
+    if new_vol < 0 then new_vol = 0 end
     sbar.exec("osascript -e 'set volume output volume " .. new_vol .. "'")
     -- Manually update the display since volume_change event may not fire
     update_volume(new_vol)

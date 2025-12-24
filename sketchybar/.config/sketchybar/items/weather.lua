@@ -1,165 +1,230 @@
 local colors = require("colors")
 local settings = require("settings")
 
--- === Compact chip (icon + temp) ===
-local weather = sbar.add("item", "widgets.weather", {
-  position = "right",
-  icon = { string = "􀇃" }, -- default cloud.sun
-  label = { string = "…°", font = { family = settings.font.text, style = "Bold", size = 12.0 } },
-  padding_left = 6,
-  padding_right = 6,
-  update_freq = 600, -- 10 min
-  popup = { align = "right" } -- Align bottom of popup with item (for vertical right bar)
+-- Weather icon on the vertical bar
+local weather = sbar.add("item", "weather", {
+  position = "center",
+  icon = {
+    string = "􀇃",
+    font = { size = 18 },
+    color = colors.yellow,
+  },
+  label = { drawing = false },
+  background = { drawing = false },
+  popup = {
+    align = "center",
+    horizontal = false,
+  },
+  update_freq = 600,
 })
 
--- Removed bracket container
+-- Popup: Header (city + temp)
+local popup_header = sbar.add("item", "weather.popup.header", {
+  position = "popup." .. weather.name,
+  icon = {
+    string = "—",
+    font = {
+      family = settings.font.text,
+      style = "Bold",
+      size = 14,
+    },
+    color = colors.text,
+    align = "left",
+    width = 140,
+  },
+  label = {
+    string = "—°C",
+    font = {
+      family = settings.font.text,
+      style = "Bold",
+      size = 14,
+    },
+    color = colors.blue,
+    align = "right",
+    width = 60,
+  },
+  width = 220,
+  padding_left = 10,
+  padding_right = 10,
+})
 
--- Helper: add a popup row with fixed left/right columns
-local function add_row(name, left, right, total_w, left_w, right_w)
-  total_w = total_w or 260
-  left_w = left_w or 120
-  right_w = right_w or 140
+-- Popup: Condition
+local popup_cond = sbar.add("item", "weather.popup.cond", {
+  position = "popup." .. weather.name,
+  icon = {
+    string = "􀇃",
+    font = { size = 14 },
+    color = colors.yellow,
+  },
+  label = {
+    string = "—",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 12,
+    },
+    color = colors.subtext1,
+    max_chars = 25,
+  },
+  width = 220,
+  padding_left = 10,
+  padding_right = 10,
+})
+
+-- Helper: create info row
+local function add_row(name, icon_str, icon_color, label_text)
   return sbar.add("item", name, {
-    position = "popup." .. weather.name, -- Attach to weather item
-    icon = { string = left, align = "left", width = left_w },
-    label = { string = right, align = "right", width = right_w },
-    width = total_w,
+    position = "popup." .. weather.name,
+    icon = {
+      string = icon_str,
+      font = { size = 12 },
+      color = icon_color,
+      width = 25,
+    },
+    label = {
+      string = label_text,
+      font = {
+        family = settings.font.text,
+        style = "Regular",
+        size = 11,
+      },
+      color = colors.text,
+    },
+    width = 220,
+    padding_left = 10,
+    padding_right = 10,
   })
 end
 
--- Header widths chosen so they never collide
-local header = sbar.add("item", "widgets.weather.row.header", {
-  position = "popup." .. weather.name,
-  icon = { align = "left", width = 170, string = "—" }, -- city
-  label = { align = "right", width = 80, string = "—", max_chars = 6 }, -- "23°C"
-  width = 250,
-})
+local popup_feels = add_row("weather.popup.feels", "􀇬", colors.peach, "Feels like: —°C")
+local popup_humidity = add_row("weather.popup.humidity", "􀌢", colors.sky, "Humidity: —%")
+local popup_wind = add_row("weather.popup.wind", "􀇤", colors.teal, "Wind: — km/h")
 
--- Conditions (full width; we can later add a marquee)
-local cond = sbar.add("item", "widgets.weather.row.cond", {
+-- Separator
+sbar.add("item", "weather.popup.sep", {
   position = "popup." .. weather.name,
   icon = { drawing = false },
-  label = { string = "—", align = "left", width = 250, max_chars = 999 },
-  width = 250,
+  label = { drawing = false },
+  background = {
+    color = colors.surface1,
+    height = 1,
+  },
+  width = 200,
+  padding_left = 10,
+  padding_right = 10,
 })
 
-local feels = add_row("widgets.weather.row.feels", "Feels like", "—")
-local humidity = add_row("widgets.weather.row.hum", "Humidity", "—")
-local wind = add_row("widgets.weather.row.wind", "Wind", "—")
+-- Forecast rows
+local popup_h1 = add_row("weather.popup.h1", "􀐫", colors.green, "1h: —")
+local popup_h3 = add_row("weather.popup.h3", "􀐫", colors.green, "3h: —")
+local popup_h6 = add_row("weather.popup.h6", "􀐫", colors.green, "6h: —")
 
--- Simple separator line
-sbar.add("item", "widgets.weather.row.sep", {
-  position = "popup." .. weather.name,
-  background = { height = 1, color = colors.bg2 },
-  width = 250,
-})
+-- Get weather icon based on condition
+local function get_weather_icon(condition)
+  local c = (condition or ""):lower()
+  if c:find("storm") or c:find("thunder") then
+    return "􀇏"
+  elseif c:find("rain") or c:find("drizzle") then
+    return "􀇈"
+  elseif c:find("snow") or c:find("sleet") or c:find("hail") then
+    return "􀇇"
+  elseif c:find("clear") or c:find("sun") then
+    return "􀆮"
+  elseif c:find("cloud") or c:find("overcast") then
+    return "􀇂"
+  elseif c:find("fog") or c:find("mist") then
+    return "􀇋"
+  else
+    return "􀇃"
+  end
+end
 
-local h1 = add_row("widgets.weather.row.h1", "Next 1h", "—")
-local h3 = add_row("widgets.weather.row.h3", "Next 3h", "—")
-local h6 = add_row("widgets.weather.row.h6", "Next 6h", "—")
+-- Refresh weather data
+local function refresh_weather()
+  local cmd = [[/opt/homebrew/bin/jq -r '
+    def h(i): .weather[0].hourly[i] | "\(.tempC)°C \(.weatherDesc[0].value)";
+    [
+      .nearest_area[0].areaName[0].value,
+      .current_condition[0].temp_C,
+      .current_condition[0].weatherDesc[0].value,
+      .current_condition[0].FeelsLikeC,
+      .current_condition[0].humidity,
+      .current_condition[0].windspeedKmph,
+      h(1), h(3), h(6)
+    ] | .[]
+  ' /tmp/weather.json 2>/dev/null]]
 
--- === CHIP REFRESH (icon + temp)
-local function refresh_chip()
-  sbar.exec([[curl -s 'https://wttr.in/Rovereto?format=%t+%C' | tr -d '\n']], function(out)
-    if not out or out == "" then
-      return
-    end
-    local temp, condition = out:match("([%+%-]?%d+°C)%s+(.+)")
-    if not temp or not condition then
-      return
-    end
+  -- First fetch the data
+  sbar.exec("curl -s 'https://wttr.in/Rovereto?format=j1' -o /tmp/weather.json 2>/dev/null", function()
+    -- Then parse it
+    sbar.exec(cmd, function(out)
+      if not out or out == "" then return end
 
-    local c = condition:lower()
-    local icon = "􀇃" -- cloud.sun
-    if c:find("storm") or c:find("thunder") then
-      icon = "􀇏" -- cloud.bolt.rain
-    elseif c:find("rain") or c:find("drizzle") then
-      icon = "􀇈" -- cloud.rain
-    elseif c:find("snow") or c:find("sleet") or c:find("hail") then
-      icon = "􀇇" -- cloud.snow
-    elseif c:find("clear") or c:find("sun") then
-      icon = "􀆮" -- sun.max
-    elseif c:find("cloud") or c:find("overcast") then
-      icon = "􀇂" -- cloud
-    end
+      local lines = {}
+      for line in string.gmatch(out, "[^\r\n]+") do
+        table.insert(lines, line)
+      end
 
-    weather:set({ icon = { string = icon }, label = { string = temp } })
+      if #lines < 9 then return end
+
+      local city = lines[1]
+      local temp = lines[2]
+      local condition = lines[3]
+      local feels = lines[4]
+      local humidity = lines[5]
+      local wind = lines[6]
+      local h1 = lines[7]
+      local h3 = lines[8]
+      local h6 = lines[9]
+
+      local icon = get_weather_icon(condition)
+
+      -- Update bar icon
+      weather:set({ icon = { string = icon } })
+
+      -- Update popup
+      popup_header:set({
+        icon = { string = city },
+        label = { string = temp .. "°C" },
+      })
+      popup_cond:set({
+        icon = { string = icon },
+        label = { string = condition },
+      })
+      popup_feels:set({ label = { string = "Feels like: " .. feels .. "°C" } })
+      popup_humidity:set({ label = { string = "Humidity: " .. humidity .. "%" } })
+      popup_wind:set({ label = { string = "Wind: " .. wind .. " km/h" } })
+      popup_h1:set({ label = { string = "1h: " .. h1 } })
+      popup_h3:set({ label = { string = "3h: " .. h3 } })
+      popup_h6:set({ label = { string = "6h: " .. h6 } })
+    end)
   end)
 end
 
--- === POPUP REFRESH (details) — harden PATH for jq when launched by services
-local function refresh_popup()
-  local url = "https://wttr.in/Rovereto?format=j1"
-  -- Logging start
-  -- Removed logging
-
-  local cmd = [[/bin/bash -lc '
-    export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-    curl -fsSL "]] .. url .. [[" | jq -r "
-      def h(i): .weather[0].hourly[i] | \"\\(.tempC)°C, \\(.weatherDesc[0].value)\";
-      [
-        .nearest_area[0].areaName[0].value,         # city
-        .current_condition[0].temp_C,               # tempC (no unit)
-        .current_condition[0].weatherDesc[0].value, # condition
-        .current_condition[0].FeelsLikeC,           # feels
-        .current_condition[0].humidity,             # humidity
-        (.current_condition[0].windspeedKmph|tostring + \" km/h\"), # wind
-        h(1), h(3), h(6)
-      ] | .[]
-    "
-  ']]
-
-  sbar.exec(cmd, function(out)
-    if not out or out == "" then
-      return
-    end
-
-    local lines = {}
-    for line in string.gmatch(out, "[^\r\n]+") do
-      lines[#lines + 1] = line
-    end
-    if #lines < 9 then
-      return
-    end -- expect 9 fields
-
-    local city, tempC, desc, feelC, humP, windStr, n1, n3, n6 =
-      lines[1], lines[2], lines[3], lines[4], lines[5], lines[6], lines[7], lines[8], lines[9]
-
-    header:set({
-      icon = { string = city },
-      label = { string = tostring(tempC) .. "°C" },
-    })
-    cond:set({ label = { string = desc } }) -- << fix: use :set
-
-    feels:set({ label = { string = tostring(feelC) .. "°C" } })
-    humidity:set({ label = { string = tostring(humP) .. "%" } })
-    wind:set({ label = { string = windStr } })
-    h1:set({ label = { string = n1 } })
-    h3:set({ label = { string = n3 } })
-    h6:set({ label = { string = n6 } })
-  end)
-end
-
--- === Click behavior ===
+-- Toggle popup on click
 weather:subscribe("mouse.clicked", function(env)
   if env.BUTTON == "right" then
-    sbar.exec([[open -a "Weather"]]) -- right click opens app
+    sbar.exec("open -a Weather")
   else
-    sbar.set("widgets.weather", { popup = { drawing = "toggle" } })
-    sbar.delay(0.05, function()
-      refresh_popup()
-    end)
+    weather:set({ popup = { drawing = "toggle" } })
+    refresh_weather()
   end
 end)
 
--- === Periodic updates ===
-weather:subscribe({ "routine", "system_woke" }, function()
-  refresh_chip()
-  sbar.delay(300, refresh_popup) -- soft refresh even if popup closed
+-- Click on popup header opens Weather app
+popup_header:subscribe("mouse.clicked", function()
+  sbar.exec("open -a Weather")
 end)
 
--- Spacing after widget
-sbar.add("item", { position = "right", width = settings.group_paddings })
+-- Close popup when mouse exits
+popup_h6:subscribe("mouse.exited.global", function()
+  weather:set({ popup = { drawing = false } })
+end)
 
--- Initial paint
-refresh_chip()
+-- Periodic updates
+weather:subscribe({ "routine", "system_woke" }, function()
+  refresh_weather()
+end)
+
+-- Initial fetch
+refresh_weather()
