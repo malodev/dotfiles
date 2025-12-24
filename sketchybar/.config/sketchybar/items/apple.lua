@@ -1,12 +1,26 @@
 local colors = require("colors")
 local icons = require("icons")
+local settings = require("settings")
 
+local height = 50
 local apple = sbar.add("item", "apple", {
   position = "left", -- Top of vertical bar
-  icon = { string = icons.apple, color = colors.text },
+  icon = {
+    string = icons.apple,
+    color = colors.text,
+    font = { family = settings.font.apps, size = 20.0 },
+    width = settings.item_width,
+    align = "center",
+  },
   label = { drawing = false },
+  background = {
+    color = colors.surface0,
+    corner_radius = 9,
+    height = height,
+    drawing = true,
+  },
+  width = settings.item_width,
   -- padding_bottom removed (invalid property)
-  padding_right = 10,
   click_script = "sketchybar --set $NAME popup.drawing=toggle"
 })
 
