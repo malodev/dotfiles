@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Config (override via env)
-PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Neoware}"
+PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Projects}"
 MAX_REPOS="${MAX_REPOS:-10}"    # hard cap
 RECENT_DAYS="${RECENT_DAYS:-0}" # 0 = no time filter
 
