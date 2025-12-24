@@ -69,18 +69,21 @@ export SAVEHIST=9223372036854775807
 
 # records the timestamp of each command. To view time: history -E
 export HISTTIMEFORMAT="[%F %T] "
-setopt EXTENDED_HISTORY
 
-setopt HIST_FIND_NO_DUPS
-setopt APPEND_HISTORY
-setopt INC_APPEND_HISTORY
-setopt SHARE_HISTORY
-setopt HIST_REDUCE_BLANKS
-setopt HIST_IGNORE_ALL_DUPS
-setopt HIST_IGNORE_SPACE
-setopt HIST_SAVE_NO_DUPS
-setopt HIST_VERIFY
-setopt HIST_REDUCE_BLANKS
+setopt EXTENDED_HISTORY          # Timestamps
+setopt APPEND_HISTORY            # Append, don't overwrite
+setopt INC_APPEND_HISTORY        # Write immediately, not on exit
+# setopt SHARE_HISTORY           # ← REMOVE THIS (causes race conditions + dedup storms)
+
+setopt HIST_FIND_NO_DUPS         # Don't show dups when searching (cosmetic only)
+setopt HIST_EXPIRE_DUPS_FIRST    # Only remove dups when hitting limit
+setopt HIST_IGNORE_SPACE         # Commands starting with space are private
+setopt HIST_VERIFY               # Show command before executing from history
+setopt HIST_REDUCE_BLANKS        # Clean up whitespace
+
+# REMOVE these aggressive dedup options:
+# setopt HIST_IGNORE_ALL_DUPS    # ← This destroys your history
+# setopt HIST_SAVE_NO_DUPS       # ← This too
 
 bindkey "^[[A" history-substring-search-up
 bindkey "^[[B" history-substring-search-down

@@ -34,7 +34,7 @@ fi
 ## Essential
 source ~/.zplug/init.zsh
 
-zplug "lib/history", from:oh-my-zsh
+# zplug "lib/history", from:oh-my-zsh
 
 ## Make sure to use double quotes
 zplug "zsh-users/zsh-history-substring-search"
