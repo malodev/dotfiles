@@ -14,7 +14,7 @@ local media = sbar.add("item", "media", {
   icon = {
     string = icons.media.music,
     color = colors.mauve,
-    font = { size = 18 },
+    font = { size = 16 },
   },
   label = { drawing = false },
   background = { drawing = false },
@@ -22,8 +22,30 @@ local media = sbar.add("item", "media", {
     align = "center",
     horizontal = true,
   },
+  padding_left = 5,
+  padding_right = 5,
   updates = true,
   update_freq = 5,
+})
+
+-- Song title label below icon
+local media_label = sbar.add("item", "media.label", {
+  position = "center",
+  icon = { drawing = false },
+  label = {
+    string = "—",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 9,
+    },
+    color = colors.subtext1,
+    max_chars = 10,
+    scroll_duration = 100,
+  },
+  background = { drawing = false },
+  padding_left = 5,
+  padding_right = 5,
 })
 
 -- Popup: Cover Art
@@ -232,6 +254,7 @@ local function update_media_info()
       })
       title_item:set({ label = { string = "Not Playing" } })
       artist_item:set({ label = { string = "" } })
+      media_label:set({ label = { string = "—" } })
       play_pause:set({
         icon = {
           string = icons.media.play,
@@ -273,6 +296,7 @@ local function update_media_info()
         -- Update popup info
         title_item:set({ label = { string = title } })
         artist_item:set({ label = { string = artist } })
+        media_label:set({ label = { string = title } })
 
         -- Update play/pause button
         play_pause:set({
@@ -294,6 +318,7 @@ local function update_media_info()
         })
         title_item:set({ label = { string = "Not Playing" } })
         artist_item:set({ label = { string = "" } })
+        media_label:set({ label = { string = "—" } })
         play_pause:set({
           icon = {
             string = icons.media.play,
@@ -321,6 +346,7 @@ media:subscribe("media_change", function(env)
     -- Update popup info
     title_item:set({ label = { string = env.INFO.title or "Unknown" } })
     artist_item:set({ label = { string = env.INFO.artist or "" } })
+    media_label:set({ label = { string = env.INFO.title or "—" } })
 
     -- Update play/pause button
     play_pause:set({
