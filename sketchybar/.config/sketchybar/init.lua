@@ -17,7 +17,7 @@ sbar.add("event", "media_change")
 sbar.bar({
   height = 65,         -- Width (since bar is vertical)
   position = "right",  -- Vertical Layout
-  y_offset = 10,
+  y_offset = 26,
   margin = 10,
   corner_radius = 9,
   blur_radius = 20,
@@ -45,7 +45,7 @@ sbar.default({
     font = {
       family = settings.font.text,
       style = "Semibold",
-      size = 13.0,
+      size = 14.0,
     },
     color = colors.label,
     padding_left = 4,
