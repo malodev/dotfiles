@@ -226,7 +226,166 @@ local date = sbar.add("item", "date", {
     height = height,
     drawing = true,
   },
+  popup = {
+    align = "center",
+    horizontal = false,
+    y_offset = -300,
+  },
+  updates = true,
 })
+
+--------------------------------------------------------------------------------
+-- CALENDAR POPUP
+--------------------------------------------------------------------------------
+
+local MAX_EVENTS = settings.calendar.max_events
+local CALENDAR_SCRIPT = os.getenv("HOME") .. "/.config/sketchybar/helpers/calendar/get_events.sh"
+local CALENDARS = settings.calendar.calendars
+local DAYS_AHEAD = settings.calendar.days_ahead
+
+-- Popup header
+local cal_header = sbar.add("item", "date.popup.header", {
+  position = "popup." .. date.name,
+  icon = {
+    string = "󰃭",
+    font = { family = settings.font.nerd, size = 18 },
+    color = colors.blue,
+  },
+  label = {
+    string = "Upcoming Events",
+    font = { family = settings.font.text, style = "Bold", size = 18 },
+    color = colors.text,
+  },
+  padding_left = 6,
+  padding_right = 6,
+})
+
+-- Separator
+sbar.add("item", "date.popup.sep", {
+  position = "popup." .. date.name,
+  icon = { drawing = false },
+  label = { drawing = false },
+  background = { color = colors.surface1, height = 1 },
+  width = 400,
+  padding_left = 6,
+  padding_right = 6,
+})
+
+-- Pre-create event rows (hidden by default)
+local event_rows = {}
+for i = 1, MAX_EVENTS do
+  event_rows[i] = sbar.add("item", "date.event." .. i, {
+    position = "popup." .. date.name,
+    drawing = false,
+    icon = {
+      string = "󰥔",
+      font = { family = settings.font.nerd, size = 16 },
+      color = colors.peach,
+      width = 20,
+    },
+    label = {
+      string = "",
+      font = { family = settings.font.text, style = "Regular", size = 16 },
+      color = colors.text,
+    },
+    padding_left = 6,
+    padding_right = 6,
+  })
+end
+
+-- Empty/loading state
+local cal_empty = sbar.add("item", "date.popup.empty", {
+  position = "popup." .. date.name,
+  drawing = true,
+  icon = {
+    string = "󰋗",
+    font = { family = settings.font.nerd, size = 14 },
+    color = colors.surface2,
+    width = 20,
+  },
+  label = {
+    string = "Loading...",
+    font = { family = settings.font.text, style = "Regular", size = 14 },
+    color = colors.subtext1,
+  },
+  padding_left = 6,
+  padding_right = 6,
+})
+
+-- Event data storage
+local events_data = {}
+
+local function update_calendar_rows()
+  -- Hide all rows first
+  for i = 1, MAX_EVENTS do
+    event_rows[i]:set({ drawing = false })
+  end
+
+  if #events_data == 0 then
+    cal_empty:set({ drawing = true, label = { string = "No upcoming events" } })
+    return
+  end
+
+  cal_empty:set({ drawing = false })
+
+  for i, event in ipairs(events_data) do
+    if i > MAX_EVENTS then break end
+
+    local icon_color = colors.peach
+
+    -- Highlight "today" events differently
+    if event.datetime:find("today") then
+      icon_color = colors.green
+    elseif event.datetime:find("tomorrow") then
+      icon_color = colors.blue
+    end
+
+    -- Format: "Title • datetime"
+    local display = event.title .. " • " .. event.datetime
+
+    event_rows[i]:set({
+      drawing = true,
+      icon = { color = icon_color },
+      label = {
+        string = display,
+        color = colors.text,
+      },
+    })
+  end
+end
+
+local function refresh_calendar()
+  cal_empty:set({ drawing = true, label = { string = "Loading..." } })
+
+  -- Pass settings as environment variables to the script
+  local cmd = string.format(
+    "MAX_EVENTS=%d DAYS_AHEAD=%d CALENDARS='%s' %s",
+    MAX_EVENTS, DAYS_AHEAD, CALENDARS, CALENDAR_SCRIPT
+  )
+
+  -- Use io.popen instead of sbar.exec for different permission inheritance
+  local handle = io.popen(cmd)
+  local output = handle:read("*a")
+  handle:close()
+  print(output)
+
+  events_data = {}
+
+  if output and output ~= "" and not output:match("NO_EVENTS") then
+    for line in output:gmatch("[^\r\n]+") do
+      -- Format: "datetime|title"
+      local datetime, title = line:match("^(.+)|(.+)$")
+      if datetime and title then
+        table.insert(events_data, {
+          datetime = datetime,
+          title = title,
+        })
+      end
+    end
+  end
+
+  update_calendar_rows()
+end
 
 local function open_calendar()
   sbar.exec("open -a 'Calendar'")
@@ -241,5 +400,13 @@ end)
 date:subscribe("mouse.clicked", function(env)
   if env.BUTTON == "right" then
     open_calendar()
+  else
+    date:set({ popup = { drawing = "toggle" } })
+    refresh_calendar()
   end
+end)
+
+-- Close popup when mouse exits
+cal_empty:subscribe("mouse.exited.global", function()
+  date:set({ popup = { drawing = false } })
 end)

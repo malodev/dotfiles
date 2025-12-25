@@ -18,4 +18,10 @@ return {
     recent_days = 0, -- 0 = no time filter
     max_depth = 4,   -- max directory depth to search
   },
+  calendar = {
+    -- Calendars to display (comma-separated names)
+    calendars = "mauro.longano@marconirovereto.it,agenda@marconirovereto.it,mauro@oruam.org,iloveariannatilltheend@gmail.com,Festività italiane",
+    max_events = 10,
+    days_ahead = 14,
+  },
 }
