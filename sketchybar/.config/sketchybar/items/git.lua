@@ -82,6 +82,7 @@ sbar.add("item", "git.popup.sep", {
   icon = { drawing = false },
   label = { drawing = false },
   background = { color = colors.surface1, height = 1 },
+  width = 200,
   padding_left = 6,
   padding_right = 6,
 })
