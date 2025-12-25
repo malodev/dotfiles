@@ -57,15 +57,17 @@ for sid = 1, 12 do
     scroll_texts = true,
     padding_left = sid * -28,
     icon = {
+      drawing = true,
       string = sid_to_string(sid),
-      font = { family = settings.font.text, style = "Bold", size = 18.0 },
+      font = { family = settings.font.text, style = "Bold", size = 8.0 },
     },
     label = {
-      string = " ",
+      string = "",
+      width = settings.item_width,
       font = "sketchybar-app-font:Regular:16.0",
-      padding_right = 8,
+      padding_right = 0,
+      padding_left = 0,
       color = colors.text,
-      width = "dynamic",
     },
     background = {
       color = colors.surface0,
