@@ -26,21 +26,72 @@ local apple = sbar.add("item", "apple", {
 
 sbar.add("item", {
   position = "popup." .. apple.name,
-  label = { string = "Preferences" },
-  icon = { string = icons.prefs },
+  icon = {
+    string = icons.prefs,
+    font = { size = 16 },
+    color = colors.blue,
+    width = 20,
+    padding_right = 0,
+  },
+  label = {
+    string = "Preferences",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 16,
+    },
+    color = colors.text,
+    padding_left = 2,
+  },
+  padding_left = 6,
+  padding_right = 6,
   click_script = "open -a 'System Settings'; sketchybar --set apple popup.drawing=off"
 })
 
 sbar.add("item", {
   position = "popup." .. apple.name,
-  label = { string = "Activity Monitor" },
-  icon = { string = icons.activity },
+  icon = {
+    string = icons.activity,
+    font = { size = 16 },
+    color = colors.green,
+    width = 20,
+    padding_right = 0,
+  },
+  label = {
+    string = "Activity Monitor",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 16,
+    },
+    color = colors.text,
+    padding_left = 2,
+  },
+  padding_left = 6,
+  padding_right = 6,
   click_script = "open -a 'Activity Monitor'; sketchybar --set apple popup.drawing=off"
 })
 
 sbar.add("item", {
   position = "popup." .. apple.name,
-  label = { string = "Lock Screen" },
-  icon = { string = icons.lock },
+  icon = {
+    string = icons.lock,
+    font = { size = 16 },
+    color = colors.peach,
+    width = 20,
+    padding_right = 0,
+  },
+  label = {
+    string = "Lock Screen",
+    font = {
+      family = settings.font.text,
+      style = "Regular",
+      size = 16,
+    },
+    color = colors.text,
+    padding_left = 2,
+  },
+  padding_left = 6,
+  padding_right = 6,
   click_script = "pmset displaysleepnow; sketchybar --set apple popup.drawing=off"
 })
