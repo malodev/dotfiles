@@ -5,7 +5,17 @@ local app_icons = require("helpers.app_icons")
 -- Event to trigger updates
 sbar.add("event", "aerospace_workspace_change")
 
--- Function to redraw app icons
+-- Function to convert workspace  sequence number to space id string
+local function sid_to_string(sid)
+  if sid > 0 and sid < 11 then return tostring(sid % 10) end
+  if sid == 11 then return "A" end
+  if sid == 12 then return "S" end
+  if sid == 13 then return "D" end
+  if sid == 14 then return "F" end
+  if sid == 15 then return "G" end
+  return ""
+end
+
 -- Function to redraw app icons
 local function update_windows()
   -- Execute AeroSpace command to get windows with a safe delimiter
@@ -29,8 +39,8 @@ local function update_windows()
     end
 
     -- Update all space items
-    for i = 1, 10 do -- Assuming 10 spaces
-      local sid = tostring(i)
+    for i = 1, 12 do -- Assuming 10 spaces
+      local sid = sid_to_string(i)
       local icon_strip = workspace_apps[sid] or " "
 
       sbar.animate("tanh", 10, function()
@@ -41,13 +51,13 @@ local function update_windows()
 end
 
 -- Create the Workspace Items
-for sid = 1, 10 do
-  local space = sbar.add("item", "space." .. sid, {
+for sid = 1, 12 do
+  local space = sbar.add("item", "space." .. sid_to_string(sid), {
     position = "left", -- Center area (after Front App)
     scroll_texts = true,
     padding_left = sid * -28,
     icon = {
-      string = tostring(sid),
+      string = sid_to_string(sid),
       font = { family = settings.font.text, style = "Bold", size = 18.0 },
     },
     label = {
@@ -65,12 +75,12 @@ for sid = 1, 10 do
       drawing = true,
     },
     width = settings.item_width,
-    click_script = "aerospace workspace " .. sid,
+    click_script = "aerospace workspace " .. sid_to_string(sid),
   })
 
   -- Subscribe to changes
   space:subscribe("aerospace_workspace_change", function(env)
-    local selected = env.FOCUSED_WORKSPACE == tostring(sid)
+    local selected = env.FOCUSED_WORKSPACE == sid_to_string(sid)
     local color = selected and colors.mauve or colors.surface0
     local border = selected and colors.yellow or colors.transparent
 
