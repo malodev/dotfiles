@@ -406,6 +406,15 @@ date:subscribe("mouse.clicked", function(env)
   end
 end)
 
+local current_date_string = os.date("%a %d")
+date:subscribe({"routine", "system_woke"}, function()
+  local new_date_string = os.date("%a %d")
+  if new_date_string ~= current_date_string then
+    current_date_string = new_date_string
+    date:set({ label = current_date_string })
+  end
+end)
+
 -- Close popup when mouse exits
 cal_empty:subscribe("mouse.exited.global", function()
   date:set({ popup = { drawing = false } })
