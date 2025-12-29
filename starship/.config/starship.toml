@@ -1,6 +1,8 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 palette = "catppuccin_mocha"
-right_format = """$battery $time"""
+# right_format = """$battery $time"""
+format = """$os $username$hostname $directory $git_branch $git_status
+$character"""
 command_timeout = 5000
 # Starship modules
 [character]
@@ -8,12 +10,12 @@ command_timeout = 5000
 #success_symbol = "[[󰄛](green) ❯](blue)"
 #error_symbol = "[[󰄛](red) ❯](blue)"
 #vimcmd_symbol = "[󰄛 ❮](subtext1)" # For use with zsh-vi-mode
-success_symbol = '[](bold fg:green)'
-error_symbol = '[](bold fg:red)'
-vimcmd_symbol = '[](bold fg:green)'
-vimcmd_replace_one_symbol = '[](bold fg:purple)'
-vimcmd_replace_symbol = '[](bold fg:purple)'
-vimcmd_visual_symbol = '[](bold fg:lavender)'
+success_symbol = '[❯](bold fg:green)'
+error_symbol = '[❯](bold fg:red)'
+vimcmd_symbol = '[󰕷](bold fg:peach)'
+vimcmd_replace_one_symbol = '[󰕷](bold fg:purple)'
+vimcmd_replace_symbol = '[󰕷](bold fg:purple)'
+vimcmd_visual_symbol = '[󰕷](bold fg:lavender)'
 
 [cmd_duration]
 style = "surface2"
@@ -29,9 +31,9 @@ style = "lavender"
 format = '([\[$all_status$ahead_behind\]]($style) )'
 conflicted = '[🏳](red)'
 #up_to_date = '[✓](green)'
-untracked = '${count}🤷'
-stashed = '${count}📦'
-modified = '${count}📝'
+untracked = ':${count}'
+stashed = ' :${count} '
+modified = ' :${count} '
 staged = '[++\($count\)](green)'
 renamed = '${count}󰾵'
 deleted = '[${count}🗑](lavender)'
@@ -83,84 +85,85 @@ base = "#1e1e2e"
 mantle = "#181825"
 crust = "#11111b"
 
-format = '$all'
+# [battery]
+# format = '[$symbol$percentage]($style)'
+# full_symbol = '🔋'
+# charging_symbol = '⚡️'
+# #unknown_symbol = '🤷'
+# unknown_symbol = '󰚥'
+# empty_symbol = '💀'
+#
+# #  󰁺  󰁻  󰁼  󰁽  󰁾󱊢  󰁿  󰂀  󰂁  󰂂  󰁹
+# #  󰢜  󰂆  󰂇  󰂈  󰂈󱊥  󰢝  󰂉  󰂊  󰂋  󰂅
+# # 10 20 30 40 50 60 70 80 90 100
+# [[battery.display]] # 'bold red' style and discharging_symbol when capacity is between 0% and 10%
+# threshold = 10
+# style = 'bold red'
+# charging_symbol = '🪫'
+# discharging_symbol = '󱟥'
+#
+# [[battery.display]] # capacity between 10% and 20%
+# threshold = 20
+# discharging_symbol = '󰁺'
+# charging_symbol = '󰢜'
+#
+# [[battery.display]] # capacity between 20% and 30%
+# threshold = 30
+# discharging_symbol = '󰁻'
+# charging_symbol = '󰂇'
+# style = 'bold peach'
+#
+# [[battery.display]] # capacity between 30% and 40%
+# threshold = 40
+# discharging_symbol = '󰁼'
+# charging_symbol = '󰂇'
+# style = 'yellow'
+#
+# [[battery.display]] # capacity between 40% and 50%
+# threshold = 50
+# discharging_symbol = '󰁽'
+# charging_symbol = '󰂈'
+# style = 'yellow'
+#
+# [[battery.display]] # capacity between 50% and 60%
+# threshold = 60
+# discharging_symbol = '󱊢'
+# charging_symbol = '󱊥'
+# style = 'green'
+#
+# [[battery.display]] # capacity between 60% and 70%
+# threshold = 70
+# discharging_symbol = '󰁿'
+# charging_symbol = '󰢝 '
+# style = 'green'
+#
+# [[battery.display]] # capacity between 70% and 80%
+# threshold = 80
+# discharging_symbol = '󰂀 '
+# charging_symbol = '󰂉'
+# style = 'green'
+#
+# [[battery.display]] # capacity between 80% and 90%
+# threshold = 90
+# discharging_symbol = '󰂁'
+# charging_symbol = '󰂊'
+# style = 'green'
+#
+# [[battery.display]] # capacity between 90% and 99%
+# threshold = 99
+# discharging_symbol = '󰂂'
+# charging_symbol = '󰂋'
+# style = 'green'
+#
+#
+# [[battery.display]]  # capacity between 99% and 100%
+# threshold = 100
+# discharging_symbol = '󰁹'
+# charging_symbol = '󰂅'
+# style = 'green'
 
-[battery]
-format = '[$symbol$percentage]($style)'
-full_symbol = '🔋'
-charging_symbol = '⚡️'
-#unknown_symbol = '🤷'
-unknown_symbol = '󰚥'
-empty_symbol = '💀'
-
-#  󰁺  󰁻  󰁼  󰁽  󰁾󱊢  󰁿  󰂀  󰂁  󰂂  󰁹 
-#  󰢜  󰂆  󰂇  󰂈  󰂈󱊥  󰢝  󰂉  󰂊  󰂋  󰂅
-# 10 20 30 40 50 60 70 80 90 100
-[[battery.display]] # 'bold red' style and discharging_symbol when capacity is between 0% and 10%
-threshold = 10
-style = 'bold red'
-charging_symbol = '🪫'
-discharging_symbol = '󱟥'
-
-[[battery.display]] # capacity between 10% and 20%
-threshold = 20
-discharging_symbol = '󰁺'
-charging_symbol = '󰢜'
-
-[[battery.display]] # capacity between 20% and 30%
-threshold = 30
-discharging_symbol = '󰁻'
-charging_symbol = '󰂇'
-style = 'bold peach'
-
-[[battery.display]] # capacity between 30% and 40%
-threshold = 40
-discharging_symbol = '󰁼'
-charging_symbol = '󰂇'
-style = 'yellow'
-
-[[battery.display]] # capacity between 40% and 50%
-threshold = 50
-discharging_symbol = '󰁽'
-charging_symbol = '󰂈'
-style = 'yellow'
-
-[[battery.display]] # capacity between 50% and 60%
-threshold = 60
-discharging_symbol = '󱊢'
-charging_symbol = '󱊥'
-style = 'green'
-
-[[battery.display]] # capacity between 60% and 70%
-threshold = 70
-discharging_symbol = '󰁿'
-charging_symbol = '󰢝 '
-style = 'green'
-
-[[battery.display]] # capacity between 70% and 80%
-threshold = 80
-discharging_symbol = '󰂀 '
-charging_symbol = '󰂉'
-style = 'green'
-
-[[battery.display]] # capacity between 80% and 90%
-threshold = 90
-discharging_symbol = '󰂁'
-charging_symbol = '󰂊'
-style = 'green'
-
-[[battery.display]] # capacity between 90% and 99%
-threshold = 99 
-discharging_symbol = '󰂂'
-charging_symbol = '󰂋'
-style = 'green'
-
-
-[[battery.display]]  # capacity between 99% and 100%
-threshold = 100
-discharging_symbol = '󰁹'
-charging_symbol = '󰂅'
-style = 'green'
+[os]
+disabled = false
 
 [username]
 disabled = false
@@ -170,14 +173,14 @@ style_root = "bold bg:base fg:red"
 format = '[$user]($style)@'
 
 [time]
-disabled = false
+disabled = true
 style = "surface2"
 #style = "bg:peach"
-#format = '🕙[$time]($style) '
-format = '[$time]($style) '
+#format = '🕙 [$time]($style) '
+#format = '[ $time]($style) '
 #time_format = '%T'
 time_format = "%R"
-#format = '[[  $time ](fg:mantle bg:purple)]($style)'
+# format = '[[  $time ](fg:mantle bg:purple)]($style)'
 
 
 # Preset nerd fonts symbols
@@ -271,8 +274,6 @@ format = '[$symbol]($style)[$version](surface2) '
 [ocaml]
 symbol = " "
 
-[os]
-disabled = false
 
 [os.symbols]
 Alpaquita = " "
