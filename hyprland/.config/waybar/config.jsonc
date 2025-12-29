@@ -1,0 +1,74 @@
+/* ---- 💫 https://github.com/JaKooLit 💫 ---- */
+
+// ### DEFAULT - Bottom ### //
+{
+	"include": [
+	  "$HOME/.config/waybar/Modules",
+	  "$HOME/.config/waybar/ModulesWorkspaces",
+	  "$HOME/.config/waybar/ModulesCustom",
+	  "$HOME/.config/waybar/ModulesGroups",
+	  "$HOME/.config/waybar/UserModules",
+	  ],
+	"custom/omarchy": {
+		"format": "<span font='omarchy'>\ue900</span>",
+		"on-click": "omarchy-menu",
+		"on-click-right": "xdg-terminal-exec",
+		"tooltip-format": "Omarchy Menu\n\nSuper + Alt + Space"
+	},
+	"custom/update": {
+		"format": "",
+		"exec": "omarchy-update-available",
+		"on-click": "omarchy-launch-floating-terminal-with-presentation omarchy-update",
+		"tooltip-format": "Omarchy update available",
+		"signal": 7,
+		"interval": 21600
+	},
+
+	"layer": "top",
+	//"mode": "dock",
+	"exclusive": true,
+	"passthrough": false,
+	"position": "bottom",
+	"spacing": 3,
+	"fixed-center": true,
+	"ipc": true,
+	"margin-top": 3,
+	"margin-left": 8,
+	"margin-right": 8,
+	
+	"modules-left": [
+		// "custom/separator#dot-line",
+		// "custom/cava_mviz",
+		// "custom/separator#dot-line",
+		"custom/playerctl",
+		"custom/separator#dot-line",
+    "custom/omarchy",
+		"hyprland/window",
+		],
+	
+	"modules-center": [
+		"group/app_drawer",
+		"custom/separator#dot-line",
+		"group/notify",
+		"custom/separator#dot-line",
+		"hyprland/workspaces#rw",
+		"clock",
+		"custom/separator#dot-line",
+		"custom/weather",
+		"custom/separator#dot-line",
+		"idle_inhibitor",	
+    "custom/hyprpicker",
+		"custom/update",	
+		],
+	
+	"modules-right": [
+		"tray",
+		"network#speed",
+		"custom/separator#dot-line",
+		"group/mobo_drawer",
+		"custom/separator#line",  
+		"group/audio",
+		"custom/separator#dot-line", 
+		"group/status",
+		],
+	}
