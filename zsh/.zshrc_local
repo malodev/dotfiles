@@ -23,7 +23,7 @@ fi
 
 # Make sure that homebrew binaries are in the PATH
 [[ "$OSX" == "1" ]] && export PATH="/opt/homebrew/bin:$PATH"
-[[ "$LINUX" == "1" ]] && export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+# [[ "$LINUX" == "1" ]] && export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
  
 eval "$(starship init zsh)"
 echo "🛠️zshrc_local: starship loaded."
