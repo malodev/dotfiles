@@ -9,7 +9,10 @@ export PATH=$HOME/.local/bin:$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
 
 # Completion
 export ZSH_DISABLE_COMPFIX="true"
-fpath=(/usr/share/zsh/$ZSH_VERSION/functions $fpath)
+# Add system functions path if it exists (Linux)
+[[ -d /usr/share/zsh/$ZSH_VERSION/functions ]] && fpath=(/usr/share/zsh/$ZSH_VERSION/functions $fpath)
+# On macOS, zsh functions are in a different location
+[[ -d /usr/local/share/zsh/$ZSH_VERSION/functions ]] && fpath=(/usr/local/share/zsh/$ZSH_VERSION/functions $fpath)
 # if you want use complition from bash in zsh
 # uncomment next lines and comment next
 # autoload -Uz compinit bashcompinit
