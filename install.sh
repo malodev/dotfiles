@@ -1,16 +1,35 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #=============================================================================
 # Dotfiles Installation Script
 # Supports: macOS, Arch Linux, Ubuntu/Debian
 #
 # Usage:
-#   ./install.sh           # Normal installation
-#   ./install.sh --dry-run # Show what would be installed without changes
-#   DRY_RUN=1 ./install.sh # Alternative dry-run syntax
+#   ./install.sh                  # Interactive menu (default)
+#   ./install.sh --dry-run        # Show what would be installed
+#   ./install.sh --list-groups    # List available groups
+#   ./install.sh shell editor     # Install specific groups
 #=============================================================================
 
-set -euo pipefail  # Exit on error, undefined variables, and pipe failures
+# Check bash version for associative array support
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    echo "Error: This script requires Bash 4.0 or later for associative arrays."
+    echo ""
+    echo "Your bash version: $BASH_VERSION"
+    echo ""
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "On macOS, install a newer bash via Homebrew:"
+        echo "  brew install bash"
+        echo ""
+        echo "Then run this script with:"
+        echo "  /opt/homebrew/bin/bash $0 \"$@\""
+        echo ""
+        echo "Or set it as your default shell."
+    fi
+    exit 1
+fi
+
+set -eo pipefail  # Exit on error and pipe failures (no -u for associative arrays)
 
 #=============================================================================
 # CONFIGURATION
@@ -19,26 +38,108 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/tmp/dotfiles_install_$(date +%Y%m%d_%H%M%S).log"
 ORIGINAL_DIR="$(pwd)"
 DRY_RUN=0
+INTERACTIVE=1
 
-# Parse arguments
-for arg in "$@"; do
-    case $arg in
-        --dry-run)
-            DRY_RUN=1
-            shift
-            ;;
-        -h|--help)
-            echo "Usage: $0 [--dry-run]"
-            echo ""
-            echo "Options:"
-            echo "  --dry-run    Show what would be installed without making changes"
-            echo "  -h, --help   Show this help message"
-            exit 0
-            ;;
-    esac
-done
+#=============================================================================
+# INSTALLATION GROUPS
+#=============================================================================
+# Define groups and their packages
+# Format: "group_name:package1,package2,package3"
+declare -A INSTALL_GROUPS=(
+    # Core (always installed - dependencies)
+    ["core"]="stow"
 
-export DRY_RUN SCRIPT_DIR
+    # Shell & Terminal (bare minimum)
+    ["shell"]="zsh starship nushell"
+
+    # Editor configurations
+    ["editor"]="nvim-malo nvim-lazy nvim-test nvim-php nvim-astro"
+
+    # Terminal tools
+    ["terminal"]="kitty tmux"
+
+    # Desktop environment (macOS only)
+    ["desktop"]="sketchybar aerospace borders"
+
+    # Window manager (Linux only)
+    ["linux"]="i3"
+
+    # Development tools
+    ["dev"]="git lazygit"
+
+    # Extras
+    ["extras"]="shell-color-scripts"
+)
+
+# Group descriptions for display
+declare -A GROUP_DESC=(
+    ["core"]="Core dependencies (GNU Stow)"
+    ["shell"]="Shell configurations (Zsh, Starship, Nushell)"
+    ["editor"]="Neovim configurations (malo, lazy, test, php, astro)"
+    ["terminal"]="Terminal tools (Kitty, Tmux)"
+    ["desktop"]="Desktop environment (SketchyBar, AeroSpace, Borders)"
+    ["linux"]="Linux window manager (i3)"
+    ["dev"]="Development tools (Git, Lazygit)"
+    ["extras"]="Extra utilities (Shell color scripts)"
+)
+
+# Installation order (groups with dependencies first)
+INSTALL_ORDER=("core" "shell" "editor" "terminal" "desktop" "linux" "dev" "extras")
+
+# Neovim configurations
+declare -A NVIM_CONFIGS=(
+    ["malo"]="nvim-malo (main - LazyVim based)"
+    ["lazy"]="nvim-lazy (pure LazyVim)"
+    ["test"]="nvim-test (experimental)"
+    ["php"]="nvim-php (PHP development)"
+    ["astro"]="nvim-astro (AstroNvim based)"
+)
+
+# Default selections by OS
+declare -A DEFAULT_GROUPS
+if [[ "$(uname)" == "Darwin" ]]; then
+    DEFAULT_GROUPS=(
+        ["core"]=1
+        ["shell"]=1
+        ["editor"]=1
+        ["terminal"]=1
+        ["desktop"]=1
+        ["linux"]=0
+        ["dev"]=1
+        ["extras"]=0
+    )
+else
+    DEFAULT_GROUPS=(
+        ["core"]=1
+        ["shell"]=1
+        ["editor"]=1
+        ["terminal"]=1
+        ["desktop"]=0
+        ["linux"]=1
+        ["dev"]=1
+        ["extras"]=0
+    )
+fi
+
+# Selected groups (associative array with selected state)
+declare -A SELECTED_GROUPS
+
+# Safe accessor for associative arrays
+get_group_selection() {
+    local group="$1"
+    local default="${2:-0}"
+    # Check if key exists, return default if not
+    if [[ -v "SELECTED_GROUPS[$group]" ]]; then
+        echo "${SELECTED_GROUPS[$group]}"
+    else
+        echo "$default"
+    fi
+}
+
+has_group() {
+    local group="$1"
+    [[ -v "INSTALL_GROUPS[$group]" ]]
+}
 
 #=============================================================================
 # SOURCE COMMON FUNCTIONS
@@ -59,7 +160,378 @@ else
 fi
 
 #=============================================================================
-# STATUS DISPLAY
+# UI HELPERS
+#=============================================================================
+show_header() {
+    clear
+    echo "=========================================="
+    echo "  Dotfiles Installation"
+    echo "=========================================="
+    echo ""
+}
+
+show_banner() {
+    echo ""
+    echo "=========================================="
+    echo "  $1"
+    echo "=========================================="
+    echo ""
+}
+
+# Checkbox menu function
+# Usage: checkbox_menu "Prompt" "option1|desc1" "option2|desc2" ...
+# Returns: array of selected options
+checkbox_menu() {
+    local prompt="$1"
+    shift
+    local -a options=("$@")
+    local -a selections
+    local -a checked
+
+    # Check if stdin is a terminal
+    if [[ ! -t 0 ]]; then
+        echo "Error: stdin is not a terminal. Cannot show interactive menu." >&2
+        echo "Use --minimal, --standard, --full, or specify groups manually." >&2
+        echo "Example: $0 --minimal" >&2
+        return 1
+    fi
+
+    # Initialize checked state from default selections
+    for i in "${!options[@]}"; do
+        local opt="${options[$i]%%|*}"
+        if [[ "$(get_group_selection "$opt")" == "1" ]]; then
+            checked[$i]=1
+        else
+            checked[$i]=0
+        fi
+    done
+
+    # Show menu (using simple numbered list)
+    # ALL display goes to stderr so it's visible (stdout is captured by caller)
+    local done=0
+
+    while [[ $done -eq 0 ]]; do
+        # Clear screen and show menu
+        clear >&2
+        echo "==========================================" >&2
+        echo "  Dotfiles Installation - Select Groups" >&2
+        echo "==========================================" >&2
+        echo "" >&2
+        echo "$prompt" >&2
+        echo "" >&2
+        echo "Groups marked with [*] are currently selected." >&2
+        echo "" >&2
+        echo "Commands:" >&2
+        echo "  - Type numbers separated by spaces to toggle selection" >&2
+        echo "  - Example: '1 3 5' toggles items 1, 3, and 5" >&2
+        echo "  - Type 'a' to select all" >&2
+        echo "  - Type 'n' to select none" >&2
+        echo "  - Type 'd' to show defaults for your OS" >&2
+        echo "  - Press Enter when done to confirm selection" >&2
+        echo "  - Type 'q' to cancel" >&2
+        echo "" >&2
+
+        for i in "${!options[@]}"; do
+            local opt="${options[$i]%%|*}"
+            local desc="${options[$i]#*|}"
+
+            if [[ ${checked[$i]} -eq 1 ]]; then
+                printf "  [%2d] [*] %s\n" "$((i+1))" "$desc" >&2
+            else
+                printf "  [%2d] [ ] %s\n" "$((i+1))" "$desc" >&2
+            fi
+        done
+
+        echo "" >&2
+        echo -n "Your choice (or Enter when done): " >&2
+
+        local input
+        read -r input <&0
+
+        # Handle cancel
+        if [[ "$input" == "q" ]] || [[ "$input" == "Q" ]]; then
+            return 1
+        fi
+
+        # Handle done (empty input)
+        if [[ -z "$input" ]]; then
+            done=1
+            continue
+        fi
+
+        # Handle "select all"
+        if [[ "$input" == "a" ]] || [[ "$input" == "A" ]]; then
+            for i in "${!options[@]}"; do
+                checked[$i]=1
+            done
+            continue
+        fi
+
+        # Handle "select none"
+        if [[ "$input" == "n" ]] || [[ "$input" == "N" ]]; then
+            for i in "${!options[@]}"; do
+                checked[$i]=0
+            done
+            continue
+        fi
+
+        # Handle "show defaults"
+        if [[ "$input" == "d" ]] || [[ "$input" == "D" ]]; then
+            for i in "${!options[@]}"; do
+                local opt="${options[$i]%%|*}"
+                if [[ "$(get_group_selection "$opt")" == "1" ]]; then
+                    checked[$i]=1
+                else
+                    checked[$i]=0
+                fi
+            done
+            continue
+        fi
+
+        # Parse input and toggle selections
+        for num in $input; do
+            if [[ "$num" =~ ^[0-9]+$ ]]; then
+                local idx=$((num - 1))
+                if [[ $idx -ge 0 ]] && [[ $idx -lt ${#options[@]} ]]; then
+                    if [[ ${checked[$idx]} -eq 1 ]]; then
+                        checked[$idx]=0
+                    else
+                        checked[$idx]=1
+                    fi
+                fi
+            fi
+        done
+    done
+
+    # Final confirmation
+    echo "" >&2
+    echo "==========================================" >&2
+    echo "  Final Selection" >&2
+    echo "==========================================" >&2
+    echo "" >&2
+    for i in "${!options[@]}"; do
+        if [[ ${checked[$i]} -eq 1 ]]; then
+            local desc="${options[$i]#*|}"
+            echo "  [*] $desc" >&2
+        fi
+    done
+    echo "" >&2
+    echo -n "Confirm installation? (Y/n): " >&2
+
+    local confirm
+    read -r confirm <&0
+
+    if [[ "$confirm" == "n" ]] || [[ "$confirm" == "N" ]]; then
+        return 1
+    fi
+
+    # Collect selections - THIS GOES TO STDOUT (captured by caller)
+    for i in "${!checked[@]}"; do
+        if [[ ${checked[$i]} -eq 1 ]]; then
+            selections+=("${options[$i]%%|*}")
+        fi
+    done
+
+    printf '%s\n' "${selections[@]}"
+    return 0
+}
+
+#=============================================================================
+# NEONVIM CONFIG SELECTION
+#=============================================================================
+select_nvim_config() {
+    show_banner "Select Default Neovim Configuration"
+
+    echo "Choose which Neovim configuration to use as default:"
+    echo ""
+    local opts=()
+    local default_idx=0
+    local idx=0
+
+    for key in "${!NVIM_CONFIGS[@]}"; do
+        opts+=("$key|${NVIM_CONFIGS[$key]}")
+        if [[ "$key" == "malo" ]]; then
+            default_idx=$idx
+        fi
+        ((idx++))
+    done
+
+    # Simple numeric selection
+    for i in "${!opts[@]}"; do
+        local desc="${opts[$i]#*|}"
+        echo "  $((i+1))) $desc"
+    done
+    echo ""
+
+    local choice
+    read -p "Enter choice [1-${#opts[@]}] [default: 1]: " choice
+
+    # Default to 1 (malo) if empty
+    choice=${choice:-1}
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#opts[@]} ]]; then
+        local selected_key="${opts[$((choice-1))]%%|*}"
+        local selected_pkg="nvim-$selected_key"
+        local config_dir="$SCRIPT_DIR/$selected_pkg"
+
+        if [[ -d "$config_dir" ]]; then
+            # Set up nvim config symlink
+            local nvim_config="$HOME/.config/nvim"
+
+            log_info "Setting $selected_pkg as default Neovim configuration..."
+
+            if [[ "$DRY_RUN" == "0" ]]; then
+                # Backup existing nvim config if it's not a symlink
+                if [[ -e "$nvim_config" && ! -L "$nvim_config" ]]; then
+                    mv "$nvim_config" "${nvim_config}.backup.$(date +%Y%m%d)"
+                    log_info "Backed up existing nvim config to ${nvim_config}.backup.$(date +%Y%m%d)"
+                fi
+
+                # Create symlink
+                ln -sf "$config_dir" "$nvim_config"
+                log_success "Default Neovim set to: $selected_pkg"
+            else
+                log_dry_run "Would set default Neovim to: $selected_pkg"
+            fi
+        else
+            log_warn "Configuration directory not found: $config_dir"
+        fi
+    else
+        log_warn "Invalid choice, skipping Neovim configuration"
+    fi
+}
+
+#=============================================================================
+# OS AND DISTRIBUTION DETECTION
+#=============================================================================
+detect_os() {
+    OS=$(uname -s)
+    DISTRO=""
+
+    case "$OS" in
+        Darwin)
+            ;;
+        Linux)
+            if [[ -f /etc/arch-release ]]; then
+                DISTRO="arch"
+            elif [[ -f /etc/debian_version ]]; then
+                DISTRO="debian"
+            elif [[ -f /etc/fedora-release ]]; then
+                DISTRO="fedora"
+            else
+                DISTRO="unknown"
+            fi
+            ;;
+        *)
+            log_error "Unsupported OS: $OS"
+            exit 1
+            ;;
+    esac
+}
+
+#=============================================================================
+# INSTALLATION FUNCTIONS
+#=============================================================================
+install_group() {
+    local group="$1"
+    local packages=(${INSTALL_GROUPS[$group]})
+
+    if [[ -z "${packages[*]}" ]]; then
+        return
+    fi
+
+    show_banner "Installing: $group"
+
+    for pkg in "${packages[@]}"; do
+        if [[ "$group" == "editor" && "$pkg" =~ ^nvim- ]]; then
+            # Skip nvim configs in main loop - handled separately
+            continue
+        fi
+
+        if [[ -d "$SCRIPT_DIR/$pkg" ]]; then
+            log_dry_run "  stow $pkg"
+            if [[ "$DRY_RUN" == "0" ]]; then
+                log_info "Stowing $pkg..."
+                stow -v "$pkg" 2>&1 | tee -a "$LOG_FILE"
+            fi
+        else
+            log_warn "Package directory not found: $pkg"
+        fi
+    done
+}
+
+install_nvim_configs() {
+    show_banner "Installing: Neovim Configurations"
+
+    # Install all selected nvim configs
+    for pkg in ${INSTALL_GROUPS[editor]}; do
+        if [[ "$pkg" =~ ^nvim- ]] && [[ -d "$SCRIPT_DIR/$pkg" ]]; then
+            if [[ "$(get_group_selection "$pkg" "1")" == "1" ]]; then
+                log_dry_run "  stow $pkg"
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    log_info "Stowing $pkg..."
+                    stow -v "$pkg" 2>&1 | tee -a "$LOG_FILE"
+                fi
+            fi
+        fi
+    done
+}
+
+install_homebrew_packages() {
+    if [[ "$OS" == "Darwin" ]] && [[ -f "$SCRIPT_DIR/Brewfile" ]]; then
+        show_banner "Installing Homebrew Packages"
+        log_dry_run "  brew bundle (from Brewfile)"
+        if [[ "$DRY_RUN" == "0" ]]; then
+            log_info "Installing packages from Brewfile..."
+            brew bundle || log_warn "Brew bundle installation had issues"
+        fi
+    fi
+}
+
+#=============================================================================
+# PRESET MODES
+#=============================================================================
+apply_preset() {
+    local preset="$1"
+
+    case "$preset" in
+        minimal)
+            # Bare minimum: core + shell
+            for group in core shell; do
+                SELECTED_GROUPS[$group]=1
+            done
+            for group in editor terminal desktop linux dev extras; do
+                SELECTED_GROUPS[$group]=0
+            done
+            ;;
+        standard)
+            # Standard setup: core + shell + editor + terminal
+            for group in core shell editor terminal; do
+                SELECTED_GROUPS[$group]=1
+            done
+            for group in desktop linux dev extras; do
+                SELECTED_GROUPS[$group]=0
+            done
+            ;;
+        full)
+            # Everything
+            for group in "${!INSTALL_GROUPS[@]}"; do
+                SELECTED_GROUPS[$group]=1
+            done
+            ;;
+    esac
+
+    # Adjust for platform
+    if [[ "$OS" != "Darwin" ]]; then
+        SELECTED_GROUPS[desktop]=0
+    fi
+    if [[ "$OS" == "Darwin" ]]; then
+        SELECTED_GROUPS[linux]=0
+    fi
+}
+
+#=============================================================================
+# STATUS DISPLAY (from original)
 #=============================================================================
 show_status_header() {
     local name="$1"
@@ -82,94 +554,6 @@ show_installed_status() {
     fi
 }
 
-show_package_status() {
-    local stow_dir="$1"
-    local name="$2"
-
-    if [[ -d "$stow_dir" ]]; then
-        # Check if stowed (symlink exists in target)
-        local target symlink
-        case "$name" in
-            *nvim*)
-                target="$HOME/.config/nvim"
-                ;;
-            *kitty*)
-                target="$HOME/.config/kitty"
-                ;;
-            *tmux*)
-                target="$HOME/.tmux.conf"
-                ;;
-            *starship*)
-                target="$HOME/.config/starship.toml"
-                ;;
-            *nushell*)
-                target="$HOME/.config/nushell"
-                ;;
-            *zsh*)
-                target="$HOME/.zshrc"
-                ;;
-            *sketchybar*)
-                target="$HOME/.config/sketchybar"
-                ;;
-            *aerospace*)
-                target="$HOME/.config/aerospace"
-                ;;
-            *i3*)
-                target="$HOME/.config/i3"
-                ;;
-            *)
-                target=""
-                ;;
-        esac
-
-        if [[ -n "$target" && -L "$target" ]]; then
-            log_success "✓ $name: STOWED (→ $target)"
-        elif [[ -n "$target" && -e "$target" ]]; then
-            log_warn "⚠ $name: EXISTS but not symlinked (→ $target)"
-        else
-            log_info "✗ $name: AVAILABLE but not stowed"
-        fi
-    else
-        log_warn "✗ $name: NOT FOUND in repo"
-    fi
-}
-
-#=============================================================================
-# OS AND DISTRIBUTION DETECTION
-#=============================================================================
-detect_os() {
-    OS=$(uname -s)
-    DISTRO=""
-
-    case "$OS" in
-        Darwin)
-            log_info "Detected macOS"
-            ;;
-        Linux)
-            if [[ -f /etc/arch-release ]]; then
-                DISTRO="arch"
-                log_info "Detected Arch Linux"
-            elif [[ -f /etc/debian_version ]]; then
-                DISTRO="debian"
-                log_info "Detected Debian/Ubuntu"
-            elif [[ -f /etc/fedora-release ]]; then
-                DISTRO="fedora"
-                log_info "Detected Fedora"
-            else
-                DISTRO="unknown"
-                log_warn "Unknown Linux distribution"
-            fi
-            ;;
-        *)
-            log_error "Unsupported OS: $OS"
-            exit 1
-            ;;
-    esac
-}
-
-#=============================================================================
-# PACKAGE MANAGER STATUS
-#=============================================================================
 show_package_manager_status() {
     show_status_header "Package Manager Status"
 
@@ -194,9 +578,6 @@ show_package_manager_status() {
     fi
 }
 
-#=============================================================================
-# REQUIRED TOOLS STATUS
-#=============================================================================
 show_required_tools_status() {
     show_status_header "Required Tools Status"
 
@@ -212,44 +593,9 @@ show_required_tools_status() {
 }
 
 #=============================================================================
-# DOTFILES PACKAGES STATUS
-#=============================================================================
-show_dotfiles_status() {
-    show_status_header "Dotfiles Packages Status"
-
-    local common_packages=(
-        "nvim-malo:Neovim (malo config)"
-        "nvim-test:Neovim (test config)"
-        "kitty:Kitty terminal"
-        "tmux:Tmux"
-        "starship:Starship prompt"
-        "nushell:Nushell"
-        "zsh:Zsh"
-    )
-
-    for pkg_info in "${common_packages[@]}"; do
-        IFS=':' read -r pkg_name pkg_desc <<< "$pkg_info"
-        show_package_status "$SCRIPT_DIR/$pkg_name" "$pkg_desc ($pkg_name)"
-    done
-
-    # Platform-specific packages
-    if [[ "$OS" == "Darwin" ]]; then
-        echo ""
-        log_info "macOS-specific packages:"
-        show_package_status "$SCRIPT_DIR/sketchybar" "SketchyBar"
-        show_package_status "$SCRIPT_DIR/aerospace" "AeroSpace"
-    elif [[ "$OS" == "Linux" ]]; then
-        echo ""
-        log_info "Linux-specific packages:"
-        show_package_status "$SCRIPT_DIR/i3" "i3 window manager"
-    fi
-}
-
-#=============================================================================
-# HOMEBREW SETUP
+# HOMEBREW SETUP (from original)
 #=============================================================================
 setup_homebrew() {
-    # On Arch, skip Homebrew - use pacman/yay instead
     if [[ "$DISTRO" == "arch" ]]; then
         log_info "Arch Linux detected: Using pacman instead of Homebrew"
         return 0
@@ -257,7 +603,6 @@ setup_homebrew() {
 
     if command_exists brew; then
         log_success "Homebrew is already installed"
-        # Ensure Homebrew is in PATH for Linux
         if [[ "$OS" == "Linux" ]]; then
             eval "$(($(command -v brew) shellenv 2>/dev/null || echo '/home/linuxbrew/.linuxbrew/bin/brew') shellenv)"
         fi
@@ -270,25 +615,22 @@ setup_homebrew() {
         log_info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-        # Add Homebrew to PATH for Linux
         if [[ "$OS" == "Linux" ]]; then
             eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         fi
     fi
 
-    # Update Homebrew
     log_dry_run "Would update Homebrew..."
     if [[ "$DRY_RUN" == "0" ]]; then
         log_info "Updating Homebrew..."
         brew update || log_warn "Homebrew update failed, continuing..."
-
         log_info "Upgrading Homebrew packages..."
         brew upgrade || log_warn "Homebrew upgrade failed, continuing..."
     fi
 }
 
 #=============================================================================
-# GNU STOW SETUP
+# GNU STOW SETUP (from original)
 #=============================================================================
 setup_stow() {
     if command_exists stow; then
@@ -341,76 +683,14 @@ setup_stow() {
 }
 
 #=============================================================================
-# PACKAGE INSTALLATION
-#=============================================================================
-install_packages() {
-    show_status_header "Installing Dotfiles"
-
-    log_dry_run "DRY RUN: Would stow the following packages..."
-
-    # Common packages for all systems
-    local common_packages=(
-        "nvim-malo"
-        "nvim-test"
-        "kitty"
-        "tmux"
-        "starship"
-        "nushell"
-        "zsh"
-    )
-
-    for pkg in "${common_packages[@]}"; do
-        if [[ -d "$SCRIPT_DIR/$pkg" ]]; then
-            log_dry_run "  stow $pkg"
-            if [[ "$DRY_RUN" == "0" ]]; then
-                log_info "Stowing $pkg..."
-                stow -v "$pkg" 2>&1 | tee -a "$LOG_FILE"
-            fi
-        else
-            log_warn "Package directory not found: $pkg"
-        fi
-    done
-
-    # macOS-specific packages
-    if [[ "$OS" == "Darwin" ]]; then
-        local macos_packages=("sketchybar" "aerospace")
-        for pkg in "${macos_packages[@]}"; do
-            if [[ -d "$SCRIPT_DIR/$pkg" ]]; then
-                log_dry_run "  stow $pkg (macOS)"
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    log_info "Stowing $pkg..."
-                    stow -v "$pkg" 2>&1 | tee -a "$LOG_FILE"
-                fi
-            fi
-        done
-
-        # Install Homebrew packages from Brewfile
-        if [[ -f "$SCRIPT_DIR/Brewfile" ]]; then
-            log_dry_run "  brew bundle (from Brewfile)"
-            if [[ "$DRY_RUN" == "0" ]]; then
-                log_info "Installing packages from Brewfile..."
-                brew bundle || log_warn "Brew bundle installation had issues"
-            fi
-        fi
-    fi
-
-    # Linux-specific packages
-    if [[ "$OS" == "Linux" && -d "$SCRIPT_DIR/i3" ]]; then
-        log_dry_run "  stow i3 (Linux)"
-        if [[ "$DRY_RUN" == "0" ]]; then
-            log_info "Stowing i3..."
-            stow -v i3 2>&1 | tee -a "$LOG_FILE"
-        fi
-    fi
-}
-
-#=============================================================================
-# SHELL COLOR SCRIPTS
+# SHELL COLOR SCRIPTS (from original)
 #=============================================================================
 install_shell_color_scripts() {
-    local colorscript_install_dir=""
+    if [[ "$(get_group_selection "extras")" != "1" ]]; then
+        return
+    fi
 
-    # Detect colorscript location based on OS
+    local colorscript_install_dir=""
     if [[ "$OS" == "Darwin" ]]; then
         colorscript_install_dir="/usr/local/bin"
     else
@@ -432,7 +712,6 @@ install_shell_color_scripts() {
 
     log_info "Installing shell-color-scripts..."
 
-    # Check for sudo access on Linux
     if [[ "$OS" == "Linux" ]] && ! sudo -n true 2>/dev/null; then
         log_warn "sudo access required for colorscript installation"
         log_info "You may be prompted for your password"
@@ -442,7 +721,6 @@ install_shell_color_scripts() {
     cd ~/.local/src
 
     if [[ -d shell-color-scripts ]]; then
-        log_info "Removing existing shell-color-scripts directory..."
         rm -rf shell-color-scripts
     fi
 
@@ -464,11 +742,214 @@ install_shell_color_scripts() {
 }
 
 #=============================================================================
-# SUMMARY
+# LIST GROUPS
 #=============================================================================
-show_summary() {
-    show_status_header "Summary"
+list_groups() {
+    echo ""
+    echo "Available installation groups:"
+    echo ""
+    printf "%-15s %s\n" "Group" "Description"
+    printf "%-15s %s\n" "------" "-----------"
+    for group in "${INSTALL_ORDER[@]}"; do
+        printf "%-15s %s\n" "$group" "${GROUP_DESC[$group]}"
+    done
+    echo ""
+    echo "Packages in each group:"
+    echo ""
+    for group in "${INSTALL_ORDER[@]}"; do
+        echo "$group: ${INSTALL_GROUPS[$group]}"
+    done
+    echo ""
+}
 
+#=============================================================================
+# MAIN INSTALLATION FLOW
+#=============================================================================
+main() {
+    # Parse arguments
+    local manual_groups=()
+    local use_preset=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dry-run)
+                DRY_RUN=1
+                shift
+                ;;
+            -h|--help)
+                echo "Usage: $0 [options] [groups...]"
+                echo ""
+                echo "Options:"
+                echo "  --dry-run       Show what would be installed without making changes"
+                echo "  --list-groups   List available installation groups"
+                echo "  --minimal       Minimal installation (core + shell)"
+                echo "  --standard      Standard installation (core + shell + editor + terminal)"
+                echo "  --full         Full installation (all groups)"
+                echo "  -h, --help      Show this help message"
+                echo ""
+                echo "Groups:"
+                echo "  ${INSTALL_ORDER[*]}"
+                echo ""
+                echo "Examples:"
+                echo "  $0                    # Interactive menu"
+                echo "  $0 --dry-run          # Preview what would be installed"
+                echo "  $0 --minimal          # Minimal installation"
+                echo "  $0 shell editor       # Install specific groups"
+                exit 0
+                ;;
+            --list-groups)
+                list_groups
+                exit 0
+                ;;
+            --minimal|--standard|--full)
+                use_preset="${1#--}"
+                shift
+                ;;
+            -*)
+                echo "Unknown option: $1"
+                echo "Run '$0 --help' for usage"
+                exit 1
+                ;;
+            *)
+                manual_groups+=("$1")
+                echo "Installing groups: ${manual_groups[*]}"
+                shift
+                ;;
+        esac
+    done
+
+    # Initialize logging
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        mkdir -p "$(dirname "$LOG_FILE")"
+    fi
+
+    show_header
+
+    # Detect OS
+    detect_os
+
+    # Apply preset if specified
+    if [[ -n "$use_preset" ]]; then
+        apply_preset "$use_preset"
+        log_info "Using preset: $use_preset"
+        INTERACTIVE=0
+    # Use manual groups if specified
+    elif [[ ${#manual_groups[@]} -gt 0 ]]; then
+        # Reset selections
+        for group in "${!INSTALL_GROUPS[@]}"; do
+            SELECTED_GROUPS[$group]=0
+        done
+        # Enable specified groups
+        for group in "${manual_groups[@]}"; do
+            if [[ -n "${INSTALL_GROUPS[$group]:-}" ]]; then
+                SELECTED_GROUPS[$group]=1
+            else
+                log_warn "Unknown group: $group"
+            fi
+        done
+        INTERACTIVE=0
+    # Use default selections (skip interactive in dry-run mode)
+    else
+        # Initialize with defaults
+        for group in "${!DEFAULT_GROUPS[@]}"; do
+            SELECTED_GROUPS[$group]="${DEFAULT_GROUPS[$group]}"
+        done
+
+        # Skip interactive mode in dry-run
+        if [[ "$DRY_RUN" == "1" ]]; then
+            INTERACTIVE=0
+            log_info "Dry-run mode: Using default group selection"
+            log_info "Run without --dry-run for interactive menu"
+        else
+            INTERACTIVE=1
+        fi
+    fi
+
+    echo "Log file: $LOG_FILE"
+    echo ""
+
+    # Interactive menu
+    if [[ "$INTERACTIVE" == "1" ]]; then
+        # Build menu options
+        local menu_options=()
+        for group in "${INSTALL_ORDER[@]}"; do
+            menu_options+=("$group|${GROUP_DESC[$group]}")
+        done
+
+        # Show menu and get selections
+        local selections
+        if selections=$(checkbox_menu "Select installation groups (Space to toggle, Enter to confirm):" "${menu_options[@]}"); then
+            # Reset selections
+            for group in "${!INSTALL_GROUPS[@]}"; do
+                SELECTED_GROUPS[$group]=0
+            done
+
+            # Apply selections
+            while IFS= read -r group; do
+                SELECTED_GROUPS[$group]=1
+            done <<< "$selections"
+        else
+            log_info "Installation cancelled"
+            exit 0
+        fi
+    fi
+
+    # Show what will be installed
+    show_banner "Selected Groups"
+    for group in "${INSTALL_ORDER[@]}"; do
+        if [[ "$(get_group_selection "$group")" == "1" ]]; then
+            log_success "✓ $group - ${GROUP_DESC[$group]}"
+        fi
+    done
+    echo ""
+
+    # Pause for confirmation
+    if [[ "$INTERACTIVE" == "1" ]] && [[ "$DRY_RUN" == "0" ]]; then
+        read -p "Press Enter to continue, or Ctrl+C to cancel..."
+    fi
+
+    # Show status (skip in interactive mode as we already showed selections)
+    if [[ "$INTERACTIVE" == "0" ]]; then
+        show_package_manager_status
+        show_required_tools_status
+    fi
+
+    # Setup package manager
+    setup_homebrew
+
+    # Setup GNU Stow
+    setup_stow
+
+    # Neovim config selection
+    if [[ "${SELECTED_GROUPS[editor]:-0}" == "1" ]]; then
+        if [[ "$DRY_RUN" == "1" ]]; then
+            log_info "Would set default Neovim to: nvim-malo"
+            log_info "(Run without --dry-run to select different config)"
+        else
+            select_nvim_config
+        fi
+    fi
+
+    # Install groups in dependency order
+    for group in "${INSTALL_ORDER[@]}"; do
+        if [[ "$(get_group_selection "$group")" == "1" ]]; then
+            install_group "$group"
+        fi
+    done
+
+    # Install Neovim configs separately
+    if [[ "$(get_group_selection "editor")" == "1" ]]; then
+        install_nvim_configs
+    fi
+
+    # Install Homebrew packages
+    install_homebrew_packages
+
+    # Install extras
+    install_shell_color_scripts
+
+    # Summary
+    show_banner "Summary"
     echo ""
     if [[ "$DRY_RUN" == "1" ]]; then
         echo "  📋 DRY RUN MODE - No changes were made"
@@ -483,52 +964,12 @@ show_summary() {
     echo ""
     echo "  Next steps:"
     echo "    - Restart your shell or run: source ~/.zshrc"
-    if [[ "$OS" == "Darwin" ]]; then
+    if [[ "$OS" == "Darwin" && "$(get_group_selection "desktop")" == "1" ]]; then
         echo "    - Start SketchyBar: brew services restart sketchybar"
     fi
-    echo "    - Run: colorscript to see available color scripts"
-}
-
-#=============================================================================
-# MAIN INSTALLATION FLOW
-#=============================================================================
-main() {
-    echo "=========================================="
-    echo "  Dotfiles Installation"
-    echo "=========================================="
-    if [[ "$DRY_RUN" == "1" ]]; then
-        echo "  📋 DRY RUN MODE"
+    if [[ "$(get_group_selection "extras")" == "1" ]]; then
+        echo "    - Run: colorscript to see available color scripts"
     fi
-    echo "  Log file: $LOG_FILE"
-    echo ""
-
-    # Detect OS
-    detect_os
-
-    # Show current status
-    show_package_manager_status
-    show_required_tools_status
-    show_dotfiles_status
-
-    if [[ "$DRY_RUN" == "1" ]]; then
-        echo ""
-        log_info "Dry run mode - showing what would be installed:"
-    fi
-
-    # Setup package manager
-    setup_homebrew
-
-    # Setup GNU Stow
-    setup_stow
-
-    # Install dotfiles
-    install_packages
-
-    # Install extras
-    install_shell_color_scripts
-
-    # Show summary
-    show_summary
 }
 
 # Run main function
