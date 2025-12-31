@@ -798,6 +798,42 @@ install_shell_color_scripts() {
 }
 
 #=============================================================================
+# ZOXIDE SETUP
+#=============================================================================
+setup_zoxide() {
+    # Skip if already installed
+    if command_exists zoxide; then
+        log_success "zoxide is already installed"
+        return 0
+    fi
+
+    # Skip on macOS (installed via Brewfile)
+    if [[ "$OS" == "Darwin" ]]; then
+        return 0
+    fi
+
+    # Skip on Linux if using Homebrew (installed via Brewfile)
+    if [[ "$OS" == "Linux" ]] && [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    log_dry_run "Would install zoxide..."
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return 0
+    fi
+
+    log_info "Installing zoxide..."
+
+    # Debian/Ubuntu installation via curl script
+    if [[ "$DISTRO" == "debian" ]]; then
+        curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh
+    else
+        log_info "zoxide installation not configured for $DISTRO (will be installed via package manager if available)"
+    fi
+}
+
+#=============================================================================
 # LIST GROUPS
 #=============================================================================
 list_groups() {
@@ -1076,6 +1112,9 @@ main() {
 
     # Install extras
     install_shell_color_scripts
+
+    # Install zoxide
+    setup_zoxide
 
     # Summary (simplified in lightweight mode)
     if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "1" ]]; then
