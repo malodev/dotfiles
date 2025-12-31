@@ -22,11 +22,11 @@
 	line-numbers-right-style = "#6c7086"
 	line-numbers-zero-style = "#6c7086" italic
 
-	minus-style = syntax "#620f39"
-	minus-emph-style = bold syntax "#a20f39"
+	minus-style = syntax "#1E1115"
+	minus-emph-style = bold syntax "#40242B"
 
-	plus-style = syntax "#40602b"
-	plus-emph-style = bold syntax "#40602b"
+	plus-style = syntax "#182118"
+	plus-emph-style = bold syntax "#2C3C2B"
 
 	map-styles = \
 		bold purple => syntax "#cba6f7", \
@@ -37,7 +37,7 @@
 	# Should match the name of the bat theme
 	syntax-theme = Catppuccin Mocha
 
-  whitespace-error-style = "#80002a" reverse
+  whitespace-error-style = "#f0808a" reverse
   zero-style = syntax
   blame-format = "{author:<18} ({commit:>7}) ┊{timestamp:^16}┊ "
 
@@ -65,7 +65,7 @@
   minus-emph-style = normal "#80002a"
   minus-style = normal "#5e0000"
   plus-emph-style = syntax bold "#007e5e"
-  plus-style = syntax "#00f500"
+  plus-style = syntax "#00a500"
   syntax-theme = OneHalfDark
   whitespace-error-style = "#80002a" reverse
   zero-style = syntax
@@ -90,6 +90,6 @@
   minus-emph-style = normal "#80002a"
   minus-style = normal "#330011"
   plus-emph-style = syntax "#003300"
-  plus-style = syntax "#001a00"
+  plus-style = syntax "#00a500"
   syntax-theme = Nord
 
