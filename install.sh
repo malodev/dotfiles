@@ -50,7 +50,7 @@ declare -A INSTALL_GROUPS=(
     ["core"]="stow"
 
     # Shell & Terminal (bare minimum)
-    ["shell"]="zsh starship nushell"
+    ["shell"]="bash zsh starship nushell"
 
     # Editor configurations
     ["editor"]="nvim-malo nvim-lazy nvim-test nvim-php nvim-astro"
@@ -74,7 +74,7 @@ declare -A INSTALL_GROUPS=(
 # Group descriptions for display
 declare -A GROUP_DESC=(
     ["core"]="Core dependencies (GNU Stow)"
-    ["shell"]="Shell configurations (Zsh, Starship, Nushell)"
+    ["shell"]="Shell configurations (Bash, Zsh, Starship, Nushell)"
     ["editor"]="Neovim configurations (malo, lazy, test, php, astro)"
     ["terminal"]="Terminal tools (Kitty, Tmux)"
     ["desktop"]="Desktop environment (SketchyBar, AeroSpace, Borders)"
@@ -442,10 +442,58 @@ install_group() {
 
     show_banner "Installing: $group"
 
+    # Detect current shell for shell group (only if not manually overridden)
+    local current_shell=""
+    local install_specific_shells=0
+
+    if [[ "$group" == "shell" ]]; then
+        current_shell=$(basename "$SHELL")
+
+        # Check if specific shells were manually requested
+        if [[ -n "${MANUAL_SHELL_PACKAGES:-}" ]]; then
+            install_specific_shells=1
+            log_info "Installing manually specified shell configs: $MANUAL_SHELL_PACKAGES"
+        else
+            log_info "Current shell: $current_shell - only stowing $current_shell config"
+        fi
+    fi
+
     for pkg in "${packages[@]}"; do
         if [[ "$group" == "editor" && "$pkg" =~ ^nvim- ]]; then
             # Skip nvim configs in main loop - handled separately
             continue
+        fi
+
+        # For shell group, handle shell config filtering
+        if [[ "$group" == "shell" ]]; then
+            if [[ $install_specific_shells -eq 1 ]]; then
+                # Specific shells were manually requested
+                # Check if this package is in the manual list
+                local should_install=0
+                for manual_shell in $MANUAL_SHELL_PACKAGES; do
+                    if [[ "$pkg" == "$manual_shell" ]]; then
+                        should_install=1
+                        break
+                    fi
+                done
+
+                # Skip shell configs not in the manual list
+                if [[ $should_install -eq 0 ]] && [[ "$pkg" =~ ^(bash|zsh|nushell|fish)$ ]]; then
+                    log_dry_run "  Skipping $pkg (not in manual selection)"
+                    continue
+                fi
+            else
+                # No manual selection - only install current shell
+                if [[ "$pkg" == "$current_shell" ]]; then
+                    # Match: install this shell config
+                    :
+                elif [[ "$pkg" =~ ^(bash|zsh|nushell|fish)$ ]]; then
+                    # This is a shell config, but not the current one - skip it
+                    log_dry_run "  Skipping $pkg (not current shell, use './install.sh $pkg' to install)"
+                    continue
+                fi
+            fi
+            # starship and other non-shell packages get installed normally
         fi
 
         if [[ -d "$SCRIPT_DIR/$pkg" ]]; then
@@ -777,7 +825,7 @@ main() {
                 shift
                 ;;
             -h|--help)
-                echo "Usage: $0 [options] [groups...]"
+                echo "Usage: $0 [options] [groups|packages...]"
                 echo ""
                 echo "Options:"
                 echo "  --dry-run       Show what would be installed without making changes"
@@ -790,11 +838,17 @@ main() {
                 echo "Groups:"
                 echo "  ${INSTALL_ORDER[*]}"
                 echo ""
+                echo "Packages (can be installed individually):"
+                echo "  Shell configs: bash, zsh, nushell"
+                echo "  Others: starship, nvim-malo, kitty, tmux, etc."
+                echo ""
                 echo "Examples:"
                 echo "  $0                    # Interactive menu"
                 echo "  $0 --dry-run          # Preview what would be installed"
                 echo "  $0 --minimal          # Minimal installation"
                 echo "  $0 shell editor       # Install specific groups"
+                echo "  $0 bash zsh           # Install specific shell configs"
+                echo "  $0 nvim-malo tmux     # Install specific packages"
                 exit 0
                 ;;
             --list-groups)
@@ -833,20 +887,68 @@ main() {
         apply_preset "$use_preset"
         log_info "Using preset: $use_preset"
         INTERACTIVE=0
-    # Use manual groups if specified
+    # Use manual groups/packages if specified
     elif [[ ${#manual_groups[@]} -gt 0 ]]; then
         # Reset selections
         for group in "${!INSTALL_GROUPS[@]}"; do
             SELECTED_GROUPS[$group]=0
         done
-        # Enable specified groups
-        for group in "${manual_groups[@]}"; do
-            if [[ -n "${INSTALL_GROUPS[$group]:-}" ]]; then
-                SELECTED_GROUPS[$group]=1
+
+        # Track if any specific shell packages were manually selected
+        local manual_shell_packages=()
+
+        # Process each argument - could be a group or a specific package
+        for item in "${manual_groups[@]}"; do
+            if [[ -n "${INSTALL_GROUPS[$item]:-}" ]]; then
+                # It's a group name
+                SELECTED_GROUPS[$item]=1
+            elif [[ -d "$SCRIPT_DIR/$item" ]]; then
+                # It's a specific package directory
+                # Check if it's a shell package
+                if [[ "$item" =~ ^(bash|zsh|nushell|fish)$ ]]; then
+                    manual_shell_packages+=("$item")
+                fi
+                # For other packages, we need to find which group they belong to
+                # and enable that group
+                for group in "${!INSTALL_GROUPS[@]}"; do
+                    local packages=(${INSTALL_GROUPS[$group]})
+                    for pkg in "${packages[@]}"; do
+                        if [[ "$pkg" == "$item" ]]; then
+                            SELECTED_GROUPS[$group]=1
+                            break 2
+                        fi
+                    done
+                done
             else
-                log_warn "Unknown group: $group"
+                log_warn "Unknown group or package: $item"
             fi
         done
+
+        # If specific shell packages were requested, mark them for installation
+        if [[ ${#manual_shell_packages[@]} -gt 0 ]]; then
+            # Export for use by install_group
+            export MANUAL_SHELL_PACKAGES="${manual_shell_packages[*]}"
+            log_info "Will install specific shell configs: ${manual_shell_packages[*]}"
+            # Mark as lightweight install (skip Homebrew updates, Brewfile, etc.)
+            export LIGHTWEIGHT_INSTALL=1
+        fi
+
+        # Also check if only non-group packages were specified (individual packages)
+        if [[ ${#manual_shell_packages[@]} -eq 0 ]]; then
+            local has_group=0
+            for item in "${manual_groups[@]}"; do
+                if [[ -n "${INSTALL_GROUPS[$item]:-}" ]]; then
+                    has_group=1
+                    break
+                fi
+            done
+            if [[ $has_group -eq 0 ]]; then
+                # Only individual packages specified, no groups
+                export LIGHTWEIGHT_INSTALL=1
+                log_info "Lightweight mode: skipping Homebrew updates and Brewfile"
+            fi
+        fi
+
         INTERACTIVE=0
     # Use default selections (skip interactive in dry-run mode)
     else
@@ -894,28 +996,39 @@ main() {
         fi
     fi
 
-    # Show what will be installed
-    show_banner "Selected Groups"
-    for group in "${INSTALL_ORDER[@]}"; do
-        if [[ "$(get_group_selection "$group")" == "1" ]]; then
-            log_success "✓ $group - ${GROUP_DESC[$group]}"
-        fi
-    done
-    echo ""
+    # Show what will be installed (skip in lightweight mode)
+    if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
+        show_banner "Selected Groups"
+        for group in "${INSTALL_ORDER[@]}"; do
+            if [[ "$(get_group_selection "$group")" == "1" ]]; then
+                log_success "✓ $group - ${GROUP_DESC[$group]}"
+            fi
+        done
+        echo ""
+    fi
 
-    # Pause for confirmation
-    if [[ "$INTERACTIVE" == "1" ]] && [[ "$DRY_RUN" == "0" ]]; then
+    # Pause for confirmation (skip in lightweight mode)
+    if [[ "$INTERACTIVE" == "1" ]] && [[ "$DRY_RUN" == "0" ]] && [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
         read -p "Press Enter to continue, or Ctrl+C to cancel..."
     fi
 
-    # Show status (skip in interactive mode as we already showed selections)
-    if [[ "$INTERACTIVE" == "0" ]]; then
+    # Show status (skip in interactive or lightweight mode)
+    if [[ "$INTERACTIVE" == "0" ]] && [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
         show_package_manager_status
         show_required_tools_status
     fi
 
-    # Setup package manager
-    setup_homebrew
+    # Setup package manager (skip updates in lightweight mode)
+    if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "1" ]]; then
+        # In lightweight mode, just ensure Homebrew is in PATH, don't update
+        if ! command_exists brew; then
+            setup_homebrew
+        elif [[ "$OS" == "Linux" ]]; then
+            eval "$(($(command -v brew) shellenv 2>/dev/null || echo '/home/linuxbrew/.linuxbrew/bin/brew') shellenv)"
+        fi
+    else
+        setup_homebrew
+    fi
 
     # Setup GNU Stow
     setup_stow
@@ -942,33 +1055,67 @@ main() {
         install_nvim_configs
     fi
 
-    # Install Homebrew packages
-    install_homebrew_packages
+    # Install Homebrew packages (skip in lightweight mode)
+    if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
+        install_homebrew_packages
+    fi
 
     # Install extras
     install_shell_color_scripts
 
-    # Summary
-    show_banner "Summary"
-    echo ""
-    if [[ "$DRY_RUN" == "1" ]]; then
-        echo "  📋 DRY RUN MODE - No changes were made"
+    # Summary (simplified in lightweight mode)
+    if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "1" ]]; then
         echo ""
-        echo "  To apply these changes, run:"
-        echo "    ./install.sh"
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  📋 DRY RUN - No changes made"
+        else
+            echo "  ✅ Done!"
+        fi
+        echo ""
+        echo "  Next steps:"
+        if [[ -n "${MANUAL_SHELL_PACKAGES:-}" ]]; then
+            # Shell-specific next steps
+            for shell in $MANUAL_SHELL_PACKAGES; do
+                case "$shell" in
+                    bash)
+                        echo "    - Restart your shell or run: source ~/.bashrc"
+                        ;;
+                    zsh)
+                        echo "    - Restart your shell or run: source ~/.zshrc"
+                        ;;
+                    nushell)
+                        echo "    - Restart your shell or run: source ~/.config/nushell/env.nu"
+                        ;;
+                    fish)
+                        echo "    - Restart your shell or run: source ~/.config/fish/config.fish"
+                        ;;
+                esac
+            done
+        else
+            echo "    - Restart your shell"
+        fi
     else
-        echo "  ✅ Installation complete!"
-    fi
-    echo ""
-    echo "  Log saved to: $LOG_FILE"
-    echo ""
-    echo "  Next steps:"
-    echo "    - Restart your shell or run: source ~/.zshrc"
-    if [[ "$OS" == "Darwin" && "$(get_group_selection "desktop")" == "1" ]]; then
-        echo "    - Start SketchyBar: brew services restart sketchybar"
-    fi
-    if [[ "$(get_group_selection "extras")" == "1" ]]; then
-        echo "    - Run: colorscript to see available color scripts"
+        show_banner "Summary"
+        echo ""
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  📋 DRY RUN MODE - No changes were made"
+            echo ""
+            echo "  To apply these changes, run:"
+            echo "    ./install.sh"
+        else
+            echo "  ✅ Installation complete!"
+        fi
+        echo ""
+        echo "  Log saved to: $LOG_FILE"
+        echo ""
+        echo "  Next steps:"
+        echo "    - Restart your shell or run: source ~/.zshrc"
+        if [[ "$OS" == "Darwin" && "$(get_group_selection "desktop")" == "1" ]]; then
+            echo "    - Start SketchyBar: brew services restart sketchybar"
+        fi
+        if [[ "$(get_group_selection "extras")" == "1" ]]; then
+            echo "    - Run: colorscript to see available color scripts"
+        fi
     fi
 }
 
