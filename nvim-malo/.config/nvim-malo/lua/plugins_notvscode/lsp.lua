@@ -123,6 +123,10 @@ return {
           },
         },
       })
+			-- Stylua LSP - DISABLE (v2.0+ removed --lsp flag, use separate stylua-lsp instead)
+			vim.lsp.config("stylua", {
+				cmd = { "echo", "stylua LSP is disabled" },
+			})
 
       -- TypeScript/JavaScript
       vim.lsp.config("ts_ls", {
