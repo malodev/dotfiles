@@ -643,7 +643,15 @@ show_required_tools_status() {
 #=============================================================================
 # HOMEBREW SETUP (from original)
 #=============================================================================
+# Homebrew is opt-in on Linux (use --with-brew flag)
+# On macOS, it's the standard package manager
 setup_homebrew() {
+    # On Linux, skip unless --with-brew was specified
+    if [[ "$OS" == "Linux" ]] && [[ "${WITH_BREW:-0}" == "0" ]]; then
+        log_info "Skipping Homebrew on Linux (use --with-brew to enable)"
+        return 0
+    fi
+
     if [[ "$DISTRO" == "arch" ]]; then
         log_info "Arch Linux detected: Using pacman instead of Homebrew"
         return 0
@@ -824,12 +832,17 @@ main() {
                 DRY_RUN=1
                 shift
                 ;;
+            --with-brew)
+                WITH_BREW=1
+                shift
+                ;;
             -h|--help)
                 echo "Usage: $0 [options] [groups|packages...]"
                 echo ""
                 echo "Options:"
                 echo "  --dry-run       Show what would be installed without making changes"
                 echo "  --list-groups   List available installation groups"
+                echo "  --with-brew     Use Homebrew on Linux (default: skip)"
                 echo "  --minimal       Minimal installation (core + shell)"
                 echo "  --standard      Standard installation (core + shell + editor + terminal)"
                 echo "  --full         Full installation (all groups)"
@@ -849,6 +862,7 @@ main() {
                 echo "  $0 shell editor       # Install specific groups"
                 echo "  $0 bash zsh           # Install specific shell configs"
                 echo "  $0 nvim-malo tmux     # Install specific packages"
+                echo "  $0 --with-brew shell  # Use Homebrew on Linux"
                 exit 0
                 ;;
             --list-groups)
