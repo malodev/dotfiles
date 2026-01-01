@@ -903,6 +903,69 @@ setup_zoxide() {
 }
 
 #=============================================================================
+# STARSHIP SETUP
+#=============================================================================
+setup_starship() {
+    # Skip if already installed
+    if command_exists starship; then
+        log_success "starship is already installed"
+        return 0
+    fi
+
+    # Skip on macOS (installed via Brewfile)
+    if [[ "$OS" == "Darwin" ]]; then
+        return 0
+    fi
+
+    # Skip on Linux if using Homebrew (installed via Brewfile)
+    if [[ "$OS" == "Linux" ]] && [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    log_dry_run "Would install starship..."
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return 0
+    fi
+
+    log_info "Installing starship..."
+
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
+    # Debian/Ubuntu - install via apt
+    if [[ "$DISTRO" == "debian" ]]; then
+        $sudo_prefix apt-get update -qq
+        $sudo_prefix apt-get install -y starship
+    # Arch - install via pacman or yay
+    elif [[ "$DISTRO" == "arch" ]]; then
+        if command_exists yay; then
+            yay -S --noconfirm starship
+        elif command_exists paru; then
+            paru -S --noconfirm starship
+        else
+            $sudo_prefix pacman -S --noconfirm starship
+        fi
+    # Fedora - install via dnf
+    elif [[ "$DISTRO" == "fedora" ]]; then
+        $sudo_prefix dnf install -y starship
+    else
+        # Fallback to install script for other distros
+        curl -sS https://starship.rs/install.sh | sh -s -- --bin "$HOME/.local/bin"
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+
+    if command_exists starship; then
+        log_success "starship installed successfully"
+    else
+        log_warn "starship installation may have failed (not found in PATH)"
+    fi
+}
+
+#=============================================================================
 # LIST GROUPS
 #=============================================================================
 list_groups() {
@@ -1182,6 +1245,9 @@ main() {
 
     # Install zoxide
     setup_zoxide
+
+    # Install starship (shell group)
+    setup_starship
 
     # Summary (simplified in lightweight mode)
     if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "1" ]]; then
