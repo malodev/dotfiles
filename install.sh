@@ -329,29 +329,37 @@ checkbox_menu() {
 # NEONVIM CONFIG SELECTION
 #=============================================================================
 select_nvim_config() {
-    show_banner "Select Default Neovim Configuration"
+    # In non-interactive mode, default to nvim-malo immediately
+    # Do this BEFORE any array operations (set -e will exit on array errors)
+    if [[ "$INTERACTIVE" == "0" ]] || [[ ! -t 0 ]]; then
+        [[ "$INTERACTIVE" == "0" ]] && log_info "Defaulting to nvim-malo"
 
-    # Safety check: ensure NVIM_CONFIGS array exists and has elements
-    # Use declare -p to check if array is set (safe with set -e)
-    if ! declare -p NVIM_CONFIGS >/dev/null 2>&1; then
-        log_warn "NVIM_CONFIGS array not found"
-        log_info "Setting nvim-malo as default..."
         local selected_key="malo"
         local selected_pkg="nvim-$selected_key"
-        local config_dir="$SCRIPT_DIR/$selected_pkg"
+        local config_dir="$selected_pkg/.config/nvim-$selected_key"
+        local nvim_config="$HOME/.config/nvim"
 
-        if [[ -d "$config_dir" ]]; then
-            local nvim_config="$HOME/.config/nvim"
+        if [[ -d "$SCRIPT_DIR/$config_dir" ]]; then
             if [[ "$DRY_RUN" == "0" ]]; then
+                # Backup existing nvim config if it's not a symlink
                 if [[ -e "$nvim_config" && ! -L "$nvim_config" ]]; then
                     mv "$nvim_config" "${nvim_config}.backup.$(date +%Y%m%d)"
+                    log_info "Backed up existing nvim config"
                 fi
+                # Create relative symlink (compatible with stow)
                 ln -sf "$config_dir" "$nvim_config"
                 log_success "Default Neovim set to: $selected_pkg"
+            else
+                log_dry_run "Would set default Neovim to: $selected_pkg"
             fi
+        else
+            log_warn "Configuration directory not found: $SCRIPT_DIR/$config_dir"
         fi
         return 0
     fi
+
+    # Interactive mode - show selection menu
+    show_banner "Select Default Neovim Configuration"
 
     echo "Choose which Neovim configuration to use as default:"
     echo ""
@@ -359,41 +367,15 @@ select_nvim_config() {
     local default_idx=0
     local idx=0
 
-    for key in "${!NVIM_CONFIGS[@]}"; do
-        opts+=("$key|${NVIM_CONFIGS[$key]}")
+    # Build options list - hardcode keys to avoid array expansion issues
+    for key in "malo" "lazy" "test" "php" "astro"; do
+        local desc="${NVIM_CONFIGS[$key]:-nvim-$key}"
+        opts+=("$key|$desc")
         if [[ "$key" == "malo" ]]; then
             default_idx=$idx
         fi
         ((idx++))
     done
-
-    # Check if we should skip interactive selection
-    # Skip in non-interactive mode or when stdin is not a terminal
-    if [[ "$INTERACTIVE" == "0" ]] || [[ ! -t 0 ]]; then
-        log_info "Defaulting to nvim-malo"
-        local selected_key="malo"
-        local selected_pkg="nvim-$selected_key"
-        local config_dir="$SCRIPT_DIR/$selected_pkg"
-
-        if [[ -d "$config_dir" ]]; then
-            local nvim_config="$HOME/.config/nvim"
-            log_info "Setting $selected_pkg as default Neovim configuration..."
-
-            if [[ "$DRY_RUN" == "0" ]]; then
-                if [[ -e "$nvim_config" && ! -L "$nvim_config" ]]; then
-                    mv "$nvim_config" "${nvim_config}.backup.$(date +%Y%m%d)"
-                    log_info "Backed up existing nvim config"
-                fi
-                ln -sf "$config_dir" "$nvim_config"
-                log_success "Default Neovim set to: $selected_pkg"
-            else
-                log_dry_run "Would set default Neovim to: $selected_pkg"
-            fi
-        else
-            log_warn "Configuration directory not found: $config_dir"
-        fi
-        return 0
-    fi
 
     # Simple numeric selection
     for i in "${!opts[@]}"; do
@@ -411,12 +393,10 @@ select_nvim_config() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#opts[@]} ]]; then
         local selected_key="${opts[$((choice-1))]%%|*}"
         local selected_pkg="nvim-$selected_key"
-        local config_dir="$SCRIPT_DIR/$selected_pkg"
+        local config_dir="$selected_pkg/.config/nvim-$selected_key"
 
-        if [[ -d "$config_dir" ]]; then
-            # Set up nvim config symlink
+        if [[ -d "$SCRIPT_DIR/$config_dir" ]]; then
             local nvim_config="$HOME/.config/nvim"
-
             log_info "Setting $selected_pkg as default Neovim configuration..."
 
             if [[ "$DRY_RUN" == "0" ]]; then
@@ -426,14 +406,14 @@ select_nvim_config() {
                     log_info "Backed up existing nvim config to ${nvim_config}.backup.$(date +%Y%m%d)"
                 fi
 
-                # Create symlink
+                # Create relative symlink (compatible with stow)
                 ln -sf "$config_dir" "$nvim_config"
                 log_success "Default Neovim set to: $selected_pkg"
             else
                 log_dry_run "Would set default Neovim to: $selected_pkg"
             fi
         else
-            log_warn "Configuration directory not found: $config_dir"
+            log_warn "Configuration directory not found: $SCRIPT_DIR/$config_dir"
         fi
     else
         log_warn "Invalid choice, skipping Neovim configuration"
