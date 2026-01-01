@@ -684,7 +684,22 @@ install_dev_tools() {
                 # Check for Python venv module
                 if ! python3 -m venv --help >/dev/null 2>&1; then
                     log_info "Python venv module not found, installing..."
-                    $sudo_prefix apt-get install -y python3-venv
+
+                    # Detect Python version and install versioned venv package
+                    local python_version=$(python3 --version 2>/dev/null | awk '{print $2}' | cut -d. -f1-2)
+                    if [[ -n "$python_version" ]]; then
+                        local venv_package="python${python_version}-venv"
+                        log_info "Installing $venv_package for Python $python_version..."
+                        if $sudo_prefix apt-get install -y "$venv_package" 2>/dev/null; then
+                            log_success "Installed $venv_package"
+                        else
+                            # Fallback to generic python3-venv
+                            log_warn "Versioned venv package not found, trying python3-venv..."
+                            $sudo_prefix apt-get install -y python3-venv
+                        fi
+                    else
+                        $sudo_prefix apt-get install -y python3-venv
+                    fi
                 else
                     log_success "Python venv module is available"
                 fi
