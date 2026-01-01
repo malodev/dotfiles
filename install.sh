@@ -595,16 +595,20 @@ install_dev_tools() {
                     fi
                 fi
 
-                # Install composer for PHP
-                if ! command_exists composer; then
-                    if command_exists yay; then
-                        yay -S --noconfirm composer
-                    elif command_exists paru; then
-                        paru -S --noconfirm composer
-                    else
-                        # Composer may need manual installation or php-composer package
-                        $sudo_prefix pacman -S --noconfirm php-composer 2>/dev/null || log_warn "Composer not found in repos, install manually"
+                # Install composer for PHP (only if PHP is installed)
+                if command_exists php; then
+                    if ! command_exists composer; then
+                        if command_exists yay; then
+                            yay -S --noconfirm composer
+                        elif command_exists paru; then
+                            paru -S --noconfirm composer
+                        else
+                            # Composer may need manual installation or php-composer package
+                            $sudo_prefix pacman -S --noconfirm php-composer 2>/dev/null || log_warn "Composer not found in repos, install manually"
+                        fi
                     fi
+                else
+                    log_info "PHP not found, skipping composer installation"
                 fi
 
                 # Install unzip
@@ -620,6 +624,17 @@ install_dev_tools() {
                     $sudo_prefix pacman -S --noconfirm python-pip
                     pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
+
+                # Install hub (GitHub CLI tool)
+                if ! command_exists hub; then
+                    if command_exists yay; then
+                        yay -S --noconfirm hub
+                    elif command_exists paru; then
+                        paru -S --noconfirm hub
+                    else
+                        log_warn "hub not in official repos, install from AUR or https://github.com/mislav/hub"
+                    fi
+                fi
                 ;;
 
             debian)
@@ -631,13 +646,17 @@ install_dev_tools() {
                     $sudo_prefix apt-get install -y golang-go
                 fi
 
-                # Install composer for PHP
-                if ! command_exists composer; then
-                    # Download composer installer
-                    curl -sS https://getcomposer.org/installer | php
-                    if [[ -f composer.phar ]]; then
-                        $sudo_prefix mv composer.phar /usr/local/bin/composer
+                # Install composer for PHP (only if PHP is installed)
+                if command_exists php; then
+                    if ! command_exists composer; then
+                        # Download composer installer
+                        curl -sS https://getcomposer.org/installer | php
+                        if [[ -f composer.phar ]]; then
+                            $sudo_prefix mv composer.phar /usr/local/bin/composer
+                        fi
                     fi
+                else
+                    log_info "PHP not found, skipping composer installation"
                 fi
 
                 # Install unzip
@@ -653,6 +672,18 @@ install_dev_tools() {
                     $sudo_prefix apt-get install -y python3-pip
                     pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
+
+                # Install hub (GitHub CLI tool) - download from GitHub
+                if ! command_exists hub; then
+                    log_info "Installing hub from GitHub releases..."
+                    local hub_arch="amd64"
+                    local hub_version="2.14.2"
+                    curl -L "https://github.com/mislav/hub/releases/download/v${hub_version}/hub-linux-${hub_arch}-${hub_version}.tgz" \
+                        -o /tmp/hub.tgz 2>/dev/null \
+                        && tar -xzf /tmp/hub.tgz -C /tmp \
+                        && $sudo_prefix /tmp/hub-linux-${hub_arch}-${hub_version}/install && rm -rf /tmp/hub* \
+                        || log_warn "hub installation failed, install manually from https://github.com/mislav/hub"
+                fi
                 ;;
 
             fedora)
@@ -661,9 +692,13 @@ install_dev_tools() {
                     $sudo_prefix dnf install -y golang
                 fi
 
-                # Install composer for PHP
-                if ! command_exists composer; then
-                    $sudo_prefix dnf install -y composer
+                # Install composer for PHP (only if PHP is installed)
+                if command_exists php; then
+                    if ! command_exists composer; then
+                        $sudo_prefix dnf install -y composer
+                    fi
+                else
+                    log_info "PHP not found, skipping composer installation"
                 fi
 
                 # Install unzip
@@ -678,6 +713,11 @@ install_dev_tools() {
                 else
                     $sudo_prefix dnf install -y python3-pip
                     pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                fi
+
+                # Install hub (GitHub CLI tool)
+                if ! command_exists hub; then
+                    $sudo_prefix dnf install -y hub 2>/dev/null || log_warn "hub not in repos, install manually from https://github.com/mislav/hub"
                 fi
                 ;;
 
