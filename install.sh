@@ -331,6 +331,27 @@ checkbox_menu() {
 select_nvim_config() {
     show_banner "Select Default Neovim Configuration"
 
+    # Debug: check if array is set
+    if [[ ${#NVIM_CONFIGS[@]} -eq 0 ]]; then
+        log_warn "No Neovim configurations found (array is empty)"
+        log_info "Setting nvim-malo as default..."
+        local selected_key="malo"
+        local selected_pkg="nvim-$selected_key"
+        local config_dir="$SCRIPT_DIR/$selected_pkg"
+
+        if [[ -d "$config_dir" ]]; then
+            local nvim_config="$HOME/.config/nvim"
+            if [[ "$DRY_RUN" == "0" ]]; then
+                if [[ -e "$nvim_config" && ! -L "$nvim_config" ]]; then
+                    mv "$nvim_config" "${nvim_config}.backup.$(date +%Y%m%d)"
+                fi
+                ln -sf "$config_dir" "$nvim_config"
+                log_success "Default Neovim set to: $selected_pkg"
+            fi
+        fi
+        return 0
+    fi
+
     echo "Choose which Neovim configuration to use as default:"
     echo ""
     local opts=()
