@@ -367,6 +367,33 @@ select_nvim_config() {
         ((idx++))
     done
 
+    # Check if stdin is a terminal
+    if [[ ! -t 0 ]]; then
+        log_info "Non-interactive mode: defaulting to nvim-malo"
+        local selected_key="malo"
+        local selected_pkg="nvim-$selected_key"
+        local config_dir="$SCRIPT_DIR/$selected_pkg"
+
+        if [[ -d "$config_dir" ]]; then
+            local nvim_config="$HOME/.config/nvim"
+            log_info "Setting $selected_pkg as default Neovim configuration..."
+
+            if [[ "$DRY_RUN" == "0" ]]; then
+                if [[ -e "$nvim_config" && ! -L "$nvim_config" ]]; then
+                    mv "$nvim_config" "${nvim_config}.backup.$(date +%Y%m%d)"
+                    log_info "Backed up existing nvim config"
+                fi
+                ln -sf "$config_dir" "$nvim_config"
+                log_success "Default Neovim set to: $selected_pkg"
+            else
+                log_dry_run "Would set default Neovim to: $selected_pkg"
+            fi
+        else
+            log_warn "Configuration directory not found: $config_dir"
+        fi
+        return 0
+    fi
+
     # Simple numeric selection
     for i in "${!opts[@]}"; do
         local desc="${opts[$i]#*|}"
