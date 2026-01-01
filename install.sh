@@ -144,9 +144,9 @@ else
         ["editor"]=1
         ["terminal"]=1
         ["desktop"]=0
-        ["linux"]=1
+        ["linux"]=0
         ["dev"]=1
-        ["extras"]=0
+        ["extras"]=1
     )
 fi
 
@@ -169,7 +169,7 @@ has_group() {
     local group="$1"
     [[ -v "INSTALL_GROUPS[$group]" ]]
 }
-
+echo "CHECK IF ECHO WORKS HERE"
 #=============================================================================
 # UI HELPERS
 #=============================================================================
@@ -336,7 +336,7 @@ select_nvim_config() {
 
         local selected_key="malo"
         local selected_pkg="nvim-$selected_key"
-        local config_dir="$selected_pkg/.config/nvim-$selected_key"
+        local config_dir="../dotfiles/$selected_pkg/.config/nvim-$selected_key"
         local nvim_config="$HOME/.config/nvim"
 
         if [[ -d "$SCRIPT_DIR/$config_dir" ]]; then
@@ -679,7 +679,7 @@ setup_homebrew() {
     if command_exists brew; then
         log_success "Homebrew is already installed"
         if [[ "$OS" == "Linux" ]]; then
-            eval "$(($(command -v brew) shellenv 2>/dev/null || echo '/home/linuxbrew/.linuxbrew/bin/brew') shellenv)"
+            eval "$(brew shellenv 2>/dev/null || /home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         fi
     else
         log_dry_run "Would install Homebrew..."
@@ -1194,7 +1194,7 @@ main() {
         if ! command_exists brew; then
             setup_homebrew
         elif [[ "$OS" == "Linux" ]]; then
-            eval "$(($(command -v brew) shellenv 2>/dev/null || echo '/home/linuxbrew/.linuxbrew/bin/brew') shellenv)"
+            eval "$(brew shellenv 2>/dev/null || /home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         fi
     else
         setup_homebrew
