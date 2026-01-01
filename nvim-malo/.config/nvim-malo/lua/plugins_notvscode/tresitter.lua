@@ -1,7 +1,7 @@
 return {
 	{
 		"nvim-treesitter/nvim-treesitter",
-		lazy = true,
+		event = { "VeryLazy" },
 		build = ":TSUpdate",
 		config = function()
 			local configs = require("nvim-treesitter.configs")
@@ -36,7 +36,7 @@ return {
 		end,
 	},
 	{
-		lazy = true,
+		event = { "VeryLazy" },
 		"nushell/tree-sitter-nu",
 		build = ":TSUpdate nu",
 		dependencies = {
