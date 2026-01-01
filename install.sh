@@ -331,9 +331,10 @@ checkbox_menu() {
 select_nvim_config() {
     show_banner "Select Default Neovim Configuration"
 
-    # Debug: check if array is set
-    if [[ ${#NVIM_CONFIGS[@]} -eq 0 ]]; then
-        log_warn "No Neovim configurations found (array is empty)"
+    # Safety check: ensure NVIM_CONFIGS array exists and has elements
+    # Use declare -p to check if array is set (safe with set -e)
+    if ! declare -p NVIM_CONFIGS >/dev/null 2>&1; then
+        log_warn "NVIM_CONFIGS array not found"
         log_info "Setting nvim-malo as default..."
         local selected_key="malo"
         local selected_pkg="nvim-$selected_key"
@@ -950,8 +951,7 @@ setup_starship() {
         # Fall back to curl install script if apt failed
         if [[ $install_success -eq 0 ]]; then
             log_info "apt install failed, using official install script..."
-            curl -sS https://starship.rs/install.sh | sh -s -- --bin "$HOME/.local/bin"
-            export PATH="$HOME/.local/bin:$PATH"
+            curl -sS https://starship.rs/install.sh | sh
         fi
     # Arch - install via pacman or yay
     elif [[ "$DISTRO" == "arch" ]]; then
