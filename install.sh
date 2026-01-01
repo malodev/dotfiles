@@ -1109,11 +1109,26 @@ install_fastfetch() {
                 log_info "Installing fastfetch from GitHub releases..."
                 local fastfetch_dir="$HOME/.local/share/fastfetch"
                 mkdir -p "$fastfetch_dir"
-                curl -sL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
-                    -o "$fastfetch_dir/fastfetch" \
-                    && chmod +x "$fastfetch_dir/fastfetch" \
-                    && $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch \
-                    || log_warn "fastfetch installation failed"
+
+                # Follow redirects and check for proper download
+                if curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
+                    -o "$fastfetch_dir/fastfetch" 2>/dev/null; then
+
+                    # Verify the file was downloaded correctly (not a 404 page)
+                    if [[ -s "$fastfetch_dir/fastfetch" ]] && ! grep -q "Not Found" "$fastfetch_dir/fastfetch" 2>/dev/null; then
+                        chmod +x "$fastfetch_dir/fastfetch"
+                        # Add to PATH via symlink
+                        mkdir -p /usr/local/bin 2>/dev/null || true
+                        $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch 2>/dev/null || \
+                            ln -sf "$fastfetch_dir/fastfetch" "$HOME/.local/bin/fastfetch" 2>/dev/null
+                        log_success "fastfetch installed to $fastfetch_dir/fastfetch"
+                    else
+                        log_warn "fastfetch download appears invalid, trying alternative method..."
+                        rm -f "$fastfetch_dir/fastfetch"
+                    fi
+                else
+                    log_warn "fastfetch download failed, you can install manually from https://github.com/fastfetch-cli/fastfetch/releases"
+                fi
             fi
             ;;
         debian)
@@ -1121,11 +1136,24 @@ install_fastfetch() {
             log_info "Installing fastfetch from GitHub releases..."
             local fastfetch_dir="$HOME/.local/share/fastfetch"
             mkdir -p "$fastfetch_dir"
-            curl -sL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
-                -o "$fastfetch_dir/fastfetch" \
-                && chmod +x "$fastfetch_dir/fastfetch" \
-                && $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch \
-                || log_warn "fastfetch installation failed"
+
+            if curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
+                -o "$fastfetch_dir/fastfetch" 2>/dev/null; then
+
+                # Verify the file was downloaded correctly
+                if [[ -s "$fastfetch_dir/fastfetch" ]] && ! grep -q "Not Found" "$fastfetch_dir/fastfetch" 2>/dev/null; then
+                    chmod +x "$fastfetch_dir/fastfetch"
+                    mkdir -p /usr/local/bin 2>/dev/null || true
+                    $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch 2>/dev/null || \
+                        ln -sf "$fastfetch_dir/fastfetch" "$HOME/.local/bin/fastfetch" 2>/dev/null
+                    log_success "fastfetch installed to $fastfetch_dir/fastfetch"
+                else
+                    log_warn "fastfetch download appears invalid"
+                    rm -f "$fastfetch_dir/fastfetch"
+                fi
+            else
+                log_warn "fastfetch download failed, install manually from https://github.com/fastfetch-cli/fastfetch/releases"
+            fi
             ;;
         fedora)
             # Available in copr repo or prebuilt binary
@@ -1133,11 +1161,24 @@ install_fastfetch() {
                 log_info "Installing fastfetch from GitHub releases..."
                 local fastfetch_dir="$HOME/.local/share/fastfetch"
                 mkdir -p "$fastfetch_dir"
-                curl -sL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
-                    -o "$fastfetch_dir/fastfetch" \
-                    && chmod +x "$fastfetch_dir/fastfetch" \
-                    && $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch \
-                    || log_warn "fastfetch installation failed"
+
+                if curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
+                    -o "$fastfetch_dir/fastfetch" 2>/dev/null; then
+
+                    # Verify the file was downloaded correctly
+                    if [[ -s "$fastfetch_dir/fastfetch" ]] && ! grep -q "Not Found" "$fastfetch_dir/fastfetch" 2>/dev/null; then
+                        chmod +x "$fastfetch_dir/fastfetch"
+                        mkdir -p /usr/local/bin 2>/dev/null || true
+                        $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch 2>/dev/null || \
+                            ln -sf "$fastfetch_dir/fastfetch" "$HOME/.local/bin/fastfetch" 2>/dev/null
+                        log_success "fastfetch installed to $fastfetch_dir/fastfetch"
+                    else
+                        log_warn "fastfetch download appears invalid"
+                        rm -f "$fastfetch_dir/fastfetch"
+                    fi
+                else
+                    log_warn "fastfetch download failed, install manually from https://github.com/fastfetch-cli/fastfetch/releases"
+                fi
             fi
             ;;
         *)
