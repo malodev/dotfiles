@@ -65,69 +65,13 @@ fi
 # PROMPT - Starship
 #=============================================================================
 
-# Function to install starship in user environment
-_install_starship() {
-    local starship_bin="$HOME/.local/bin/starship"
-    local install_dir="$HOME/.local/bin"
-
-    # Create install directory if needed
-    mkdir -p "$install_dir"
-
-    echo "Installing starship to $install_dir..."
-
-    # Detect OS and install
-    if [[ "$(uname)" == "Darwin" ]]; then
-        # macOS
-        if command -v brew >/dev/null 2>&1; then
-            brew install starship
-        else
-            # Manual install
-            curl -sS https://starship.rs/install.sh | sh -s -- --bin "$install_dir"
-        fi
-    else
-        # Linux - manual install
-        curl -sS https://starship.rs/install.sh | sh -s -- --bin "$install_dir"
-    fi
-
-    # Verify installation
-    if [[ -x "$starship_bin" ]]; then
-        echo "✓ Starship installed successfully"
-        return 0
-    else
-        echo "✗ Starship installation failed" >&2
-        return 1
-    fi
-}
-
-# Initialize starship prompt with fallback
-_init_starship() {
-    # Check if starship is in PATH
-    if command -v starship >/dev/null 2>&1; then
-        eval "$(starship init bash)"
-        return 0
-    fi
-
-    # Check if starship is in ~/.local/bin
-    if [[ -x "$HOME/.local/bin/starship" ]]; then
-        export PATH="$HOME/.local/bin:$PATH"
-        eval "$(starship init bash)"
-        return 0
-    fi
-
-    # Starship not found - try to install it
-    echo "Starship not found. Installing..." >&2
-    if _install_starship; then
-        export PATH="$HOME/.local/bin:$PATH"
-        eval "$(starship init bash)"
-        return 0
-    fi
-
-    # Installation failed - use fallback prompt
-    return 1
-}
-
-# Try to initialize starship, use fallback if it fails
-if ! _init_starship; then
+# Initialize starship if available, otherwise use simple prompt
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init bash)"
+elif [[ -x "$HOME/.local/bin/starship" ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
+    eval "$(starship init bash)"
+else
     # Fallback prompt (simple but functional)
     # Set debian_chroot if in a chroot
     if [ -z "$debian_chroot" ] && [ -r /etc/debian_chroot ]; then
