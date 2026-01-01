@@ -47,7 +47,6 @@ return {
     config = function()
       require("mason-tool-installer").setup({
         ensure_installed = {
-          "stylua",
           "tree-sitter-cli",
           "shfmt",
           "dprint",
