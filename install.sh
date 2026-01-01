@@ -1157,6 +1157,11 @@ install_fastfetch() {
 # ZOXIDE SETUP
 #=============================================================================
 setup_zoxide() {
+    # Only install if shell group is selected
+    if [[ "$(get_group_selection "shell")" != "1" ]]; then
+        return
+    fi
+
     # Skip if already installed
     if command_exists zoxide; then
         log_success "zoxide is already installed"
@@ -1193,6 +1198,11 @@ setup_zoxide() {
 # STARSHIP SETUP
 #=============================================================================
 setup_starship() {
+    # Only install if shell group is selected
+    if [[ "$(get_group_selection "shell")" != "1" ]]; then
+        return
+    fi
+
     # Skip if already installed
     if command_exists starship; then
         log_success "starship is already installed"
