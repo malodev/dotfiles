@@ -2,10 +2,13 @@ return {
 	{
 		"sindrets/diffview.nvim",
 		config = function()
-			-- Lua
-			local actions = require("diffview.actions")
+			local ok_actions, actions = pcall(require, "diffview.actions")
+			local ok_diffview, diffview = pcall(require, "diffview")
+			if not ok_diffview or not ok_actions then
+				return
+			end
 
-			require("diffview").setup({
+			diffview.setup({
 				diff_binaries = false, -- Show diffs for binaries
 				enhanced_diff_hl = false, -- See |diffview-config-enhanced_diff_hl|
 				git_cmd = { "git" }, -- The git executable followed by default args.
@@ -691,7 +694,8 @@ return {
 		},
 		config = true,
 		enabled = function()
-			return require("config").is_enabled.neogit
+			local ok_config, config = pcall(require, "config")
+			return ok_config and config.is_enabled.neogit or false
 		end,
 	},
 }

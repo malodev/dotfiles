@@ -2,7 +2,11 @@ return {
 	"folke/persistence.nvim",
 	event = "BufReadPre",
 	config = function()
-		require("persistence").setup({
+		local ok, persistence = pcall(require, "persistence")
+		if not ok then
+			return
+		end
+		persistence.setup({
 			options = { "buffers", "curdir", "tabpages", "winsize", "help", "globals", "skiprtp" },
 		})
 	end,

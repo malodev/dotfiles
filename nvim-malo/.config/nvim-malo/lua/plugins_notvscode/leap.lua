@@ -4,7 +4,10 @@ return {
 		highlight_unlabeled_phase_one_targets = true,
 	},
 	config = function(_, opts)
-		local leap = require("leap")
+		local ok, leap = pcall(require, "leap")
+		if not ok then
+			return
+		end
 		for k, v in pairs(opts) do
 			leap.opts[k] = v
 		end

@@ -21,6 +21,12 @@ return {
 		requires = { "HiPhish/rainbow-delimiters.nvim", "nvim-treesitter/nvim-treesitter" }, -- optional for treesitter
 		main = "ibl",
 		config = function()
+			local ok_ibl_hooks, hooks = pcall(require, "ibl.hooks")
+			local ok_ibl, ibl = pcall(require, "ibl")
+			if not ok_ibl or not ok_ibl_hooks then
+				return
+			end
+
 			local highlight = {
 				"RainbowRed",
 				"RainbowYellow",
@@ -35,7 +41,6 @@ return {
 				"Whitespace",
 			}
 
-			local hooks = require("ibl.hooks")
 			-- create the highlight groups in the highlight setup hook, so they are reset
 			-- every time the colorscheme changes
 			hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
@@ -49,7 +54,7 @@ return {
 			end)
 
 			vim.g.rainbow_delimiters = { highlight = highlight }
-			require("ibl").setup({
+			ibl.setup({
 				scope = { highlight = highlight },
 				-- indent = { highlight = highlight, char = "" },
 				-- indent = { highlight = highlight, char = "" },

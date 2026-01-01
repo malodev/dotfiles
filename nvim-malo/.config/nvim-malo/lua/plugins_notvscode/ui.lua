@@ -55,7 +55,10 @@ return {
       { "<c-b>",       function() if not require("noice.lsp").scroll(-4) then return "<c-b>" end end, silent = true,                           expr = true,              desc = "Scroll Backward", mode = { "i", "n", "s" } },
     },
 		config = function(_, opts)
-			require("noice").setup(opts)
+			local ok, noice = pcall(require, "noice")
+			if ok then
+				noice.setup(opts)
+			end
 		end,
 	},
 

@@ -1,14 +1,19 @@
 return {
 	"Exafunction/codeium.nvim",
 	enabled = function()
-		return require("config").is_enabled.codeium
+		local ok_config, config = pcall(require, "config")
+		return ok_config and config.is_enabled.codeium or false
 	end,
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 	},
 	event = "BufEnter",
 	config = function()
-		require("codeium").setup({
+		local ok, codeium = pcall(require, "codeium")
+		if not ok then
+			return
+		end
+		codeium.setup({
 			-- Optionally disable cmp source if using virtual text only
 			enable_chat = true,
 			enable_cmp_source = false,

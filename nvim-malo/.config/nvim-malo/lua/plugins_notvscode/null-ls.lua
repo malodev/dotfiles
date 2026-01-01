@@ -2,10 +2,13 @@ return {
 	"nvimtools/none-ls.nvim",
 	event = "VeryLazy",
 	config = function()
-		local null_ls = require("null-ls")
+		local ok_null_ls, null_ls = pcall(require, "null-ls")
+		local ok_rpc, rpc = pcall(require, "null-ls.rpc")
+		if not ok_null_ls or not ok_rpc then
+			return
+		end
 
 		-- Override the problematic flush function
-		local rpc = require("null-ls.rpc")
 		rpc.flush = function() end -- Replace with empty function
 		null_ls.setup({
 			sources = {

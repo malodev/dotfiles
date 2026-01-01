@@ -1,7 +1,8 @@
 return {
 	"catgoose/nvim-colorizer.lua",
 	enabled = function()
-		return require("config").is_enabled.nvchad_colorizer
+		local ok_config, config = pcall(require, "config")
+		return ok_config and config.is_enabled.nvchad_colorizer or false
 	end,
 	event = "BufReadPre",
 	opts = { -- set to setup table
@@ -38,6 +39,9 @@ return {
 		user_commands = true, -- Enable all or some usercommands
 	},
 	config = function(_, opts)
-		require("colorizer").setup(opts)
+		local ok, colorizer = pcall(require, "colorizer")
+		if ok then
+			colorizer.setup(opts)
+		end
 	end,
 }

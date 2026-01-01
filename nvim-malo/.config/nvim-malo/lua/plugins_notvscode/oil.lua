@@ -1,6 +1,10 @@
 -- Declare a global function to retrieve the current directory
 function _G.get_oil_winbar()
-	local dir = require("oil").get_current_dir()
+	local ok, oil = pcall(require, "oil")
+	if not ok then
+		return vim.api.nvim_buf_get_name(0)
+	end
+	local dir = oil.get_current_dir()
 	if dir then
 		return vim.fn.fnamemodify(dir, ":~")
 	else
@@ -15,7 +19,11 @@ return {
 	-- dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
 	config = function()
 		local detail = false
-		require("oil").setup({
+		local ok, oil = pcall(require, "oil")
+		if not ok then
+			return
+		end
+		oil.setup({
 			win_options = {
 				winbar = "%!v:lua.get_oil_winbar()",
 			},
@@ -29,9 +37,9 @@ return {
 					callback = function()
 						detail = not detail
 						if detail then
-							require("oil").set_columns({ "icon", "permissions", "size", "mtime" })
+							oil.set_columns({ "icon", "permissions", "size", "mtime" })
 						else
-							require("oil").set_columns({ "icon" })
+							oil.set_columns({ "icon" })
 						end
 					end,
 				},
@@ -46,7 +54,7 @@ return {
 		vim.keymap.set(
 			"n",
 			"<leader>fl",
-			require("oil").toggle_float,
+			oil.toggle_float,
 			{ desc = "Oil: Open parent directory in floating window" }
 		)
 	end,

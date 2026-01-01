@@ -1,12 +1,16 @@
 return {
 	"lewis6991/hover.nvim",
 	config = function()
-		require("hover").setup({
+		local ok, hover = pcall(require, "hover")
+		if not ok then
+			return
+		end
+		hover.setup({
 			init = function()
-				require("hover.providers.lsp")
-				require("hover.providers.diagnostic")
-				require("hover.providers.fold_preview")
-				require("hover.providers.dictionary")
+				pcall(require, "hover.providers.lsp")
+				pcall(require, "hover.providers.diagnostic")
+				pcall(require, "hover.providers.fold_preview")
+				pcall(require, "hover.providers.dictionary")
 			end,
 		})
 		-- Setup keymaps
@@ -20,7 +24,7 @@ return {
 		-- end, { desc = "hover.nvim (next source)" })
 
 		-- Mouse support
-		vim.keymap.set("n", "<MouseMove>", require("hover").hover_mouse, { desc = "hover.nvim (mouse)" })
+		vim.keymap.set("n", "<MouseMove>", hover.hover_mouse, { desc = "hover.nvim (mouse)" })
 		vim.o.mousemoveevent = true
 	end,
 }

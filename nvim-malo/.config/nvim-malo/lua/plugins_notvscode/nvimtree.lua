@@ -6,7 +6,11 @@ return {
     "nvim-tree/nvim-web-devicons",
   },
   config = function()
-    require("nvim-tree").setup({
+    local ok, nvim_tree = pcall(require, "nvim-tree")
+    if not ok then
+      return
+    end
+    nvim_tree.setup({
       on_attach = "default",
       hijack_cursor = false,
       auto_reload_on_write = true,

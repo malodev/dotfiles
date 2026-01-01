@@ -12,14 +12,20 @@ return {
 			"andrew-george/telescope-themes",
 		},
 		config = function()
-			require("telescope").setup({
+			local ok_telescope, telescope = pcall(require, "telescope")
+			local ok_actions, actions = pcall(require, "telescope.actions")
+			if not ok_telescope or not ok_actions then
+				return
+			end
+
+			telescope.setup({
 				defaults = {
 					path_display = { "truncate" },
 					dynamic_preview_title = true,
 					mappings = {
 						i = {
-							["<c-j>"] = require("telescope.actions").cycle_history_next,
-							["<c-k>"] = require("telescope.actions").cycle_history_prev,
+							["<c-j>"] = actions.cycle_history_next,
+							["<c-k>"] = actions.cycle_history_prev,
 						},
 					},
 					layout_strategy = "vertical",
@@ -105,24 +111,35 @@ return {
 	{
 		"nvim-telescope/telescope-ui-select.nvim",
 		config = function()
-			require("telescope").setup({
+			local ok_telescope, telescope = pcall(require, "telescope")
+			local ok_themes, themes = pcall(require, "telescope.themes")
+			if not ok_telescope or not ok_themes then
+				return
+			end
+			telescope.setup({
 				extensions = {
 					["ui-select"] = {
-						require("telescope.themes").get_dropdown({}),
+						themes.get_dropdown({}),
 					},
 				},
 			})
-			require("telescope").load_extension("ui-select")
+			telescope.load_extension("ui-select")
 		end,
 	},
 	{
 		"LukasPietzschmann/telescope-tabs",
 		enabled = function()
-			return require("config").is_enabled.telescope_tabs
+			local ok_config, config = pcall(require, "config")
+			return ok_config and config.is_enabled.telescope_tabs or false
 		end,
 		config = function()
-			require("telescope").load_extension("telescope-tabs")
-			require("telescope-tabs").setup({
+			local ok_telescope, telescope = pcall(require, "telescope")
+			local ok_telescope_tabs, telescope_tabs = pcall(require, "telescope-tabs")
+			if not ok_telescope or not ok_telescope_tabs then
+				return
+			end
+			telescope.load_extension("telescope-tabs")
+			telescope_tabs.setup({
 				-- Your custom config :^)
 			})
 		end,

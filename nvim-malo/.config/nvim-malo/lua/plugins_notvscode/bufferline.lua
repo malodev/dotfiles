@@ -4,12 +4,17 @@ return {
 		version = "*",
 		dependencies = "nvim-tree/nvim-web-devicons",
 		enabled = function()
-			return require("config").is_enabled.bufferline
+			local ok_config, config = pcall(require, "config")
+			return ok_config and config.is_enabled.bufferline or false
 		end,
 		lazy = false,
 		config = function()
 			vim.opt.termguicolors = true
-			require("bufferline").setup({
+			local ok, bufferline = pcall(require, "bufferline")
+			if not ok then
+				return
+			end
+			bufferline.setup({
 				options = {
 					indicator = {
 						icon = " ", -- this should be omitted if indicator style is not 'icon'

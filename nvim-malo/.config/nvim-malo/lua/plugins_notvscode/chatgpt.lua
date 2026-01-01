@@ -2,7 +2,8 @@ return {
 	"jackMort/ChatGPT.nvim",
 	event = "VeryLazy",
 	enabled = function()
-		return require("config").is_enabled.chatgpt
+		local ok_config, config = pcall(require, "config")
+		return ok_config and config.is_enabled.chatgpt or false
 	end,
 	dependencies = {
 		"MunifTanjim/nui.nvim",
@@ -10,7 +11,11 @@ return {
 		"nvim-telescope/telescope.nvim",
 	},
 	config = function()
-		require("chatgpt").setup({
+		local ok, chatgpt = pcall(require, "chatgpt")
+		if not ok then
+			return
+		end
+		chatgpt.setup({
 			api_key_cmd = "op read op://private/GPTApiKey/credential --no-newline",
 			-- api_key_cmd = nil,
 			yank_register = "+",

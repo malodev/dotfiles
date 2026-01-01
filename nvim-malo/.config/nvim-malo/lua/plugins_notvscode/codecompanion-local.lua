@@ -5,10 +5,15 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 	},
 	config = function()
-		require("codecompanion").setup({
+		local ok_codecompanion, codecompanion = pcall(require, "codecompanion")
+		local ok_adapters, adapters = pcall(require, "codecompanion.adapters")
+		if not ok_codecompanion or not ok_adapters then
+			return
+		end
+		codecompanion.setup({
 			adapters = {
 				llama3 = function()
-					return require("codecompanion.adapters").extend("ollama", {
+					return adapters.extend("ollama", {
 						name = "llama3", -- Give this adapter a different name to differentiate it from the default ollama adapter
 						schema = {
 							model = {

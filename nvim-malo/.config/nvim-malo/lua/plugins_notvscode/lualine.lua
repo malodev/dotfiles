@@ -6,8 +6,13 @@ return {
 		"AndreM222/copilot-lualine",
 	},
 	config = function()
-		local icons = require("config").icons
-		require("lualine").setup({
+		local ok_config, config = pcall(require, "config")
+		local ok_lualine, lualine = pcall(require, "lualine")
+		if not ok_config or not ok_lualine then
+			return
+		end
+		local icons = config.icons
+		lualine.setup({
 			options = {
 				theme = "auto",
 				section_separators = { left = "", right = "" },

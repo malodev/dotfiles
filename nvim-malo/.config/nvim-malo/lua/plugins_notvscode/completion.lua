@@ -1,5 +1,6 @@
 local useBlink = function()
-  return require("config").is_enabled.blink
+  local ok_config, config = pcall(require, "config")
+  return ok_config and config.is_enabled.blink or false
 end
 
 return {
@@ -180,7 +181,11 @@ return {
             score_offset = 100,
             async = true,
             transform_items = function(_, items)
-              local CompletionItemKind = require("blink.cmp.types").CompletionItemKind
+              local ok_blink_types, blink_types = pcall(require, "blink.cmp.types")
+              if not ok_blink_types then
+                return items
+              end
+              local CompletionItemKind = blink_types.CompletionItemKind
               local kind_idx = #CompletionItemKind + 1
               CompletionItemKind[kind_idx] = "Copilot"
               for _, item in ipairs(items) do

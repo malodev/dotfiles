@@ -2,7 +2,11 @@ return {
 	"lewis6991/gitsigns.nvim",
 
 	config = function()
-		require("gitsigns").setup({
+		local ok, gitsigns = pcall(require, "gitsigns")
+		if not ok then
+			return
+		end
+		gitsigns.setup({
 
 			signs = {
 				add = { text = "󰐖" },

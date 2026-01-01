@@ -23,7 +23,11 @@ return {
 		},
 	},
 	config = function()
-		require("yazi").setup({
+		local ok, yazi = pcall(require, "yazi")
+		if not ok then
+			return
+		end
+		yazi.setup({
 			open_for_directories = true,
 			keymaps = {
 				show_help = "<f1>",

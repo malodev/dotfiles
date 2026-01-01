@@ -19,7 +19,8 @@ local lsp_language_servers = {
   "bashls",
 }
 vim.diagnostic.config({ virtual_text = false })
-local useBlink = require("config").is_enabled.blink
+local ok_config, config = pcall(require, "config")
+local useBlink = ok_config and config.is_enabled.blink or false
 return {
 
   -- LSP part
@@ -28,8 +29,12 @@ return {
     lazy = false,
     opts = {},
     config = function()
+      local ok, mason = pcall(require, "mason")
+      if not ok then
+        return
+      end
       ---@diagnostic disable-next-line: missing-fields
-      require("mason").setup({
+      mason.setup({
         ui = {
           icons = {
             package_installed = "✓",
@@ -45,7 +50,11 @@ return {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     lazy = false,
     config = function()
-      require("mason-tool-installer").setup({
+      local ok, mason_tool_installer = pcall(require, "mason-tool-installer")
+      if not ok then
+        return
+      end
+      mason_tool_installer.setup({
         ensure_installed = {
           "tree-sitter-cli",
           "shfmt",
@@ -79,9 +88,19 @@ return {
       local capabilities
 
       if useBlink then
-        capabilities = require("blink.cmp").get_lsp_capabilities()
+        local ok_blink, blink = pcall(require, "blink.cmp")
+        if ok_blink then
+          capabilities = blink.get_lsp_capabilities()
+        else
+          capabilities = vim.lsp.protocol.make_client_capabilities()
+        end
       else
-        capabilities = require("cmp_nvim_lsp").default_capabilities()
+        local ok_cmp, cmp_nvim_lsp = pcall(require, "cmp_nvim_lsp")
+        if ok_cmp then
+          capabilities = cmp_nvim_lsp.default_capabilities()
+        else
+          capabilities = vim.lsp.protocol.make_client_capabilities()
+        end
       end
 
       capabilities.textDocument.foldingRange = {
@@ -233,7 +252,10 @@ return {
 
       -- Now setup mason-lspconfig
       -- automatic_enable will call vim.lsp.enable() for installed servers
-      require("mason-lspconfig").setup(opts)
+      local ok_mason_lsp, mason_lspconfig = pcall(require, "mason-lspconfig")
+      if ok_mason_lsp then
+        mason_lspconfig.setup(opts)
+      end
     end,
   },
   {

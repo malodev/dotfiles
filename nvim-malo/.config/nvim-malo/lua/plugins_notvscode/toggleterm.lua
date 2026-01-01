@@ -22,7 +22,11 @@ return {
 			},
 		})
 
-		local Terminal = require("toggleterm.terminal").Terminal
+		local ok_terminal, terminal = pcall(require, "toggleterm.terminal")
+		if not ok_terminal then
+			return
+		end
+		local Terminal = terminal.Terminal
 		local hTerm = Terminal:new({
 			size = 10,
 			direction = "horizontal",

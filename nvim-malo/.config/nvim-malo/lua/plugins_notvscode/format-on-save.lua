@@ -2,8 +2,11 @@ return {
 	"elentok/format-on-save.nvim",
 	event = { "BufReadPre", "BufNewFile" },
 	config = function()
-		local format_on_save = require("format-on-save")
-		local formatters = require("format-on-save.formatters")
+		local ok_format, format_on_save = pcall(require, "format-on-save")
+		local ok_formatters, formatters = pcall(require, "format-on-save.formatters")
+		if not ok_format or not ok_formatters then
+			return
+		end
 
 		format_on_save.setup({
 			exclude_path_patterns = {

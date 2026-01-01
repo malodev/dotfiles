@@ -46,15 +46,22 @@ return {
 		},
 
 		config = function(_, opts)
-			require("catppuccin").setup(opts)
-			vim.cmd.colorscheme("catppuccin")
+			local ok, catppuccin = pcall(require, "catppuccin")
+			if ok then
+				catppuccin.setup(opts)
+				vim.cmd.colorscheme("catppuccin")
+			end
 		end,
 	},
 	{
 		"rose-pine/neovim",
 		name = "rose-pine",
 		config = function()
-			require("rose-pine").setup({
+			local ok, rose_pine = pcall(require, "rose-pine")
+			if not ok then
+				return
+			end
+			rose_pine.setup({
 				variant = "auto", -- auto, main, moon, or dawn
 				dark_variant = "main", -- main, moon, or dawn
 				dim_inactive_windows = false,
@@ -141,7 +148,11 @@ return {
 	{
 		"rebelot/kanagawa.nvim",
 		config = function()
-			require("kanagawa").setup({
+			local ok, kanagawa = pcall(require, "kanagawa")
+			if not ok then
+				return
+			end
+			kanagawa.setup({
 				compile = false, -- enable compiling the colorscheme
 				undercurl = true, -- enable undercurls
 				commentStyle = { italic = true },

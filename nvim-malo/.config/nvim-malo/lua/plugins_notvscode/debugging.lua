@@ -22,8 +22,15 @@ return {
 		"leoluz/nvim-dap-go",
 	},
 	config = function()
-		local dap, dapui = require("dap"), require("dapui")
-		require("dap-go").setup()
+		local ok_dap, dap = pcall(require, "dap")
+		local ok_dapui, dapui = pcall(require, "dapui")
+		local ok_dapgo = pcall(require, "dap-go")
+		if not ok_dap or not ok_dapui then
+			return
+		end
+		if ok_dapgo then
+			require("dap-go").setup()
+		end
 
 		dap.listeners.before.attach.dapui_config = function()
 			dapui.open()
