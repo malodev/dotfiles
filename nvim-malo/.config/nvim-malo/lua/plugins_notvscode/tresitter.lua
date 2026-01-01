@@ -27,7 +27,7 @@ return {
           "dockerfile",
           "astro",
           "php",
-          "nu",
+          -- "nu",
         },
         sync_install = false,
         highlight = { enable = true },
@@ -35,12 +35,12 @@ return {
       })
     end,
   },
-  {
-    event = { "VeryLazy" },
-    "nushell/tree-sitter-nu",
-    build = ":TSUpdate nu",
-    dependencies = {
-      "nvim-treesitter/nvim-treesitter",
-    },
-  },
+  -- {
+  --   event = { "VeryLazy" },
+  --   "nushell/tree-sitter-nu",
+  --   build = ":TSUpdate nu",
+  --   dependencies = {
+  --     "nvim-treesitter/nvim-treesitter",
+  --   },
+  -- },
 }
