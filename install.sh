@@ -314,28 +314,6 @@ checkbox_menu() {
         done
     done
 
-    # Final confirmation
-    echo "" >&2
-    echo "==========================================" >&2
-    echo "  Final Selection" >&2
-    echo "==========================================" >&2
-    echo "" >&2
-    for i in "${!options[@]}"; do
-        if [[ ${checked[$i]} -eq 1 ]]; then
-            local desc="${options[$i]#*|}"
-            echo "  [*] $desc" >&2
-        fi
-    done
-    echo "" >&2
-    echo -n "Confirm installation? (Y/n): " >&2
-
-    local confirm
-    read -r confirm <&0
-
-    if [[ "$confirm" == "n" ]] || [[ "$confirm" == "N" ]]; then
-        return 1
-    fi
-
     # Collect selections - THIS GOES TO STDOUT (captured by caller)
     for i in "${!checked[@]}"; do
         if [[ ${checked[$i]} -eq 1 ]]; then
@@ -367,9 +345,10 @@ select_nvim_config() {
         ((idx++))
     done
 
-    # Check if stdin is a terminal
-    if [[ ! -t 0 ]]; then
-        log_info "Non-interactive mode: defaulting to nvim-malo"
+    # Check if we should skip interactive selection
+    # Skip in non-interactive mode or when stdin is not a terminal
+    if [[ "$INTERACTIVE" == "0" ]] || [[ ! -t 0 ]]; then
+        log_info "Defaulting to nvim-malo"
         local selected_key="malo"
         local selected_pkg="nvim-$selected_key"
         local config_dir="$SCRIPT_DIR/$selected_pkg"
@@ -1127,9 +1106,7 @@ main() {
     fi
 
     # Pause for confirmation (skip in lightweight mode)
-    if [[ "$INTERACTIVE" == "1" ]] && [[ "$DRY_RUN" == "0" ]] && [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
-        read -p "Press Enter to continue, or Ctrl+C to cancel..."
-    fi
+    # REMOVED: User already confirmed in the checkbox menu
 
     # Show status (skip in interactive or lightweight mode)
     if [[ "$INTERACTIVE" == "0" ]] && [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
