@@ -625,6 +625,14 @@ install_dev_tools() {
                     pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
 
+                # Check for Python venv module
+                if ! python3 -m venv --help >/dev/null 2>&1; then
+                    log_info "Python venv module not found, installing..."
+                    $sudo_prefix pacman -S --noconfirm python-virtualenv
+                else
+                    log_success "Python venv module is available"
+                fi
+
                 # Install hub (GitHub CLI tool)
                 if ! command_exists hub; then
                     if command_exists yay; then
@@ -673,6 +681,14 @@ install_dev_tools() {
                     pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
 
+                # Check for Python venv module
+                if ! python3 -m venv --help >/dev/null 2>&1; then
+                    log_info "Python venv module not found, installing..."
+                    $sudo_prefix apt-get install -y python3-venv
+                else
+                    log_success "Python venv module is available"
+                fi
+
                 # Install hub (GitHub CLI tool) - download from GitHub
                 if ! command_exists hub; then
                     log_info "Installing hub from GitHub releases..."
@@ -713,6 +729,14 @@ install_dev_tools() {
                 else
                     $sudo_prefix dnf install -y python3-pip
                     pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                fi
+
+                # Check for Python venv module
+                if ! python3 -m venv --help >/dev/null 2>&1; then
+                    log_info "Python venv module not found, installing..."
+                    $sudo_prefix dnf install -y python3-venv || log_warn "python3-venv not found, may be included in python3 package"
+                else
+                    log_success "Python venv module is available"
                 fi
 
                 # Install hub (GitHub CLI tool)
