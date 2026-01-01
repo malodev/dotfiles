@@ -32,6 +32,17 @@ fi
 set -eo pipefail  # Exit on error and pipe failures (no -u for associative arrays)
 
 #=============================================================================
+# ROOT USER CHECK
+#=============================================================================
+# Running as root is supported but requires caution
+if [[ $EUID -eq 0 ]]; then
+    log_warn "Running as root user"
+    log_info "This will install dotfiles for the root user account"
+    # Set HOME to /root if not set (for consistency)
+    HOME="${HOME:-/root}"
+fi
+
+#=============================================================================
 # CONFIGURATION
 #=============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -710,6 +721,12 @@ setup_stow() {
 
     log_info "Installing GNU Stow..."
 
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
     case "$DISTRO" in
         arch)
             if command_exists yay; then
@@ -717,15 +734,15 @@ setup_stow() {
             elif command_exists paru; then
                 paru -S --noconfirm stow
             else
-                sudo pacman -S --noconfirm stow
+                $sudo_prefix pacman -S --noconfirm stow
             fi
             ;;
         debian)
-            sudo apt-get update
-            sudo apt-get install -y stow
+            $sudo_prefix apt-get update
+            $sudo_prefix apt-get install -y stow
             ;;
         fedora)
-            sudo dnf install -y stow
+            $sudo_prefix dnf install -y stow
             ;;
         *)
             if [[ "$OS" == "Darwin" ]]; then
@@ -768,7 +785,32 @@ install_shell_color_scripts() {
 
     log_info "Installing shell-color-scripts..."
 
-    if [[ "$OS" == "Linux" ]] && ! sudo -n true 2>/dev/null; then
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
+    # Ensure build tools are installed on Linux
+    if [[ "$OS" == "Linux" ]] && ! command_exists make; then
+        log_info "Installing build tools (make)..."
+        if [[ "$DISTRO" == "debian" ]]; then
+            $sudo_prefix apt-get update -qq
+            $sudo_prefix apt-get install -y build-essential
+        elif [[ "$DISTRO" == "arch" ]]; then
+            if command_exists yay; then
+                yay -S --noconfirm base-devel
+            elif command_exists paru; then
+                paru -S --noconfirm base-devel
+            else
+                $sudo_prefix pacman -S --noconfirm base-devel
+            fi
+        elif [[ "$DISTRO" == "fedora" ]]; then
+            $sudo_prefix dnf install -y @development-tools
+        fi
+    fi
+
+    if [[ "$OS" == "Linux" ]] && [[ $EUID -ne 0 ]] && ! sudo -n true 2>/dev/null; then
         log_warn "sudo access required for colorscript installation"
         log_info "You may be prompted for your password"
     fi
@@ -784,9 +826,9 @@ install_shell_color_scripts() {
     cd shell-color-scripts
 
     if [[ "$OS" == "Linux" ]]; then
-        sudo make install 2>&1 | tee -a "$LOG_FILE"
+        $sudo_prefix make install 2>&1 | tee -a "$LOG_FILE"
         if [[ -d /usr/share/zsh/site-functions ]]; then
-            sudo cp completions/_colorscript /usr/share/zsh/site-functions 2>/dev/null || true
+            $sudo_prefix cp completions/_colorscript /usr/share/zsh/site-functions 2>/dev/null || true
         fi
     else
         make install 2>&1 | tee -a "$LOG_FILE"

@@ -198,6 +198,12 @@ detect_package_manager() {
 pm_install() {
     local packages=("$@")
 
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
     if is_macos && command_exists brew; then
         brew install "${packages[@]}"
     elif is_arch; then
@@ -206,14 +212,14 @@ pm_install() {
         elif command_exists paru; then
             paru -S --noconfirm "${packages[@]}"
         elif command_exists pacman; then
-            sudo pacman -S --noconfirm "${packages[@]}"
+            $sudo_prefix pacman -S --noconfirm "${packages[@]}"
         else
             log_error "No package manager found on Arch"
             return 1
         fi
     elif is_debian && command_exists apt-get; then
-        sudo apt-get update -qq
-        sudo apt-get install -y "${packages[@]}"
+        $sudo_prefix apt-get update -qq
+        $sudo_prefix apt-get install -y "${packages[@]}"
     else
         log_error "No package manager found"
         return 1
