@@ -32,6 +32,33 @@ fi
 set -eo pipefail  # Exit on error and pipe failures (no -u for associative arrays)
 
 #=============================================================================
+# CONFIGURATION
+#=============================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_FILE="/tmp/dotfiles_install_$(date +%Y%m%d_%H%M%S).log"
+ORIGINAL_DIR="$(pwd)"
+DRY_RUN=0
+INTERACTIVE=1
+
+#=============================================================================
+# SOURCE COMMON FUNCTIONS (must be early for log_* functions)
+#=============================================================================
+if [[ -f "$SCRIPT_DIR/scripts/common.sh" ]]; then
+    source "$SCRIPT_DIR/scripts/common.sh"
+else
+    # Fallback logging if common.sh is not available
+    log_info() { echo "[INFO] $1"; }
+    log_success() { echo "[SUCCESS] $1"; }
+    log_error() { echo "[ERROR] $1" >&2; }
+    log_warn() { echo "[WARN] $1"; }
+    log_dry_run() {
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "[DRY RUN] $1"
+        fi
+    }
+fi
+
+#=============================================================================
 # ROOT USER CHECK
 #=============================================================================
 # Running as root is supported but requires caution
@@ -41,15 +68,6 @@ if [[ $EUID -eq 0 ]]; then
     # Set HOME to /root if not set (for consistency)
     HOME="${HOME:-/root}"
 fi
-
-#=============================================================================
-# CONFIGURATION
-#=============================================================================
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="/tmp/dotfiles_install_$(date +%Y%m%d_%H%M%S).log"
-ORIGINAL_DIR="$(pwd)"
-DRY_RUN=0
-INTERACTIVE=1
 
 #=============================================================================
 # INSTALLATION GROUPS
@@ -151,24 +169,6 @@ has_group() {
     local group="$1"
     [[ -v "INSTALL_GROUPS[$group]" ]]
 }
-
-#=============================================================================
-# SOURCE COMMON FUNCTIONS
-#=============================================================================
-if [[ -f "$SCRIPT_DIR/scripts/common.sh" ]]; then
-    source "$SCRIPT_DIR/scripts/common.sh"
-else
-    # Fallback logging if common.sh is not available
-    log_info() { echo "[INFO] $1"; }
-    log_success() { echo "[SUCCESS] $1"; }
-    log_error() { echo "[ERROR] $1" >&2; }
-    log_warn() { echo "[WARN] $1"; }
-    log_dry_run() {
-        if [[ "$DRY_RUN" == "1" ]]; then
-            echo "[DRY RUN] $1"
-        fi
-    }
-fi
 
 #=============================================================================
 # UI HELPERS
