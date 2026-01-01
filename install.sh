@@ -556,6 +556,139 @@ install_homebrew_packages() {
 }
 
 #=============================================================================
+# DEVELOPER TOOLS (for Mason.nvim LSP servers)
+#=============================================================================
+install_dev_tools() {
+    if [[ "$(get_group_selection "dev")" != "1" ]]; then
+        return
+    fi
+
+    show_banner "Installing Developer Tools"
+
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
+    if [[ "$OS" == "Darwin" ]]; then
+        # On macOS, these are installed via Brewfile
+        log_info "Developer tools installed via Brewfile"
+    elif [[ "$OS" == "Linux" ]]; then
+        log_info "Installing developer tools for Linux..."
+
+        if [[ "$DRY_RUN" == "1" ]]; then
+            log_dry_run "  Would install: go, python3-pip, composer, unzip"
+            return 0
+        fi
+
+        case "$DISTRO" in
+            arch)
+                # Install go
+                if ! command_exists go; then
+                    if command_exists yay; then
+                        yay -S --noconfirm go
+                    elif command_exists paru; then
+                        paru -S --noconfirm go
+                    else
+                        $sudo_prefix pacman -S --noconfirm go
+                    fi
+                fi
+
+                # Install composer for PHP
+                if ! command_exists composer; then
+                    if command_exists yay; then
+                        yay -S --noconfirm composer
+                    elif command_exists paru; then
+                        paru -S --noconfirm composer
+                    else
+                        # Composer may need manual installation or php-composer package
+                        $sudo_prefix pacman -S --noconfirm php-composer 2>/dev/null || log_warn "Composer not found in repos, install manually"
+                    fi
+                fi
+
+                # Install unzip
+                if ! command_exists unzip; then
+                    $sudo_prefix pacman -S --noconfirm unzip
+                fi
+
+                # Install Python pip packages
+                if command_exists pip; then
+                    log_info "Installing Python packages: basedpyright, black, isort..."
+                    pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                else
+                    $sudo_prefix pacman -S --noconfirm python-pip
+                    pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                fi
+                ;;
+
+            debian)
+                # Update package list
+                $sudo_prefix apt-get update -qq
+
+                # Install go
+                if ! command_exists go; then
+                    $sudo_prefix apt-get install -y golang-go
+                fi
+
+                # Install composer for PHP
+                if ! command_exists composer; then
+                    # Download composer installer
+                    curl -sS https://getcomposer.org/installer | php
+                    if [[ -f composer.phar ]]; then
+                        $sudo_prefix mv composer.phar /usr/local/bin/composer
+                    fi
+                fi
+
+                # Install unzip
+                if ! command_exists unzip; then
+                    $sudo_prefix apt-get install -y unzip
+                fi
+
+                # Install Python pip packages
+                if command_exists pip3; then
+                    log_info "Installing Python packages: basedpyright, black, isort..."
+                    pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                else
+                    $sudo_prefix apt-get install -y python3-pip
+                    pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                fi
+                ;;
+
+            fedora)
+                # Install go
+                if ! command_exists go; then
+                    $sudo_prefix dnf install -y golang
+                fi
+
+                # Install composer for PHP
+                if ! command_exists composer; then
+                    $sudo_prefix dnf install -y composer
+                fi
+
+                # Install unzip
+                if ! command_exists unzip; then
+                    $sudo_prefix dnf install -y unzip
+                fi
+
+                # Install Python pip packages
+                if command_exists pip3; then
+                    log_info "Installing Python packages: basedpyright, black, isort..."
+                    pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                else
+                    $sudo_prefix dnf install -y python3-pip
+                    pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
+                fi
+                ;;
+
+            *)
+                log_warn "Developer tools installation not configured for $DISTRO"
+                ;;
+        esac
+    fi
+}
+
+#=============================================================================
 # PRESET MODES
 #=============================================================================
 apply_preset() {
@@ -1229,6 +1362,9 @@ main() {
     if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
         install_homebrew_packages
     fi
+
+    # Install developer tools for Mason
+    install_dev_tools
 
     # Install extras
     install_shell_color_scripts

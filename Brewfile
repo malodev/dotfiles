@@ -48,6 +48,9 @@ brew "jesseduffield/lazygit/lazygit"
 brew "node"
 brew "yarn"
 brew "deno"
+brew "go"
+brew "composer"
+brew "unzip"
 
 # Apps for Mac
 cask "visual-studio-code" if OS.mac?
