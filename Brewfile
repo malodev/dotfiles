@@ -30,6 +30,7 @@ brew "zoxide"
 brew "zsh"
 brew "nushell"
 brew "viu"
+brew "fastfetch"
 
 # Web tools
 brew "curl"

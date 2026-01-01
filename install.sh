@@ -1060,6 +1060,100 @@ install_shell_color_scripts() {
 }
 
 #=============================================================================
+# FASTFETCH SETUP
+#=============================================================================
+install_fastfetch() {
+    if [[ "$(get_group_selection "extras")" != "1" ]]; then
+        return
+    fi
+
+    # Skip if already installed
+    if command_exists fastfetch; then
+        log_success "fastfetch is already installed"
+        return 0
+    fi
+
+    # Skip on macOS (will be installed via Brewfile)
+    if [[ "$OS" == "Darwin" ]]; then
+        return 0
+    fi
+
+    # Skip on Linux if using Homebrew (installed via Brewfile)
+    if [[ "$OS" == "Linux" ]] && [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    log_dry_run "Would install fastfetch..."
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return 0
+    fi
+
+    log_info "Installing fastfetch..."
+
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
+    case "$DISTRO" in
+        arch)
+            # Install from AUR or prebuilt binary
+            if command_exists yay; then
+                yay -S --noconfirm fastfetch-git
+            elif command_exists paru; then
+                paru -S --noconfirm fastfetch-git
+            else
+                # Download prebuilt binary from GitHub
+                log_info "Installing fastfetch from GitHub releases..."
+                local fastfetch_dir="$HOME/.local/share/fastfetch"
+                mkdir -p "$fastfetch_dir"
+                curl -sL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
+                    -o "$fastfetch_dir/fastfetch" \
+                    && chmod +x "$fastfetch_dir/fastfetch" \
+                    && $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch \
+                    || log_warn "fastfetch installation failed"
+            fi
+            ;;
+        debian)
+            # Install from prebuilt binary
+            log_info "Installing fastfetch from GitHub releases..."
+            local fastfetch_dir="$HOME/.local/share/fastfetch"
+            mkdir -p "$fastfetch_dir"
+            curl -sL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
+                -o "$fastfetch_dir/fastfetch" \
+                && chmod +x "$fastfetch_dir/fastfetch" \
+                && $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch \
+                || log_warn "fastfetch installation failed"
+            ;;
+        fedora)
+            # Available in copr repo or prebuilt binary
+            if ! $sudo_prefix dnf install -y fastfetch 2>/dev/null; then
+                log_info "Installing fastfetch from GitHub releases..."
+                local fastfetch_dir="$HOME/.local/share/fastfetch"
+                mkdir -p "$fastfetch_dir"
+                curl -sL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" \
+                    -o "$fastfetch_dir/fastfetch" \
+                    && chmod +x "$fastfetch_dir/fastfetch" \
+                    && $sudo_prefix ln -sf "$fastfetch_dir/fastfetch" /usr/local/bin/fastfetch \
+                    || log_warn "fastfetch installation failed"
+            fi
+            ;;
+        *)
+            log_warn "fastfetch installation not configured for $DISTRO"
+            ;;
+    esac
+
+    # Verify installation
+    if command_exists fastfetch; then
+        log_success "fastfetch installed successfully"
+    else
+        log_warn "fastfetch installation may have failed (not found in PATH)"
+    fi
+}
+
+#=============================================================================
 # ZOXIDE SETUP
 #=============================================================================
 setup_zoxide() {
@@ -1447,6 +1541,9 @@ main() {
 
     # Install extras
     install_shell_color_scripts
+
+    # Install fastfetch
+    install_fastfetch
 
     # Install zoxide
     setup_zoxide
