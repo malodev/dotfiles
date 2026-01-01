@@ -54,18 +54,26 @@ return {
       if not ok then
         return
       end
+
+      -- Build ensure_installed list, conditionally including PHP tools
+      local ensure_installed = {
+        "tree-sitter-cli",
+        "shfmt",
+        "dprint",
+        "prettierd",
+        "prettier",
+        "black",
+        "isort",
+      }
+
+      -- Only add PHP tools if PHP is installed
+      if vim.fn.executable("php") == 1 then
+        table.insert(ensure_installed, "pint")
+        table.insert(ensure_installed, "php-cs-fixer")
+      end
+
       mason_tool_installer.setup({
-        ensure_installed = {
-          "tree-sitter-cli",
-          "shfmt",
-          "dprint",
-          "prettierd",
-          "prettier",
-          "black",
-          "isort",
-          "pint",
-          "php-cs-fixer",
-        },
+        ensure_installed = ensure_installed,
       })
     end,
   },
