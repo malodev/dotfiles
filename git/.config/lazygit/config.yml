@@ -18,16 +18,19 @@ keybinding:
   universal:
     return: <esc>
 gui:
+  useHunkModeInStagingView: false
+
   theme:
     activeBorderColor:
       - "#cba6f7"
       - bold
     inactiveBorderColor:
-      - "#a6adc8"
+      - "#F4C1E6"
     optionsTextColor:
       - "#89b4fa"
     selectedLineBgColor:
-      - "#7F839C"
+      - reverse
+      - "#04a5e5"
     cherryPickedCommitBgColor:
       - "#45475a"
     cherryPickedCommitFgColor:
