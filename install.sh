@@ -936,28 +936,38 @@ setup_starship() {
         sudo_prefix="sudo"
     fi
 
-    # Debian/Ubuntu - install via apt
+    local install_success=0
+
+    # Debian/Ubuntu - try apt first, fall back to curl script
     if [[ "$DISTRO" == "debian" ]]; then
-        $sudo_prefix apt-get update -qq
-        $sudo_prefix apt-get install -y starship
+        # Try apt install first (available in Ubuntu 22.04+ and Debian 12+)
+        if $sudo_prefix apt-get update -qq 2>/dev/null; then
+            if $sudo_prefix apt-get install -y starship 2>/dev/null; then
+                install_success=1
+            fi
+        fi
+
+        # Fall back to curl install script if apt failed
+        if [[ $install_success -eq 0 ]]; then
+            log_info "apt install failed, using official install script..."
+            curl -sS https://starship.rs/install.sh | sh -s -- --bin "$HOME/.local/bin"
+            export PATH="$HOME/.local/bin:$PATH"
+        fi
     # Arch - install via pacman or yay
     elif [[ "$DISTRO" == "arch" ]]; then
         if command_exists yay; then
-            yay -S --noconfirm starship
+            yay -S --noconfirm starship && install_success=1
         elif command_exists paru; then
-            paru -S --noconfirm starship
+            paru -S --noconfirm starship && install_success=1
         else
-            $sudo_prefix pacman -S --noconfirm starship
+            $sudo_prefix pacman -S --noconfirm starship && install_success=1
         fi
     # Fedora - install via dnf
     elif [[ "$DISTRO" == "fedora" ]]; then
-        $sudo_prefix dnf install -y starship
-    else
-        # Fallback to install script for other distros
-        curl -sS https://starship.rs/install.sh | sh -s -- --bin "$HOME/.local/bin"
-        export PATH="$HOME/.local/bin:$PATH"
+        $sudo_prefix dnf install -y starship && install_success=1
     fi
 
+    # Verify installation
     if command_exists starship; then
         log_success "starship installed successfully"
     else
