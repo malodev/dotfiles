@@ -15,8 +15,8 @@ sbar.add("event", "media_change")
 
 -- 1. Bar Configuration
 sbar.bar({
-  height = 65,         -- Width (since bar is vertical)
-  position = "right",  -- Vertical Layout
+  height = 65, -- Width (since bar is vertical)
+  position = "right", -- Vertical Layout
   y_offset = 26,
   margin = 10,
   corner_radius = 9,
@@ -26,7 +26,7 @@ sbar.bar({
   color = colors.transparent,
   shadow = true,
   sticky = true,
-  topmost = true,
+  topmost = false,
 })
 
 -- 2. Default Item Settings
@@ -63,8 +63,8 @@ sbar.default({
       border_color = colors.popup.border,
       color = colors.popup.bg,
       shadow = { drawing = true },
-    }
-  }
+    },
+  },
 })
 
 -- 3. Load Modules (Order matters: Top -> Bottom)
@@ -84,7 +84,6 @@ require("items.cpu")
 
 -- Bottom Section
 require("items.widgets") -- Battery, Clock
-
 
 sbar.end_config()
 
