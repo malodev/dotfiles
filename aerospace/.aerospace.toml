@@ -221,7 +221,7 @@ alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
 alt-shift-semicolon = 'mode service'
 alt-shift-enter = 'mode apps'
 
-alt-t = 'exec-and-forget open -a /Applications/Telegram.app'
+# alt-t = 'exec-and-forget open -a /Applications/Telegram.app'
 alt-p = 'exec-and-forget open -a /Applications/1Password.app'
 alt-c = 'exec-and-forget open -a /Applications/Google Chrome.app'
 alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
