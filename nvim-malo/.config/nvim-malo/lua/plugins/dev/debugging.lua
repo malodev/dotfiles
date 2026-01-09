@@ -1,0 +1,135 @@
+-- Debugging: DAP configuration
+return {
+	{
+		"mfussenegger/nvim-dap",
+		dependencies = {
+			"theHamsta/nvim-dap-virtual-text",
+			"nvim-neotest/nvim-nio",
+			{
+				"rcarriga/nvim-dap-ui",
+				keys = {
+					{
+						"<leader>du",
+						function()
+							require("dapui").toggle()
+						end,
+						desc = "Toggle DAP UI",
+					},
+				},
+				config = function(_, opts)
+					require("dapui").setup(opts)
+				end,
+			},
+			"nvim-telescope/telescope-dap.nvim",
+			"leoluz/nvim-dap-go",
+		},
+		keys = {
+			{ "<leader>db", function()
+				require("dap").toggle_breakpoint()
+			end, desc = "Toggle breakpoint" },
+			{ "<leader>dc", function()
+				require("dap").continue()
+			end, desc = "Debug continue" },
+		},
+		config = function()
+			local ok_dap, dap = pcall(require, "dap")
+			local ok_dapui, dapui = pcall(require, "dapui")
+			local ok_dapgo = pcall(require, "dap-go")
+			if not ok_dap or not ok_dapui then
+				return
+			end
+			if ok_dapgo then
+				require("dap-go").setup()
+			end
+
+			dap.listeners.before.attach.dapui_config = function()
+				dapui.open()
+			end
+			dap.listeners.before.launch.dapui_config = function()
+				dapui.open()
+			end
+			dap.listeners.before.event_terminated.dapui_config = function()
+				dapui.close()
+			end
+			dap.listeners.before.event_exited.dapui_config = function()
+				dapui.close()
+			end
+
+			dap.adapters.python = {
+				type = "executable",
+				command = "python",
+				args = { "-m", "debugpy.adapter" },
+			}
+			dap.configurations.python = {
+				{
+					type = "python",
+					request = "launch",
+					name = "Launch file",
+					program = "${file}",
+					pythonPath = function()
+						local cwd = vim.fn.getcwd()
+						if vim.fn.executable(cwd .. "/.venv/bin/python") == 1 then
+							return cwd .. "/.venv/bin/python"
+						else
+							return "python"
+						end
+					end,
+				},
+			}
+			dap.adapters.node2 = {
+				type = "executable",
+				command = "node",
+				args = { os.getenv("HOME") .. "/.local/share/nvim/mason/packages/node-debug2-adapter/out/src/nodeDebug.js" },
+			}
+			dap.configurations.javascript = {
+				{
+					name = "Launch",
+					type = "node2",
+					request = "launch",
+					program = "${file}",
+					cwd = vim.fn.getcwd(),
+					sourceMaps = true,
+					protocol = "inspector",
+					console = "integratedTerminal",
+				},
+				{
+					name = "Attach to process",
+					type = "node2",
+					request = "attach",
+					processId = require("dap.utils").pick_process,
+				},
+			}
+
+			dap.adapters.delve = {
+				type = "server",
+				port = "${port}",
+				executable = {
+					command = "dlv",
+					args = { "dap", "-l", "127.0.0.1:${port}" },
+				},
+			}
+			dap.configurations.go = {
+				{
+					type = "delve",
+					name = "Debug",
+					request = "launch",
+					program = "${file}",
+				},
+				{
+					type = "delve",
+					name = "Debug test",
+					request = "launch",
+					mode = "test",
+					program = "${file}",
+				},
+				{
+					type = "delve",
+					name = "Debug test (go.mod)",
+					request = "launch",
+					mode = "test",
+					program = "./${relativeFileDirname}",
+				},
+			}
+		end,
+	},
+}
