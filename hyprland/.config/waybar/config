@@ -58,6 +58,7 @@
 		"custom/separator#dot-line",
 		"idle_inhibitor",	
     "custom/hyprpicker",
+    "custom/calc",
 		"custom/update",	
 		],
 	

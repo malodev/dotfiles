@@ -24,7 +24,12 @@
 	"tooltip": true,
 	"tooltip-format": "Hyprpicker",
 },
-
+"custom/calc": {
+	"format": "",
+	"on-click": "rofi -show calc -modi calc -no-show-match -no-sort",
+	"tooltip": true,
+	"tooltip-format": "Calculator"
+},
 "custom/file_manager": {
 	"format": " ",
 	"on-click": "$HOME/.config/hypr/scripts/WaybarScripts.sh --files",
