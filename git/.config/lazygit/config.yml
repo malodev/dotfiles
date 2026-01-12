@@ -5,21 +5,19 @@ customCommands:
     context: "files"
     loadingText: "opening commitizen commit tool"
     output: terminal
-
-# Remote model, e.g. OpenRouter / OpenAI / Msty – whatever you configured as "my-remote"
+    # Remote model, e.g. OpenRouter / OpenAI / Msty – whatever you configured as "my-remote"
   - key: '<c-a>'
     description: 'AI commit'
     context: 'files'
     command: 'ai-commit'
     loadingText: 'Generating commit message with remote model...'
-
-    # for nvim terminal integration
+    output: terminal
+# for nvim terminal integration
 keybinding:
   universal:
     return: <esc>
 gui:
   useHunkModeInStagingView: false
-
   theme:
     activeBorderColor:
       - "#cba6f7"
