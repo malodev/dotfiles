@@ -22,9 +22,34 @@ return {
     -- Open parent directory in floating window
     vim.keymap.set(
       "n",
-      "<leader>fl",
+      "<leader>fm",
       require("oil").toggle_float,
       { desc = "Oil: Open parent directory in floating window" }
     )
   end,
+
+  -- Yazi: File manager integration
+  {
+    "mikavilpas/yazi.nvim",
+    event = "VeryLazy",
+    keys = {
+      {
+        "<leader>fy",
+        function()
+          require("yazi").yazi()
+        end,
+        desc = "Open yazi",
+      },
+      {
+        "_",
+        function()
+          require("yazi").yazi()
+        end,
+        desc = "Open yazi",
+      },
+    },
+    opts = {
+      open_for_directories = false,
+    },
+  },
 }
