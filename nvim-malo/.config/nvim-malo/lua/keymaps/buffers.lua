@@ -10,7 +10,7 @@ map("n", "<leader>bb", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
 map("n", "<leader>`", "<cmd>e #<cr>", { desc = "Switch to Other Buffer" })
 
 -- Close buffer
-map("n", "<C-x>", ":bd<CR>", { desc = "Close current buffer" })
+map("n", "<C-q>", ":bd<CR>", { desc = "Close current buffer" })
 
 -- Buffer delete actions
 map("n", "<leader>bf", ":lua delete_current_file()<CR>", { desc = "Delete current file and close the buffer" })
@@ -22,11 +22,11 @@ map("n", "<leader>bD", "<cmd>bd<cr>", { desc = "Delete Buffer and Window" })
 
 -- Snacks buffer delete
 map("n", "<leader>bd", function()
-	Snacks.bufdelete()
+  Snacks.bufdelete()
 end, { desc = "Delete Buffer" })
 map("n", "<leader>ba", function()
-	Snacks.bufdelete.all()
+  Snacks.bufdelete.all()
 end, { desc = "Delete All Buffer" })
 map("n", "<leader>bo", function()
-	Snacks.bufdelete.other()
+  Snacks.bufdelete.other()
 end, { desc = "Delete Other Buffer" })
