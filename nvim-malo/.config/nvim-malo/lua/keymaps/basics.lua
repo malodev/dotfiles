@@ -2,7 +2,7 @@
 local map = require("keymaps.util").safe_keymap_set
 local opts = { noremap = true, silent = true }
 local function tc(t1, t2)
-	return vim.tbl_extend("force", t1, t2)
+  return vim.tbl_extend("force", t1, t2)
 end
 
 -- Leader key
@@ -23,20 +23,19 @@ map("n", "L", "$", tc(opts, { desc = "L goes to the end of line" }))
 
 -- Clear search and stop snippet on escape
 local function snippet_stop()
-	if vim.snippet then
-		vim.snippet.stop()
-	end
+  if vim.snippet then
+    vim.snippet.stop()
+  end
 end
 
 map({ "i", "n", "s" }, "<esc>", function()
-	vim.cmd("noh")
-	snippet_stop()
-	return "<esc>"
+  vim.cmd("noh")
+  snippet_stop()
+  return "<esc>"
 end, { expr = true, desc = "Escape and Clear hlsearch" })
 
 -- Clear search term when centering the cursor
-opts["desc"] = "Clear search term when centering the cursor"
-map("n", "zz", "zz:noh<CR>", opts)
+map("n", "zz", "zz:noh<CR>", { desc = "Clear search term when centering the cursor" })
 
 -- Resize window using '<ctrl>+arrow keys'
 map("n", "<C-Up>", "<cmd>resize +2<cr>", { desc = "Increase Window Height" })
@@ -60,12 +59,12 @@ map("n", "<D-s>", ":w<CR>", { desc = "Save current buffer" })
 map("i", "<D-s>", "<Esc>:w<CR>", { desc = "Save current buffer" })
 
 -- Select all
-map("n", "<C-a>", "ggVG", opts)
-map("v", "<C-a>", "ggVG", tc(opts, { desc = "Select all" }))
+map("n", "<C-a>", "ggVG", { desc = "Select all" })
+map("v", "<C-a>", "ggVG", { desc = "Select all" })
 
 -- Search movement keeps cursor in middle
-map("n", "n", "nzzzv", opts)
-map("n", "N", "Nzzzv", opts)
+map("n", "n", "nzzzv", { desc = "Next Search Result" })
+map("n", "N", "Nzzzv", { desc = "Prev Search Result" })
 
 -- Saner behavior of n and N
 map("n", "n", "'Nn'[v:searchforward].'zv'", { expr = true, desc = "Next Search Result" })
@@ -90,33 +89,33 @@ map("n", "gcO", "O<esc>Vcx<esc><cmd>normal gcc<cr>fxa<bs>", { desc = "Add Commen
 
 -- Surround composition keymap (React interpolation)
 map(
-	"n",
-	"<leader>c`",
-	'<Plug>(nvim-surround-change)"`<Plug>(nvim-surround-normal)a`{',
-	{ desc = "React: change string to interpolation" }
+  "n",
+  "<leader>c`",
+  '<Plug>(nvim-surround-change)"`<Plug>(nvim-surround-normal)a`{',
+  { desc = "React: change string to interpolation" }
 )
 
 -- Alt quote change text between quotes
-map("n", "<A-'>", 'ci"', tc(opts, { desc = "Change text between quotes" }))
+map("n", "<A-'>", 'ci"', { desc = "Change text between quotes" })
 
 -- Slugify the line
 map("n", "<leader>ms", "!!slugify<CR>", tc(opts, { desc = "Slugify the line" }))
 
 -- Replace current word
-map("n", "<leader>ss", [[:%s/<C-r><C-w>/<C-r><C-w>/gI<Left><Left><Left>]], tc(opts, { desc = "Search and replace current word" }))
+map("n", "<leader>ss", [[:%s/<C-r><C-w>/<C-r><C-w>/gI<Left><Left><Left>]], { desc = "Search and replace current word" })
 
 -- Delete current file function
 function _G.delete_current_file()
-	local file = vim.fn.expand("%")
-	local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
+  local file = vim.fn.expand("%")
+  local confirm = vim.fn.confirm("Do you really want to delete " .. file .. "?", "&Yes\n&No", 2)
 
-	if confirm == 1 then
-		os.remove(file)
-		vim.api.nvim_command("bdelete!")
-		print("File deleted: " .. file)
-	else
-		print("Operation cancelled.")
-	end
+  if confirm == 1 then
+    os.remove(file)
+    vim.api.nvim_command("bdelete!")
+    print("File deleted: " .. file)
+  else
+    print("Operation cancelled.")
+  end
 end
 
 -- New file
@@ -189,4 +188,9 @@ map("n", "<F5>", vim.cmd.UndotreeToggle, opts)
 map("n", "<leader>K", "<cmd>norm! K<cr>", { desc = "Lookup the keyword under the cursor" })
 
 -- Redraw / Clear hlsearch / Diff Update
-map("n", "<leader>ur", "<Cmd>nohlsearch<Bar>diffupdate<Bar>normal! <C-L><CR>", { desc = "Redraw / Clear hlsearch / Diff Update" })
+map(
+  "n",
+  "<leader>ur",
+  "<Cmd>nohlsearch<Bar>diffupdate<Bar>normal! <C-L><CR>",
+  { desc = "Redraw / Clear hlsearch / Diff Update" }
+)

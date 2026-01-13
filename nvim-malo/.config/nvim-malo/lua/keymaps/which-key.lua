@@ -86,4 +86,18 @@ if not vim.g.vscode then
 			},
 		},
 	})
+
+	wk.add({
+		{ "<leader>uh", function()
+			local clients = vim.lsp.get_active_clients({ name = "harper_ls" })
+			if #clients > 0 then
+				vim.notify("Harper LS will auto-start on next file open", vim.log.levels.INFO)
+			else
+				for _, client in ipairs(clients) do
+					vim.lsp.stop_client(client.id)
+				end
+				vim.notify("Harper LS stopped", vim.log.levels.INFO)
+			end
+		end, desc = "Toggle Harper LS" },
+	})
 end
