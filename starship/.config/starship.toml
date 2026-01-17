@@ -1,7 +1,7 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 palette = "catppuccin_mocha"
 # right_format = """$battery $time"""
-format = """$os $username$hostname $directory $git_branch $git_status
+format = """$os $username${custom.hostname_local}${custom.hostname_ssh} $directory $git_branch $git_status
 $character"""
 command_timeout = 5000
 # Starship modules
@@ -236,10 +236,25 @@ symbol = " "
 symbol = " "
 
 [hostname]
-ssh_only = false
-ssh_symbol = " "
-style = "surface2"
-format='[$ssh_symbol$hostname]($style) '
+disabled=true
+# ssh_only = false
+# ssh_symbol = " "
+# style_os = "surface2"
+# format='[$ssh_symbol$hostname]($style) '
+
+# Show this module ONLY when NOT in SSH
+[custom.hostname_local]
+command = "hostname" 
+when = '[ -z "$SSH_CONNECTION" ]' # Triggers if the variable is empty
+style = "bold #595B71"
+format = "[$output]($style) "
+
+# Show this module ONLY when in SSH
+[custom.hostname_ssh]
+command = "hostname"
+when = '[ -n "$SSH_CONNECTION" ]' # Triggers if the variable is NOT empty
+style = "bold red"
+format = "[$output]($style) "
 
 [java]
 symbol = " "
