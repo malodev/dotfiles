@@ -14,3 +14,4 @@ zed/.config/zed/prompts
 sketchybar/.config/sketchybar-ai-old
 sketchybar/.config/sketchybar-old
 sketchybar/.config/sketchybar-new
+__pycache__
