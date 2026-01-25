@@ -299,7 +299,8 @@
 	"max-length": 24,
 	"format-icons": [
 		"󰤯", "󰤟", "󰤢", "󰤥", "󰤨"
-	]
+	],
+  "on-click": "nm-connection-editor"
 },
 
 "power-profiles-daemon": {
