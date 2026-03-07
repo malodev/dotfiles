@@ -223,12 +223,12 @@ alt-shift-enter = 'mode apps'
 
 # alt-t = 'exec-and-forget open -a /Applications/Telegram.app'
 alt-p = 'exec-and-forget open -a /Applications/1Password.app'
-alt-c = 'exec-and-forget open -a /Applications/Google Chrome.app'
-alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
-alt-g = 'exec-and-forget open -a /Applications/GIMP.app'
-alt-y = 'exec-and-forget open -a /Applications/kitty.app'
+#alt-c = 'exec-and-forget open -a /Applications/Google Chrome.app'
+#alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
+#alt-g = 'exec-and-forget open -a /Applications/GIMP.app'
+#alt-y = 'exec-and-forget open -a /Applications/kitty.app'
 alt-e = 'exec-and-forget open -a /Applications/ExcalidrawZ.app'
-alt-q = 'exec-and-forget open -a /System/Applications/QuickTime Player.app'
+#alt-q = 'exec-and-forget open -a /System/Applications/QuickTime Player.app'
 
 
 # 'service' binding mode declaration.
