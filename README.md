@@ -3,6 +3,17 @@
 <!--toc:start-->
 
 - [dotfiles](#dotfiles)
+  - [Installation](#installation)
+    - [Quick Start](#quick-start)
+    - [Usage Modes](#usage-modes)
+    - [Installation Groups](#installation-groups)
+    - [What It Does](#what-it-does)
+    - [Package Installation by Platform](#package-installation-by-platform)
+    - [Binary Installation Reference](#binary-installation-reference)
+      - [Not Installed by the Script](#not-installed-by-the-script)
+    - [Manual Stow vs Install Script](#manual-stow-vs-install-script)
+    - [Requirements](#requirements)
+    - [Manual Installation with Stow (configs only)](#manual-installation-with-stow-configs-only)
   - [Inspiration](#inspiration)
   <!--toc:end-->
 
@@ -10,29 +21,194 @@ Clone the repo using:
 
 ```sh
 git clone https://github.com/malodev/dotfiles ~/.dotfiles
+cd ~/.dotfiles
 ```
 
-The configuration files in this repo are using [GNU Stow](https://www.gnu.org/software/stow/)
+## Installation
 
-To install all of them use
+### Quick Start
+
+Run the interactive installer:
 
 ```sh
-stow *
+./install.sh
 ```
 
-in the `~/.dotfiles` dir
+This launches an interactive menu where you can select which groups of configurations to install.
 
-To install just one package:
+### Usage Modes
 
 ```sh
+./install.sh                  # Interactive menu (default)
+./install.sh --dry-run        # Preview what would be installed
+./install.sh --list-groups    # List available groups
+./install.sh shell editor     # Install specific groups
+./install.sh --minimal        # Preset: core + shell only
+./install.sh --standard       # Preset: core + shell + editor + terminal
+./install.sh --full           # Preset: everything
+./install.sh --with-brew      # Enable Homebrew on Linux
+```
+
+Flags can be combined, e.g. `./install.sh --dry-run --minimal` to preview a minimal install.
+
+### Installation Groups
+
+| Group      | Packages                                              | Notes        |
+| ---------- | ----------------------------------------------------- | ------------ |
+| `core`     | GNU Stow                                              | Always installed |
+| `shell`    | Bash, Zsh, Starship, Nushell                          |              |
+| `editor`   | nvim-malo, nvim-lazy, nvim-test, nvim-php, nvim-astro |              |
+| `terminal` | Kitty, Tmux                                           |              |
+| `desktop`  | SketchyBar, AeroSpace, Borders                        | macOS only   |
+| `linux`    | i3                                                    | Linux only   |
+| `dev`      | Git, Lazygit                                          |              |
+| `extras`   | Shell color scripts                                   |              |
+
+You can also install individual packages directly: `./install.sh bash zsh nvim-malo`
+
+### What It Does
+
+The install script does more than just symlink configs — it also installs the underlying packages and binaries:
+
+1. **Detects your OS** (macOS, Arch Linux, Ubuntu/Debian, Fedora)
+2. **Installs the package manager** and system packages (see [Package Installation by Platform](#package-installation-by-platform))
+3. **Installs CLI tools** — fzf, ripgrep, bat, fd, lsd, jq, yazi, curl, wget, etc.
+4. **Installs shell/terminal tools** — zsh, tmux, kitty, carapace, starship, zoxide
+5. **Installs Neovim + editor dependencies** — neovim, build tools (make, gcc), nodejs, npm, yarn, luarocks, python-pynvim, tree-sitter-cli
+6. **Installs dev tools** — git, gh, git-delta, lazygit, go, deno, pip, composer, hub
+7. **Symlinks config files** to your home directory using GNU Stow
+8. **Sets up the default Neovim config** (`nvim-malo`) with an interactive selector
+
+### Package Installation by Platform
+
+#### macOS
+
+On macOS, **Homebrew** is the primary package manager. The script installs Homebrew if missing, then runs `brew bundle` from the [Brewfile](Brewfile) to install all CLI tools, apps, and fonts.
+
+#### Linux
+
+On Linux, **the native package manager is preferred** — the script uses `pacman` (Arch), `apt` (Debian/Ubuntu), or `dnf` (Fedora) to install packages directly. Homebrew is **not used on Linux by default**. If you pass `--with-brew`, the script will install and use Homebrew on Linux as well, but this is opt-in only.
+
+For tools not available in the system repos, the script falls back to official install scripts or prebuilt binaries from GitHub releases (e.g., lazygit, git-delta, deno on Debian/Ubuntu).
+
+> On Arch Linux, `yay` or `paru` are used when available as AUR helpers, falling back to `pacman` for official repos.
+
+### Binary Installation Reference
+
+The following tables show how each tool is installed per platform. On macOS, most tools come from the [Brewfile](Brewfile). On Linux, the native package manager is always preferred.
+
+#### Core (always installed)
+
+| Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
+| ---- | ----- | ---------- | ------------- | ------ |
+| **GNU Stow** | `brew install` | `pacman -S stow` | `apt-get install stow` | `dnf install stow` |
+
+#### CLI Tools (installed automatically)
+
+| Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
+| ---- | ----- | ---------- | ------------- | ------ |
+| **fzf** | Brewfile | `pacman -S fzf` | `apt-get install fzf` | `dnf install fzf` |
+| **ripgrep** | Brewfile | `pacman -S ripgrep` | `apt-get install ripgrep` | `dnf install ripgrep` |
+| **bat** | Brewfile | `pacman -S bat` | `apt-get install bat` | `dnf install bat` |
+| **fd** | Brewfile | `pacman -S fd` | `apt-get install fd-find` | `dnf install fd-find` |
+| **lsd** | Brewfile | `pacman -S lsd` | Not in repos | `dnf install lsd` |
+| **jq** | Brewfile | `pacman -S jq` | `apt-get install jq` | `dnf install jq` |
+| **yazi** | Brewfile | AUR (`yay -S yazi`) | Not in repos | Not in repos |
+| **gdu** | Brewfile | `pacman -S gdu` | Not in repos | Not in repos |
+| **bottom** | Brewfile | `pacman -S bottom` | Not in repos | Not in repos |
+| **procs** | Brewfile | `pacman -S procs` | Not in repos | Not in repos |
+| **curl, wget** | Brewfile | `pacman -S curl wget` | `apt-get install curl wget` | `dnf install curl wget` |
+| **ffmpeg** | Brewfile | `pacman -S ffmpeg` | `apt-get install ffmpeg` | `dnf install ffmpeg` |
+| **imagemagick** | Brewfile | `pacman -S imagemagick` | `apt-get install imagemagick` | `dnf install ImageMagick` |
+
+> Tools marked "Not in repos" on Debian/Ubuntu or Fedora will show a warning. Use `--with-brew` or install them manually.
+
+#### Shell & Terminal (shell/terminal groups)
+
+| Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
+| ---- | ----- | ---------- | ------------- | ------ |
+| **zsh** | Brewfile | `pacman -S zsh` | `apt-get install zsh` | `dnf install zsh` |
+| **tmux** | Brewfile | `pacman -S tmux` | `apt-get install tmux` | `dnf install tmux` |
+| **kitty** | Brewfile (cask) | `pacman -S kitty` | `apt-get install kitty` | `dnf install kitty` |
+| **carapace** | Brewfile | AUR (`yay -S carapace-bin`) | Not in repos | Not in repos |
+| **Starship** | Brewfile | `pacman -S starship` | `apt-get install` or `curl -sS https://starship.rs/install.sh \| sh` | `dnf install starship` |
+| **Zoxide** | Brewfile | `pacman -S zoxide` | `curl -sSfL .../zoxide/.../install.sh \| sh` | `dnf install zoxide` |
+
+#### Editor — Neovim & Dependencies (editor group)
+
+| Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
+| ---- | ----- | ---------- | ------------- | ------ |
+| **Neovim** | Brewfile | `pacman -S neovim` | `apt-get install neovim` (warns if < 0.9) | `dnf install neovim` |
+| **Build tools** (make, gcc) | Brewfile | `pacman -S base-devel cmake` | `apt-get install build-essential cmake` | `dnf install gcc gcc-c++ make cmake` |
+| **Node.js + npm** | Brewfile | `pacman -S nodejs npm` | `apt-get install nodejs npm` | `dnf install nodejs npm` |
+| **Yarn** | Brewfile | `pacman -S yarn` | `npm install -g yarn` | `npm install -g yarn` |
+| **Luarocks** | Brewfile | `pacman -S luarocks` | `apt-get install luarocks` | `dnf install luarocks` |
+| **python-pynvim** | Brewfile | `pacman -S python-pynvim` | `apt-get install python3-pynvim` | `dnf install python3-pynvim` |
+| **tree-sitter-cli** | Brewfile | `npm install -g tree-sitter-cli` | `npm install -g tree-sitter-cli` | `npm install -g tree-sitter-cli` |
+
+> Mason (Neovim plugin) automatically downloads LSP servers, formatters, and linters (lua-language-server, prettierd, stylua, shfmt, etc.) on first use. The tools above are the **system-level dependencies** that Mason and Neovim plugins need to function.
+
+#### Dev Tools (dev group)
+
+| Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
+| ---- | ----- | ---------- | ------------- | ------ |
+| **Git** | Brewfile | `pacman -S git` | `apt-get install git` | `dnf install git` |
+| **GitHub CLI (gh)** | Brewfile | `pacman -S github-cli` | Official apt repo | `dnf install gh` |
+| **git-delta** | Brewfile | `pacman -S git-delta` | GitHub release `.deb` | `dnf install git-delta` |
+| **Lazygit** | Brewfile | AUR (`yay -S lazygit`) | GitHub release binary | `dnf copr` repo |
+| **Go** | Brewfile | `pacman -S go` | `apt-get install golang-go` | `dnf install golang` |
+| **Deno** | Brewfile | Official installer (`deno.land`) | Official installer (`deno.land`) | Official installer (`deno.land`) |
+| **Python pip** | Brewfile | `pacman -S python-pip` | `apt-get install python3-pip` | `dnf install python3-pip` |
+| **Python venv** | Brewfile | `pacman -S python-virtualenv` | `apt-get install python3.x-venv` | `dnf install python3-venv` |
+| **Composer** | Brewfile | `pacman -S php-composer` | Official installer (`getcomposer.org`) | `dnf install composer` |
+| **Hub** | Brewfile | AUR (`yay -S hub`) | GitHub release binary | `dnf install hub` |
+| **Python packages** (basedpyright, black, isort) | Brewfile | `pip install --user` | `pip3 install --user` | `pip3 install --user` |
+
+#### Extras (extras group)
+
+| Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
+| ---- | ----- | ---------- | ------------- | ------ |
+| **Fastfetch** | Brewfile | AUR (`yay -S fastfetch-git`) or GitHub binary | GitHub release binary | `dnf install fastfetch` |
+| **Shell color scripts** | `make install` (from source) | `make install` (from source) | `make install` (from source) | `make install` (from source) |
+
+#### Not Installed by the Script
+
+The following are only available via the Brewfile (macOS or `--with-brew`):
+
+| Category | Tools |
+| -------- | ----- |
+| macOS apps | `visual-studio-code`, `karabiner-elements`, `aerospace`, `amethyst`, `sketchybar`, `borders` |
+| Fonts | `font-hack-nerd-font`, `font-sketchybar-app-font` |
+| Misc | `utf8proc`, `git-lfs`, `git-credential-libsecret`, `reattach-to-user-namespace`, `vscode-langservers-extracted`, `nushell`, `urlview`, `w3m`, `lynx`, `viu` |
+
+### Manual Stow vs Install Script
+
+> **Important:** Running `stow` manually **only creates symlinks** for configuration files. It does **not** install any packages or binaries. If you use manual stow, you are responsible for installing the tools yourself (e.g., Neovim, Starship, Kitty, fzf, ripgrep, etc.).
+>
+> The `install.sh` script handles both — it installs the required software **and** symlinks the configs.
+
+### Requirements
+
+- **Bash 4.0+** is required (for associative array support)
+- macOS ships with Bash 3.x — install a newer version first: `brew install bash`
+- Then run: `/opt/homebrew/bin/bash ./install.sh`
+
+### Manual Installation with Stow (configs only)
+
+If you already have the required tools installed and just want to symlink the config files, you can use [GNU Stow](https://www.gnu.org/software/stow/) directly:
+
+```sh
+# Symlink all configs
+stow */
+
+# Symlink a specific package's config
 stow <package_name>
+
+# Example: symlink just the Neovim config
+stow nvim-malo
 ```
 
-For example, to just symlink nvim config
-
-```sh
-stow nvim
-```
+Run these from the `~/.dotfiles` directory. This **only creates symlinks** — no packages or binaries are installed.
 
 ## Inspiration
 
