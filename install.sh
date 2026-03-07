@@ -169,7 +169,6 @@ has_group() {
     local group="$1"
     [[ -v "INSTALL_GROUPS[$group]" ]]
 }
-echo "CHECK IF ECHO WORKS HERE"
 #=============================================================================
 # UI HELPERS
 #=============================================================================
@@ -556,6 +555,261 @@ install_homebrew_packages() {
 }
 
 #=============================================================================
+# LINUX PACKAGE INSTALLATION (when not using Homebrew)
+#=============================================================================
+# These functions install system packages on Linux using the native package
+# manager. On macOS (or Linux with --with-brew), the Brewfile handles these.
+
+# Helper: install packages only on Linux without Homebrew
+# Skips if on macOS, or if --with-brew was passed (Brewfile handles it)
+_linux_pkg_install() {
+    local description="$1"
+    shift
+    local packages=("$@")
+
+    # Skip on macOS (Brewfile handles it)
+    if [[ "$OS" == "Darwin" ]]; then
+        return 0
+    fi
+
+    # Skip on Linux if using Homebrew (Brewfile handles it)
+    if [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    # Filter out already-installed packages
+    local to_install=()
+    for pkg in "${packages[@]}"; do
+        # Map package name to command name for common mismatches
+        local cmd="$pkg"
+        case "$pkg" in
+            golang-go|golang) cmd="go" ;;
+            python3-pip) cmd="pip3" ;;
+            python-pip) cmd="pip" ;;
+            base-devel|build-essential) cmd="make" ;;
+            nodejs|node) cmd="node" ;;
+        esac
+        if ! command_exists "$cmd"; then
+            to_install+=("$pkg")
+        fi
+    done
+
+    if [[ ${#to_install[@]} -eq 0 ]]; then
+        log_success "$description: all packages already installed"
+        return 0
+    fi
+
+    log_info "$description: installing ${to_install[*]}..."
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log_dry_run "Would install: ${to_install[*]}"
+        return 0
+    fi
+
+    pm_install "${to_install[@]}" || log_warn "Some packages from '$description' failed to install"
+}
+
+# Install core CLI tools on Linux (part of base installation)
+install_cli_tools() {
+    if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    show_banner "Installing CLI Tools (Linux)"
+
+    # Package names vary by distro
+    case "$DISTRO" in
+        arch)
+            _linux_pkg_install "CLI tools" \
+                fzf ripgrep lsd bat fd gdu bottom procs jq \
+                curl wget w3m lynx imagemagick p7zip poppler \
+                ffmpeg ffmpegthumbnailer unzip
+            # yazi is in community/AUR
+            if ! command_exists yazi; then
+                if command_exists yay; then
+                    yay -S --noconfirm yazi || log_warn "yazi installation failed"
+                elif command_exists paru; then
+                    paru -S --noconfirm yazi || log_warn "yazi installation failed"
+                else
+                    log_warn "yazi requires an AUR helper (yay/paru) or manual installation"
+                fi
+            fi
+            # viu for image preview
+            if ! command_exists viu; then
+                if command_exists yay; then
+                    yay -S --noconfirm viu || log_warn "viu installation failed"
+                elif command_exists paru; then
+                    paru -S --noconfirm viu || log_warn "viu installation failed"
+                else
+                    log_warn "viu requires an AUR helper (yay/paru) or manual installation"
+                fi
+            fi
+            ;;
+        debian)
+            _linux_pkg_install "CLI tools" \
+                fzf ripgrep bat fd-find jq \
+                curl wget w3m lynx imagemagick p7zip-full poppler-utils \
+                ffmpeg unzip
+            # lsd, yazi, bottom, gdu, procs, viu are not in default Debian repos
+            for tool in lsd yazi bottom gdu procs viu ffmpegthumbnailer; do
+                if ! command_exists "$tool"; then
+                    log_warn "$tool is not in default Debian/Ubuntu repos — install manually or use --with-brew"
+                fi
+            done
+            ;;
+        fedora)
+            _linux_pkg_install "CLI tools" \
+                fzf ripgrep bat fd-find lsd jq \
+                curl wget w3m lynx ImageMagick p7zip poppler-utils \
+                ffmpeg ffmpegthumbnailer unzip
+            for tool in yazi bottom gdu procs viu; do
+                if ! command_exists "$tool"; then
+                    log_warn "$tool may not be in Fedora repos — install manually or use --with-brew"
+                fi
+            done
+            ;;
+        *)
+            log_warn "CLI tools installation not configured for $DISTRO"
+            ;;
+    esac
+}
+
+# Install shell/terminal tools on Linux
+install_shell_tools() {
+    if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    # Install shell tools if shell group is selected
+    if [[ "$(get_group_selection "shell")" == "1" ]]; then
+        case "$DISTRO" in
+            arch)
+                _linux_pkg_install "Shell tools" zsh
+                # carapace is in AUR
+                if ! command_exists carapace; then
+                    if command_exists yay; then
+                        yay -S --noconfirm carapace-bin || log_warn "carapace installation failed"
+                    elif command_exists paru; then
+                        paru -S --noconfirm carapace-bin || log_warn "carapace installation failed"
+                    else
+                        log_warn "carapace requires an AUR helper (yay/paru) or manual installation"
+                    fi
+                fi
+                ;;
+            debian)
+                _linux_pkg_install "Shell tools" zsh
+                if ! command_exists carapace; then
+                    log_warn "carapace is not in Debian/Ubuntu repos — install manually or use --with-brew"
+                fi
+                ;;
+            fedora)
+                _linux_pkg_install "Shell tools" zsh
+                if ! command_exists carapace; then
+                    log_warn "carapace is not in Fedora repos — install manually or use --with-brew"
+                fi
+                ;;
+        esac
+    fi
+
+    # Install terminal tools if terminal group is selected
+    if [[ "$(get_group_selection "terminal")" == "1" ]]; then
+        _linux_pkg_install "Terminal tools" tmux
+        # kitty
+        if ! command_exists kitty; then
+            case "$DISTRO" in
+                arch) _linux_pkg_install "Kitty" kitty ;;
+                debian) _linux_pkg_install "Kitty" kitty-terminfo kitty ;;
+                fedora) _linux_pkg_install "Kitty" kitty ;;
+            esac
+        fi
+    fi
+}
+
+# Install editor (Neovim) and its dependencies on Linux
+install_editor_tools() {
+    if [[ "$(get_group_selection "editor")" != "1" ]]; then
+        return 0
+    fi
+
+    if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    show_banner "Installing Editor Dependencies (Linux)"
+
+    # Neovim itself
+    case "$DISTRO" in
+        arch)
+            _linux_pkg_install "Neovim" neovim
+            # Build tools for Treesitter and telescope-fzf-native
+            _linux_pkg_install "Build tools" base-devel cmake
+            # Neovim plugin dependencies
+            _linux_pkg_install "Neovim dependencies" \
+                nodejs npm yarn luarocks python-pynvim
+            ;;
+        debian)
+            # Neovim in Debian/Ubuntu repos is often outdated
+            if ! command_exists nvim; then
+                # Try apt first (Ubuntu 24.04+ has 0.9+)
+                if [[ "$DRY_RUN" == "1" ]]; then
+                    log_dry_run "Would install neovim (via apt or AppImage)"
+                else
+                    log_info "Installing Neovim..."
+                    local sudo_prefix=""
+                    if [[ $EUID -ne 0 ]]; then
+                        sudo_prefix="sudo"
+                    fi
+                    # Try apt, but warn if version is too old
+                    if $sudo_prefix apt-get install -y neovim 2>/dev/null; then
+                        local nvim_version
+                        nvim_version=$(nvim --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+' || echo "0.0")
+                        if [[ "$(echo "$nvim_version < 0.9" | bc -l 2>/dev/null || echo 1)" == "1" ]]; then
+                            log_warn "Installed Neovim $nvim_version may be too old. Consider installing from https://github.com/neovim/neovim/releases"
+                        fi
+                    else
+                        log_warn "apt install failed. Install Neovim manually from https://github.com/neovim/neovim/releases"
+                    fi
+                fi
+            fi
+            _linux_pkg_install "Build tools" build-essential cmake
+            _linux_pkg_install "Neovim dependencies" \
+                nodejs npm luarocks python3-pynvim
+            if ! command_exists yarn; then
+                log_info "Installing yarn via npm..."
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    npm install -g yarn 2>/dev/null || log_warn "yarn installation via npm failed"
+                fi
+            fi
+            ;;
+        fedora)
+            _linux_pkg_install "Neovim" neovim
+            _linux_pkg_install "Build tools" gcc gcc-c++ make cmake
+            _linux_pkg_install "Neovim dependencies" \
+                nodejs npm luarocks python3-pynvim
+            if ! command_exists yarn; then
+                log_info "Installing yarn via npm..."
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    npm install -g yarn 2>/dev/null || log_warn "yarn installation via npm failed"
+                fi
+            fi
+            ;;
+        *)
+            log_warn "Editor dependencies installation not configured for $DISTRO"
+            ;;
+    esac
+
+    # tree-sitter-cli (used by nvim-treesitter)
+    if ! command_exists tree-sitter; then
+        log_info "Installing tree-sitter-cli via npm..."
+        if [[ "$DRY_RUN" == "0" ]]; then
+            npm install -g tree-sitter-cli 2>/dev/null || log_warn "tree-sitter-cli installation failed"
+        else
+            log_dry_run "Would install tree-sitter-cli via npm"
+        fi
+    fi
+}
+
+#=============================================================================
 # DEVELOPER TOOLS (for Mason.nvim LSP servers)
 #=============================================================================
 install_dev_tools() {
@@ -574,139 +828,205 @@ install_dev_tools() {
     if [[ "$OS" == "Darwin" ]]; then
         # On macOS, these are installed via Brewfile
         log_info "Developer tools installed via Brewfile"
-    elif [[ "$OS" == "Linux" ]]; then
-        log_info "Installing developer tools for Linux..."
+        return 0
+    fi
 
-        if [[ "$DRY_RUN" == "1" ]]; then
-            log_dry_run "  Would install: go, python3-pip, composer, unzip"
-            return 0
+    # Skip if using Homebrew on Linux (Brewfile handles it)
+    if [[ "${WITH_BREW:-0}" == "1" ]]; then
+        log_info "Developer tools will be installed via Brewfile"
+        return 0
+    fi
+
+    log_info "Installing developer tools for Linux..."
+
+    # Use sudo prefix for non-root users
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
+    # --- Git tools (git, gh, git-delta, lazygit) ---
+    case "$DISTRO" in
+        arch)
+            _linux_pkg_install "Git tools" git github-cli git-delta
+            # lazygit is in community/AUR
+            if ! command_exists lazygit; then
+                if command_exists yay; then
+                    yay -S --noconfirm lazygit || log_warn "lazygit installation failed"
+                elif command_exists paru; then
+                    paru -S --noconfirm lazygit || log_warn "lazygit installation failed"
+                else
+                    log_warn "lazygit requires an AUR helper (yay/paru) or manual installation"
+                fi
+            fi
+            ;;
+        debian)
+            _linux_pkg_install "Git tools" git
+            # gh CLI
+            if ! command_exists gh; then
+                log_info "Installing GitHub CLI..."
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | $sudo_prefix dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null \
+                        && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | $sudo_prefix tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+                        && $sudo_prefix apt-get update -qq \
+                        && $sudo_prefix apt-get install -y gh \
+                        || log_warn "GitHub CLI installation failed"
+                else
+                    log_dry_run "Would install gh CLI from GitHub apt repo"
+                fi
+            fi
+            # git-delta
+            if ! command_exists delta; then
+                log_info "Installing git-delta from GitHub releases..."
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    local delta_version="0.18.2"
+                    local delta_arch="amd64"
+                    curl -fL "https://github.com/dandavison/delta/releases/download/${delta_version}/git-delta_${delta_version}_${delta_arch}.deb" \
+                        -o /tmp/git-delta.deb 2>/dev/null \
+                        && $sudo_prefix dpkg -i /tmp/git-delta.deb && rm -f /tmp/git-delta.deb \
+                        || log_warn "git-delta installation failed"
+                else
+                    log_dry_run "Would install git-delta from GitHub releases"
+                fi
+            fi
+            # lazygit
+            if ! command_exists lazygit; then
+                log_info "Installing lazygit from GitHub releases..."
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    local lazygit_version
+                    lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.44.1")
+                    curl -fL "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" \
+                        -o /tmp/lazygit.tar.gz 2>/dev/null \
+                        && tar -xzf /tmp/lazygit.tar.gz -C /tmp lazygit \
+                        && $sudo_prefix install /tmp/lazygit /usr/local/bin/lazygit && rm -f /tmp/lazygit /tmp/lazygit.tar.gz \
+                        || log_warn "lazygit installation failed"
+                else
+                    log_dry_run "Would install lazygit from GitHub releases"
+                fi
+            fi
+            ;;
+        fedora)
+            _linux_pkg_install "Git tools" git gh git-delta
+            # lazygit via copr
+            if ! command_exists lazygit; then
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    $sudo_prefix dnf copr enable -y atim/lazygit 2>/dev/null \
+                        && $sudo_prefix dnf install -y lazygit \
+                        || log_warn "lazygit installation failed"
+                else
+                    log_dry_run "Would install lazygit from copr"
+                fi
+            fi
+            ;;
+    esac
+
+    # --- Deno ---
+    if ! command_exists deno; then
+        log_info "Installing Deno..."
+        if [[ "$DRY_RUN" == "0" ]]; then
+            curl -fsSL https://deno.land/install.sh | sh || log_warn "Deno installation failed"
+        else
+            log_dry_run "Would install Deno via official installer"
         fi
+    fi
 
-        case "$DISTRO" in
-            arch)
-                # Install go
-                if ! command_exists go; then
-                    if command_exists yay; then
-                        yay -S --noconfirm go
-                    elif command_exists paru; then
-                        paru -S --noconfirm go
-                    else
-                        $sudo_prefix pacman -S --noconfirm go
-                    fi
-                fi
+    # --- Go, Composer, Python, Hub (existing logic, simplified) ---
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log_dry_run "  Would install: go, python3-pip, composer, unzip, hub"
+    fi
 
-                # Install composer for PHP (only if PHP is installed)
-                if command_exists php; then
-                    if ! command_exists composer; then
-                        if command_exists yay; then
-                            yay -S --noconfirm composer
-                        elif command_exists paru; then
-                            paru -S --noconfirm composer
-                        else
-                            # Composer may need manual installation or php-composer package
-                            $sudo_prefix pacman -S --noconfirm php-composer 2>/dev/null || log_warn "Composer not found in repos, install manually"
-                        fi
-                    fi
-                else
-                    log_info "PHP not found, skipping composer installation"
-                fi
+    case "$DISTRO" in
+        arch)
+            _linux_pkg_install "Go" go
+            _linux_pkg_install "Unzip" unzip
 
-                # Install unzip
-                if ! command_exists unzip; then
-                    $sudo_prefix pacman -S --noconfirm unzip
-                fi
+            # Composer (only if PHP is installed)
+            if command_exists php && ! command_exists composer; then
+                pm_install php-composer 2>/dev/null || log_warn "Composer not found in repos, install manually"
+            fi
 
-                # Install Python pip packages
-                if command_exists pip; then
-                    log_info "Installing Python packages: basedpyright, black, isort..."
-                    pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
-                else
-                    $sudo_prefix pacman -S --noconfirm python-pip
+            # Python pip packages
+            if ! command_exists pip; then
+                _linux_pkg_install "Python pip" python-pip
+            fi
+            if command_exists pip; then
+                log_info "Installing Python packages: basedpyright, black, isort..."
+                if [[ "$DRY_RUN" == "0" ]]; then
                     pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
+            fi
 
-                # Check for Python venv module
-                if ! python3 -m venv --help >/dev/null 2>&1; then
-                    log_info "Python venv module not found, installing..."
-                    $sudo_prefix pacman -S --noconfirm python-virtualenv
+            # Python venv
+            if ! python3 -m venv --help >/dev/null 2>&1; then
+                _linux_pkg_install "Python venv" python-virtualenv
+            else
+                log_success "Python venv module is available"
+            fi
+
+            # Hub
+            if ! command_exists hub; then
+                if command_exists yay; then
+                    yay -S --noconfirm hub || log_warn "hub installation failed"
+                elif command_exists paru; then
+                    paru -S --noconfirm hub || log_warn "hub installation failed"
                 else
-                    log_success "Python venv module is available"
+                    log_warn "hub not in official repos, install from AUR or https://github.com/mislav/hub"
                 fi
+            fi
+            ;;
 
-                # Install hub (GitHub CLI tool)
-                if ! command_exists hub; then
-                    if command_exists yay; then
-                        yay -S --noconfirm hub
-                    elif command_exists paru; then
-                        paru -S --noconfirm hub
-                    else
-                        log_warn "hub not in official repos, install from AUR or https://github.com/mislav/hub"
-                    fi
-                fi
-                ;;
-
-            debian)
-                # Update package list
+        debian)
+            if [[ "$DRY_RUN" == "0" ]]; then
                 $sudo_prefix apt-get update -qq
+            fi
+            _linux_pkg_install "Go" golang-go
+            _linux_pkg_install "Unzip" unzip
 
-                # Install go
-                if ! command_exists go; then
-                    $sudo_prefix apt-get install -y golang-go
-                fi
-
-                # Install composer for PHP (only if PHP is installed)
-                if command_exists php; then
-                    if ! command_exists composer; then
-                        # Download composer installer
-                        curl -sS https://getcomposer.org/installer | php
-                        if [[ -f composer.phar ]]; then
-                            $sudo_prefix mv composer.phar /usr/local/bin/composer
-                        fi
+            # Composer (only if PHP is installed)
+            if command_exists php && ! command_exists composer; then
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    curl -sS https://getcomposer.org/installer | php
+                    if [[ -f composer.phar ]]; then
+                        $sudo_prefix mv composer.phar /usr/local/bin/composer
                     fi
-                else
-                    log_info "PHP not found, skipping composer installation"
                 fi
+            fi
 
-                # Install unzip
-                if ! command_exists unzip; then
-                    $sudo_prefix apt-get install -y unzip
-                fi
-
-                # Install Python pip packages
-                if command_exists pip3; then
-                    log_info "Installing Python packages: basedpyright, black, isort..."
-                    pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
-                else
-                    $sudo_prefix apt-get install -y python3-pip
+            # Python pip packages
+            if ! command_exists pip3; then
+                _linux_pkg_install "Python pip" python3-pip
+            fi
+            if command_exists pip3; then
+                log_info "Installing Python packages: basedpyright, black, isort..."
+                if [[ "$DRY_RUN" == "0" ]]; then
                     pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
+            fi
 
-                # Check for Python venv module
-                if ! python3 -m venv --help >/dev/null 2>&1; then
-                    log_info "Python venv module not found, installing..."
-
-                    # Detect Python version and install versioned venv package
+            # Python venv
+            if ! python3 -m venv --help >/dev/null 2>&1; then
+                log_info "Python venv module not found, installing..."
+                if [[ "$DRY_RUN" == "0" ]]; then
                     local python_version=$(python3 --version 2>/dev/null | awk '{print $2}' | cut -d. -f1-2)
                     if [[ -n "$python_version" ]]; then
                         local venv_package="python${python_version}-venv"
                         log_info "Installing $venv_package for Python $python_version..."
-                        if $sudo_prefix apt-get install -y "$venv_package" 2>/dev/null; then
-                            log_success "Installed $venv_package"
-                        else
-                            # Fallback to generic python3-venv
+                        if ! $sudo_prefix apt-get install -y "$venv_package" 2>/dev/null; then
                             log_warn "Versioned venv package not found, trying python3-venv..."
                             $sudo_prefix apt-get install -y python3-venv
                         fi
                     else
                         $sudo_prefix apt-get install -y python3-venv
                     fi
-                else
-                    log_success "Python venv module is available"
                 fi
+            else
+                log_success "Python venv module is available"
+            fi
 
-                # Install hub (GitHub CLI tool) - download from GitHub
-                if ! command_exists hub; then
-                    log_info "Installing hub from GitHub releases..."
+            # Hub
+            if ! command_exists hub; then
+                log_info "Installing hub from GitHub releases..."
+                if [[ "$DRY_RUN" == "0" ]]; then
                     local hub_arch="amd64"
                     local hub_version="2.14.2"
                     curl -L "https://github.com/mislav/hub/releases/download/v${hub_version}/hub-linux-${hub_arch}-${hub_version}.tgz" \
@@ -715,56 +1035,53 @@ install_dev_tools() {
                         && $sudo_prefix /tmp/hub-linux-${hub_arch}-${hub_version}/install && rm -rf /tmp/hub* \
                         || log_warn "hub installation failed, install manually from https://github.com/mislav/hub"
                 fi
-                ;;
+            fi
+            ;;
 
-            fedora)
-                # Install go
-                if ! command_exists go; then
-                    $sudo_prefix dnf install -y golang
+        fedora)
+            _linux_pkg_install "Go" golang
+            _linux_pkg_install "Unzip" unzip
+
+            # Composer (only if PHP is installed)
+            if command_exists php && ! command_exists composer; then
+                if [[ "$DRY_RUN" == "0" ]]; then
+                    $sudo_prefix dnf install -y composer
                 fi
+            fi
 
-                # Install composer for PHP (only if PHP is installed)
-                if command_exists php; then
-                    if ! command_exists composer; then
-                        $sudo_prefix dnf install -y composer
-                    fi
-                else
-                    log_info "PHP not found, skipping composer installation"
-                fi
-
-                # Install unzip
-                if ! command_exists unzip; then
-                    $sudo_prefix dnf install -y unzip
-                fi
-
-                # Install Python pip packages
-                if command_exists pip3; then
-                    log_info "Installing Python packages: basedpyright, black, isort..."
-                    pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
-                else
-                    $sudo_prefix dnf install -y python3-pip
+            # Python pip packages
+            if ! command_exists pip3; then
+                _linux_pkg_install "Python pip" python3-pip
+            fi
+            if command_exists pip3; then
+                log_info "Installing Python packages: basedpyright, black, isort..."
+                if [[ "$DRY_RUN" == "0" ]]; then
                     pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
                 fi
+            fi
 
-                # Check for Python venv module
-                if ! python3 -m venv --help >/dev/null 2>&1; then
-                    log_info "Python venv module not found, installing..."
+            # Python venv
+            if ! python3 -m venv --help >/dev/null 2>&1; then
+                log_info "Python venv module not found, installing..."
+                if [[ "$DRY_RUN" == "0" ]]; then
                     $sudo_prefix dnf install -y python3-venv || log_warn "python3-venv not found, may be included in python3 package"
-                else
-                    log_success "Python venv module is available"
                 fi
+            else
+                log_success "Python venv module is available"
+            fi
 
-                # Install hub (GitHub CLI tool)
-                if ! command_exists hub; then
+            # Hub
+            if ! command_exists hub; then
+                if [[ "$DRY_RUN" == "0" ]]; then
                     $sudo_prefix dnf install -y hub 2>/dev/null || log_warn "hub not in repos, install manually from https://github.com/mislav/hub"
                 fi
-                ;;
+            fi
+            ;;
 
-            *)
-                log_warn "Developer tools installation not configured for $DISTRO"
-                ;;
-        esac
-    fi
+        *)
+            log_warn "Developer tools installation not configured for $DISTRO"
+            ;;
+    esac
 }
 
 #=============================================================================
@@ -1587,7 +1904,12 @@ main() {
         install_homebrew_packages
     fi
 
-    # Install developer tools for Mason
+    # Install Linux system packages (skipped on macOS / when using Homebrew)
+    install_cli_tools
+    install_shell_tools
+    install_editor_tools
+
+    # Install developer tools (git, gh, lazygit, go, pip, etc.)
     install_dev_tools
 
     # Install extras
