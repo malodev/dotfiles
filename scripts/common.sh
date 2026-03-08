@@ -220,6 +220,8 @@ pm_install() {
     elif is_debian && command_exists apt-get; then
         $sudo_prefix apt-get update -qq
         $sudo_prefix apt-get install -y "${packages[@]}"
+    elif [[ "$DISTRO" == "fedora" ]] && command_exists dnf; then
+        $sudo_prefix dnf install -y "${packages[@]}"
     else
         log_error "No package manager found"
         return 1
