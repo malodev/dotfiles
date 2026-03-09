@@ -48,6 +48,13 @@ if [ -z "$DIFF" ]; then
   exit 0
 fi
 
+# Truncate diff if too large (~100k chars ≈ 25k tokens)
+MAX_DIFF_CHARS=100000
+if [[ ${#DIFF} -gt $MAX_DIFF_CHARS ]]; then
+  echo "[ai-commit] Diff too large (${#DIFF} chars), truncating to $MAX_DIFF_CHARS chars..."
+  DIFF="${DIFF:0:$MAX_DIFF_CHARS}"$'\n\n[... diff truncated due to size ...]'
+fi
+
 if [[ -n "$MODEL" ]]; then
   echo "Generating commit message with llm model: ${MODEL}"
 else
@@ -271,7 +278,7 @@ Diff to analyze:
 $DIFF"
 
 # ---------- Call LLM ----------
-MSG=$(llm prompt $MODEL --system "$SYSTEM_PROMPT" --no-stream "$USER_PROMPT")
+MSG=$(llm prompt $MODEL --system "$SYSTEM_PROMPT" --no-stream <<< "$USER_PROMPT")
 
 if [[ -n "$COMMIT_MSG_FILE" ]]; then
   echo "$MSG" > "$COMMIT_MSG_FILE"
