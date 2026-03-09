@@ -94,7 +94,7 @@ declare -A INSTALL_GROUPS=(
     ["linux"]="i3"
 
     # Development tools
-    ["dev"]="git lazygit"
+    ["dev"]="git bat lazygit"
 
     # Extras
     ["extras"]="shell-color-scripts"
@@ -108,7 +108,7 @@ declare -A GROUP_DESC=(
     ["terminal"]="Terminal tools (Kitty, Tmux)"
     ["desktop"]="Desktop environment (SketchyBar, AeroSpace, Borders)"
     ["linux"]="Linux window manager (i3)"
-    ["dev"]="Development tools (Git, Lazygit)"
+    ["dev"]="Development tools (Git, Lazygit, Delta, Bat, LLM)"
     ["extras"]="Extra utilities (Shell color scripts)"
 )
 
@@ -543,6 +543,45 @@ install_nvim_configs() {
     done
 }
 
+install_neovim_binary() {
+    if [[ "$(get_group_selection "editor")" != "1" ]]; then
+        return
+    fi
+
+    # macOS: installed via Brewfile
+    if [[ "$OS" == "Darwin" ]]; then
+        return 0
+    fi
+
+    if command_exists nvim; then
+        log_success "Neovim already installed: $(nvim --version | head -1)"
+        return 0
+    fi
+
+    log_dry_run "Would install latest Neovim binary from GitHub releases"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return 0
+    fi
+
+    log_info "Installing latest Neovim from GitHub releases..."
+
+    local sudo_prefix=""
+    if [[ $EUID -ne 0 ]]; then
+        sudo_prefix="sudo"
+    fi
+
+    curl -Lo /tmp/nvim.tar.gz \
+        "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" \
+        2>/dev/null \
+        && $sudo_prefix tar -xzf /tmp/nvim.tar.gz -C /usr/local --strip-components=1 \
+        && rm -f /tmp/nvim.tar.gz \
+        || log_warn "Neovim installation failed, install manually from https://github.com/neovim/neovim/releases"
+
+    if command_exists nvim; then
+        log_success "Neovim installed: $(nvim --version | head -1)"
+    fi
+}
+
 install_homebrew_packages() {
     if [[ "$OS" == "Darwin" ]] && [[ -f "$SCRIPT_DIR/Brewfile" ]]; then
         show_banner "Installing Homebrew Packages"
@@ -930,67 +969,134 @@ install_dev_tools() {
         fi
     fi
 
-    # --- Go, Composer, Python, Hub (existing logic, simplified) ---
     if [[ "$DRY_RUN" == "1" ]]; then
-        log_dry_run "  Would install: go, python3-pip, composer, unzip, hub"
+        log_dry_run "  Would install: go, python3-pip, composer, unzip, lazygit, delta, bat, llm"
+        return 0
     fi
 
     case "$DISTRO" in
-        arch)
-            _linux_pkg_install "Go" go
-            _linux_pkg_install "Unzip" unzip
-
-            # Composer (only if PHP is installed)
-            if command_exists php && ! command_exists composer; then
-                pm_install php-composer 2>/dev/null || log_warn "Composer not found in repos, install manually"
-            fi
-
-            # Python pip packages
-            if ! command_exists pip; then
-                _linux_pkg_install "Python pip" python-pip
-            fi
-            if command_exists pip; then
-                log_info "Installing Python packages: basedpyright, black, isort..."
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    pip install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
-                fi
-            fi
-
-            # Python venv
-            if ! python3 -m venv --help >/dev/null 2>&1; then
-                _linux_pkg_install "Python venv" python-virtualenv
-            else
-                log_success "Python venv module is available"
-            fi
-
-            # Hub
-            if ! command_exists hub; then
+            arch)
+                # Install latest git
                 if command_exists yay; then
-                    yay -S --noconfirm hub || log_warn "hub installation failed"
+                    yay -S --noconfirm git
                 elif command_exists paru; then
-                    paru -S --noconfirm hub || log_warn "hub installation failed"
+                    paru -S --noconfirm git
                 else
-                    log_warn "hub not in official repos, install from AUR or https://github.com/mislav/hub"
+                    $sudo_prefix pacman -S --noconfirm git
                 fi
-            fi
-            ;;
 
-        debian)
-            if [[ "$DRY_RUN" == "0" ]]; then
-                $sudo_prefix apt-get update -qq
-            fi
-            _linux_pkg_install "Go" golang-go
-            _linux_pkg_install "Unzip" unzip
-
-            # Composer (only if PHP is installed)
-            if command_exists php && ! command_exists composer; then
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    curl -sS https://getcomposer.org/installer | php
-                    if [[ -f composer.phar ]]; then
-                        $sudo_prefix mv composer.phar /usr/local/bin/composer
+                # Install go
+                if ! command_exists go; then
+                    if command_exists yay; then
+                        yay -S --noconfirm go
+                    elif command_exists paru; then
+                        paru -S --noconfirm go
+                    else
+                        $sudo_prefix pacman -S --noconfirm go
                     fi
                 fi
-            fi
+
+
+
+                # Install hub (GitHub CLI tool)
+                if ! command_exists hub; then
+                    if command_exists yay; then
+                        yay -S --noconfirm hub
+                    elif command_exists paru; then
+                        paru -S --noconfirm hub
+                    else
+                        log_warn "hub not in official repos, install from AUR or https://github.com/mislav/hub"
+                    fi
+                fi
+
+                # Install lazygit
+                if ! command_exists lazygit; then
+                    log_info "Installing lazygit..."
+                    if command_exists yay; then
+                        yay -S --noconfirm lazygit
+                    elif command_exists paru; then
+                        paru -S --noconfirm lazygit
+                    else
+                        $sudo_prefix pacman -S --noconfirm lazygit
+                    fi
+                fi
+
+                # Install delta (git diff pager)
+                if ! command_exists delta; then
+                    log_info "Installing delta..."
+                    if command_exists yay; then
+                        yay -S --noconfirm git-delta
+                    elif command_exists paru; then
+                        paru -S --noconfirm git-delta
+                    else
+                        $sudo_prefix pacman -S --noconfirm git-delta
+                    fi
+                fi
+
+                # Install bat (latest from GitHub to match delta's bundled version)
+                if ! command_exists bat; then
+                    log_info "Installing bat from GitHub releases..."
+                    local bat_version
+                    bat_version=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" \
+                        | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.24.0")
+                    curl -Lo /tmp/bat.tar.gz \
+                        "https://github.com/sharkdp/bat/releases/latest/download/bat-v${bat_version}-x86_64-unknown-linux-musl.tar.gz" \
+                        2>/dev/null \
+                        && tar -xzf /tmp/bat.tar.gz -C /tmp \
+                        && $sudo_prefix install /tmp/bat-v${bat_version}-x86_64-unknown-linux-musl/bat /usr/local/bin/bat \
+                        && rm -rf /tmp/bat* \
+                        || log_warn "bat installation failed, install manually from https://github.com/sharkdp/bat"
+                fi
+
+                # Install llm CLI
+                if ! command_exists llm; then
+                    log_info "Installing llm CLI..."
+                    if ! command_exists pipx; then
+                        $sudo_prefix pacman -S --noconfirm python-pipx
+                    fi
+                    pipx install llm || log_warn "llm installation failed, install manually: pipx install llm"
+                fi
+                ;;
+
+            debian)
+                # Install latest git via git-core PPA
+                if command_exists add-apt-repository; then
+                    $sudo_prefix add-apt-repository -y ppa:git-core/ppa 2>/dev/null || true
+                fi
+                $sudo_prefix apt-get update -qq
+                $sudo_prefix apt-get install -y git
+
+                # Install latest Go from golang.org (apt ships outdated versions)
+                log_info "Installing latest Go..."
+                local go_version
+                go_version=$(curl -s "https://go.dev/dl/?mode=json" \
+                    | grep -Po '"version": "go\K[^"]*' | head -1 2>/dev/null || echo "1.26.0")
+                curl -Lo /tmp/go.tar.gz "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" 2>/dev/null \
+                    && $sudo_prefix rm -rf /usr/local/go \
+                    && $sudo_prefix tar -C /usr/local -xzf /tmp/go.tar.gz \
+                    && $sudo_prefix ln -sf /usr/local/go/bin/go /usr/local/bin/go \
+                    && $sudo_prefix ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+                    && rm -f /tmp/go.tar.gz \
+                    || log_warn "Go installation failed, install manually from https://go.dev/dl"
+
+                # Install latest Node.js LTS via NodeSource
+                if ! command_exists node; then
+                    log_info "Installing Node.js LTS..."
+                    curl -fsSL https://deb.nodesource.com/setup_lts.x | $sudo_prefix bash - 2>/dev/null \
+                        && $sudo_prefix apt-get install -y nodejs \
+                        || log_warn "Node.js installation failed, install manually from https://nodejs.org"
+                fi
+
+                # Install composer for PHP (only if PHP is installed)
+                if command_exists php; then
+                    if ! command_exists composer; then
+                        # Download composer installer
+                        curl -sS https://getcomposer.org/installer | php
+                        if [[ -f composer.phar ]]; then
+                            $sudo_prefix mv composer.phar /usr/local/bin/composer
+                        fi
+                    fi
+                fi
 
             # Python pip packages
             if ! command_exists pip3; then
@@ -1036,18 +1142,83 @@ install_dev_tools() {
                         || log_warn "hub installation failed, install manually from https://github.com/mislav/hub"
                 fi
             fi
-            ;;
 
-        fedora)
-            _linux_pkg_install "Go" golang
-            _linux_pkg_install "Unzip" unzip
-
-            # Composer (only if PHP is installed)
-            if command_exists php && ! command_exists composer; then
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    $sudo_prefix dnf install -y composer
+            # Install lazygit - download from GitHub releases
+            if ! command_exists lazygit; then
+                    log_info "Installing lazygit from GitHub releases..."
+                    local lazygit_version
+                    lazygit_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" \
+                        | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.44.1")
+                    curl -Lo /tmp/lazygit.tar.gz \
+                        "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${lazygit_version}_Linux_x86_64.tar.gz" \
+                        2>/dev/null \
+                        && tar -xzf /tmp/lazygit.tar.gz -C /tmp lazygit \
+                        && $sudo_prefix install /tmp/lazygit /usr/local/bin/lazygit \
+                        && rm -f /tmp/lazygit /tmp/lazygit.tar.gz \
+                        || log_warn "lazygit installation failed, install manually from https://github.com/jesseduffield/lazygit"
                 fi
-            fi
+
+                # Install delta (git diff pager) - download from GitHub releases
+                if ! command_exists delta; then
+                    log_info "Installing delta from GitHub releases..."
+                    local delta_version
+                    delta_version=$(curl -s "https://api.github.com/repos/dandavison/delta/releases/latest" \
+                        | grep -Po '"tag_name": "\K[^"]*' 2>/dev/null || echo "0.18.2")
+                    curl -Lo /tmp/delta.tar.gz \
+                        "https://github.com/dandavison/delta/releases/latest/download/delta-${delta_version}-x86_64-unknown-linux-musl.tar.gz" \
+                        2>/dev/null \
+                        && tar -xzf /tmp/delta.tar.gz -C /tmp --wildcards "*/delta" --strip-components=1 \
+                        && $sudo_prefix install /tmp/delta /usr/local/bin/delta \
+                        && rm -f /tmp/delta /tmp/delta.tar.gz \
+                        || log_warn "delta installation failed, install manually from https://github.com/dandavison/delta"
+                fi
+
+                # Install bat (latest from GitHub to match delta's bundled version)
+                if ! command_exists bat; then
+                    log_info "Installing bat from GitHub releases..."
+                    local bat_version
+                    bat_version=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" \
+                        | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.24.0")
+                    curl -Lo /tmp/bat.tar.gz \
+                        "https://github.com/sharkdp/bat/releases/latest/download/bat-v${bat_version}-x86_64-unknown-linux-musl.tar.gz" \
+                        2>/dev/null \
+                        && tar -xzf /tmp/bat.tar.gz -C /tmp \
+                        && $sudo_prefix install /tmp/bat-v${bat_version}-x86_64-unknown-linux-musl/bat /usr/local/bin/bat \
+                        && rm -rf /tmp/bat* \
+                        || log_warn "bat installation failed, install manually from https://github.com/sharkdp/bat"
+                fi
+
+                # Install llm CLI
+                if ! command_exists llm; then
+                    log_info "Installing llm CLI..."
+                    if ! command_exists pipx; then
+                        $sudo_prefix apt-get install -y pipx 2>/dev/null \
+                            || $sudo_prefix apt-get install -y python3-pipx 2>/dev/null \
+                            || pip3 install --user pipx
+                    fi
+                    pipx install llm || log_warn "llm installation failed, install manually: pipx install llm"
+                fi
+                ;;
+
+            fedora)
+                # Install latest git
+                $sudo_prefix dnf install -y git
+
+                # Install go
+                if ! command_exists go; then
+                    $sudo_prefix dnf install -y golang
+                fi
+
+                # Install composer for PHP (only if PHP is installed)
+                if command_exists php; then
+                    if ! command_exists composer; then
+                        if [[ "$DRY_RUN" == "0" ]]; then
+                            $sudo_prefix dnf install -y composer
+                        else
+                            log_dry_run "Would install composer via dnf"
+                        fi
+                    fi
+                fi
 
             # Python pip packages
             if ! command_exists pip3; then
@@ -1076,7 +1247,46 @@ install_dev_tools() {
                     $sudo_prefix dnf install -y hub 2>/dev/null || log_warn "hub not in repos, install manually from https://github.com/mislav/hub"
                 fi
             fi
-            ;;
+
+            # Install lazygit
+            if ! command_exists lazygit; then
+                    log_info "Installing lazygit..."
+                    $sudo_prefix dnf copr enable -y atim/lazygit 2>/dev/null \
+                        && $sudo_prefix dnf install -y lazygit \
+                        || log_warn "lazygit installation failed, install manually from https://github.com/jesseduffield/lazygit"
+                fi
+
+                # Install delta (git diff pager)
+                if ! command_exists delta; then
+                    log_info "Installing delta..."
+                    $sudo_prefix dnf install -y git-delta 2>/dev/null \
+                        || log_warn "delta installation failed, install manually from https://github.com/dandavison/delta"
+                fi
+
+                # Install bat (latest from GitHub to match delta's bundled version)
+                if ! command_exists bat; then
+                    log_info "Installing bat from GitHub releases..."
+                    local bat_version
+                    bat_version=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" \
+                        | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.24.0")
+                    curl -Lo /tmp/bat.tar.gz \
+                        "https://github.com/sharkdp/bat/releases/latest/download/bat-v${bat_version}-x86_64-unknown-linux-musl.tar.gz" \
+                        2>/dev/null \
+                        && tar -xzf /tmp/bat.tar.gz -C /tmp \
+                        && $sudo_prefix install /tmp/bat-v${bat_version}-x86_64-unknown-linux-musl/bat /usr/local/bin/bat \
+                        && rm -rf /tmp/bat* \
+                        || log_warn "bat installation failed, install manually from https://github.com/sharkdp/bat"
+                fi
+
+                # Install llm CLI
+                if ! command_exists llm; then
+                    log_info "Installing llm CLI..."
+                    if ! command_exists pipx; then
+                        $sudo_prefix dnf install -y pipx
+                    fi
+                    pipx install llm || log_warn "llm installation failed, install manually: pipx install llm"
+                fi
+                ;;
 
         *)
             log_warn "Developer tools installation not configured for $DISTRO"
@@ -1893,6 +2103,9 @@ main() {
             install_group "$group"
         fi
     done
+
+    # Install Neovim binary (Linux only, macOS uses Brewfile)
+    install_neovim_binary
 
     # Install Neovim configs separately
     if [[ "$(get_group_selection "editor")" == "1" ]]; then
