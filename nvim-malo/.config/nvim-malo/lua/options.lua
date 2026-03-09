@@ -38,6 +38,21 @@ if IS_WSL then
     },
     cache_enabled = true,
   }
+elseif os.getenv("SSH_TTY") ~= nil or os.getenv("SSH_CONNECTION") ~= nil then
+  -- SSH session: use OSC 52 so yanks reach the local clipboard via the terminal
+  -- Works with VSCode integrated terminal and Kitty (both support OSC 52)
+  local osc52 = require("vim.ui.clipboard.osc52")
+  vim.g.clipboard = {
+    name = "OSC 52",
+    copy = {
+      ["+"] = osc52.copy("+"),
+      ["*"] = osc52.copy("*"),
+    },
+    paste = {
+      ["+"] = osc52.paste("+"),
+      ["*"] = osc52.paste("*"),
+    },
+  }
 end
 
 vim.opt.number = true -- show absolute number
