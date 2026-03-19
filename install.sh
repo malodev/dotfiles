@@ -976,34 +976,23 @@ install_dev_tools() {
 
     case "$DISTRO" in
             arch)
-                # Install latest git
-                if command_exists yay; then
-                    yay -S --noconfirm git
-                elif command_exists paru; then
-                    paru -S --noconfirm git
-                else
-                    $sudo_prefix pacman -S --noconfirm git
-                fi
-
                 # Install go
                 if ! command_exists go; then
                     if command_exists yay; then
-                        yay -S --noconfirm go
+                        yay -S --noconfirm go || log_warn "go installation failed"
                     elif command_exists paru; then
-                        paru -S --noconfirm go
+                        paru -S --noconfirm go || log_warn "go installation failed"
                     else
-                        $sudo_prefix pacman -S --noconfirm go
+                        $sudo_prefix pacman -S --noconfirm go || log_warn "go installation failed"
                     fi
                 fi
-
-
 
                 # Install hub (GitHub CLI tool)
                 if ! command_exists hub; then
                     if command_exists yay; then
-                        yay -S --noconfirm hub
+                        yay -S --noconfirm hub || log_warn "hub installation failed"
                     elif command_exists paru; then
-                        paru -S --noconfirm hub
+                        paru -S --noconfirm hub || log_warn "hub installation failed"
                     else
                         log_warn "hub not in official repos, install from AUR or https://github.com/mislav/hub"
                     fi
@@ -1013,11 +1002,11 @@ install_dev_tools() {
                 if ! command_exists lazygit; then
                     log_info "Installing lazygit..."
                     if command_exists yay; then
-                        yay -S --noconfirm lazygit
+                        yay -S --noconfirm lazygit || log_warn "lazygit installation failed"
                     elif command_exists paru; then
-                        paru -S --noconfirm lazygit
+                        paru -S --noconfirm lazygit || log_warn "lazygit installation failed"
                     else
-                        $sudo_prefix pacman -S --noconfirm lazygit
+                        $sudo_prefix pacman -S --noconfirm lazygit || log_warn "lazygit installation failed"
                     fi
                 fi
 
@@ -1025,36 +1014,31 @@ install_dev_tools() {
                 if ! command_exists delta; then
                     log_info "Installing delta..."
                     if command_exists yay; then
-                        yay -S --noconfirm git-delta
+                        yay -S --noconfirm git-delta || log_warn "git-delta installation failed"
                     elif command_exists paru; then
-                        paru -S --noconfirm git-delta
+                        paru -S --noconfirm git-delta || log_warn "git-delta installation failed"
                     else
-                        $sudo_prefix pacman -S --noconfirm git-delta
+                        $sudo_prefix pacman -S --noconfirm git-delta || log_warn "git-delta installation failed"
                     fi
                 fi
 
-                # Install bat (latest from GitHub to match delta's bundled version)
+                # Install bat (via pacman)
                 if ! command_exists bat; then
-                    log_info "Installing bat from GitHub releases..."
-                    local bat_version
-                    bat_version=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" \
-                        | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.24.0")
-                    curl -Lo /tmp/bat.tar.gz \
-                        "https://github.com/sharkdp/bat/releases/latest/download/bat-v${bat_version}-x86_64-unknown-linux-musl.tar.gz" \
-                        2>/dev/null \
-                        && tar -xzf /tmp/bat.tar.gz -C /tmp \
-                        && $sudo_prefix install /tmp/bat-v${bat_version}-x86_64-unknown-linux-musl/bat /usr/local/bin/bat \
-                        && rm -rf /tmp/bat* \
-                        || log_warn "bat installation failed, install manually from https://github.com/sharkdp/bat"
+                    log_info "Installing bat..."
+                    $sudo_prefix pacman -S --noconfirm bat || log_warn "bat installation failed"
                 fi
 
                 # Install llm CLI
                 if ! command_exists llm; then
                     log_info "Installing llm CLI..."
-                    if ! command_exists pipx; then
-                        $sudo_prefix pacman -S --noconfirm python-pipx
+                    if command_exists uv; then
+                        uv tool install llm || log_warn "llm installation failed, install manually: uv tool install llm"
+                    else
+                        if ! command_exists pipx; then
+                            $sudo_prefix pacman -S --noconfirm python-pipx || log_warn "python-pipx installation failed"
+                        fi
+                        pipx install llm || log_warn "llm installation failed, install manually: pipx install llm"
                     fi
-                    pipx install llm || log_warn "llm installation failed, install manually: pipx install llm"
                 fi
                 ;;
 
