@@ -65,13 +65,19 @@ export ZSH_DISABLE_COMPFIX="true"
 [[ -d /usr/local/share/zsh/$ZSH_VERSION/functions ]] && fpath=(/usr/local/share/zsh/$ZSH_VERSION/functions $fpath)
 
 # Compinit — cached, only regenerate once per day
-# Required early because fzf, carapace, and machine-specific configs use compdef
+# Required early because fzf and machine-specific configs use compdef
 autoload -Uz compinit
 if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
   compinit
 else
   compinit -C  # use cache (fast)
 fi
+# Compile zcompdump for faster loading (if missing or outdated)
+{
+  if [[ -s ~/.zcompdump && ( ! -s ~/.zcompdump.zwc || ~/.zcompdump -nt ~/.zcompdump.zwc ) ]]; then
+    zcompile ~/.zcompdump
+  fi
+} &!
 
 # Order of groups can be configured with zstyle group-order
 zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'external commands'
@@ -95,10 +101,6 @@ zinit light jeffreytse/zsh-vi-mode
 # History substring search — deferred
 zinit ice wait"0" lucid
 zinit light zsh-users/zsh-history-substring-search
-
-# Enhancd — deferred
-zinit ice wait"0" lucid pick"init.sh"
-zinit light b4b4r07/enhancd
 
 # Forgit — deferred (low priority, not needed at prompt)
 zinit ice wait"1" lucid
@@ -128,13 +130,8 @@ if command -v zoxide >/dev/null 2>&1; then
     eval "$(zoxide init zsh)"
 fi
 
-# Carapace - multi-shell completion - https://github.com/carapace-sh/carapace
-if command -v carapace >/dev/null 2>&1; then
-    export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense'
-    zstyle ':completion:*' format $'\e[2;37mCompleting %d\e[m'
-    source <(carapace _carapace)
-    echo "🛠️carapace loaded."
-fi
+# Completion formatting (dimmed group headers)
+zstyle ':completion:*' format $'\e[2;37mCompleting %d\e[m'
 
 #=============================================================================
 # GIT CONFIGURATION
