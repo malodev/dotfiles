@@ -34,6 +34,21 @@ if [[ "$IS_LINUX" == "1" ]]; then
 fi
 
 #=============================================================================
+# HISTORY SETTINGS
+#=============================================================================
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=1000000
+SAVEHIST=1000000
+
+setopt EXTENDED_HISTORY       # Save timestamp with each command
+setopt INC_APPEND_HISTORY     # Write to file immediately (implies APPEND_HISTORY)
+setopt HIST_FIND_NO_DUPS      # Don't show dups when searching
+setopt HIST_EXPIRE_DUPS_FIRST # Expire dups first when trimming
+setopt HIST_IGNORE_SPACE      # Commands starting with space are private
+setopt HIST_VERIFY            # Show command before executing from history
+setopt HIST_REDUCE_BLANKS     # Clean up whitespace
+
+#=============================================================================
 # MACOS-SPECIFIC
 #=============================================================================
 [[ "$OSX" == "1" ]] && alias updatedb='sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist'
@@ -244,38 +259,6 @@ if command -v fzf >/dev/null 2>&1; then
   # Also source directly in case zsh-vi-mode isn't loaded yet
   eval "$(fzf --zsh)" 2>/dev/null
 fi
-
-#=============================================================================
-# HISTORY SETTINGS
-#=============================================================================
-# In bash, Setting the HISTFILESIZE and HISTSIZE variables to an empty string
-# makes the bash history size unlimited. However, it's not possible to set the
-# history to an unlimited size in zsh (theoretically, at least). From a zsh
-# mailing list, it appears the max history size can be LONG_MAX from limits.h
-# header file. That has a (really huge) value of 9223372036854775807, which
-# should be enough to store trillions of commands.
-export HISTFILE=~/.zsh_history
-export HISTFILESIZE=9223372036854775807
-export HISTSIZE=9223372036854775807
-export SAVEHIST=9223372036854775807
-
-# Records the timestamp of each command. To view time: history -E
-export HISTTIMEFORMAT="[%F %T] "
-
-setopt EXTENDED_HISTORY          # Timestamps
-setopt APPEND_HISTORY            # Append, don't overwrite
-setopt INC_APPEND_HISTORY        # Write immediately, not on exit
-# setopt SHARE_HISTORY           # ← REMOVE THIS (causes race conditions + dedup storms)
-
-setopt HIST_FIND_NO_DUPS         # Don't show dups when searching (cosmetic only)
-setopt HIST_EXPIRE_DUPS_FIRST    # Only remove dups when hitting limit
-setopt HIST_IGNORE_SPACE         # Commands starting with space are private
-setopt HIST_VERIFY               # Show command before executing from history
-setopt HIST_REDUCE_BLANKS        # Clean up whitespace
-
-# REMOVE these aggressive dedup options:
-# setopt HIST_IGNORE_ALL_DUPS    # ← This destroys your history
-# setopt HIST_SAVE_NO_DUPS       # ← This too
 
 bindkey "^[[A" history-substring-search-up
 bindkey "^[[B" history-substring-search-down
