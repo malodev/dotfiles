@@ -1,0 +1,20 @@
+# credentials
+.pi/agent/auth.json
+
+# session history (large + personal)
+.pi/agent/sessions/
+
+# runtime state
+.pi/agent/scheduler/
+.pi/agent/cache/
+
+# installed packages (reproducible via settings.json packages list)
+.pi/agent/git/
+.pi/agent/npm/
+.pi/agent/node_modules/
+
+# logs & transient files
+.pi/agent/pi-crash.log
+.pi/agent/pi-debug.log
+.pi/agent/.update-check
+.pi/agent/usage-tracker-*.json

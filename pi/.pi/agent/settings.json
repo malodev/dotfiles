@@ -1,0 +1,110 @@
+{
+  "defaultModel": "claude-sonnet-4-6",
+  "defaultProvider": "anthropic",
+  "defaultThinkingLevel": "medium",
+  "hideThinkingBlock": true,
+  "lastChangelogVersion": "0.65.2",
+  "modelProfiles": [
+    {
+      "model": "anthropic/claude-opus-4-6",
+      "thinking": "high",
+      "label": "Anthropic: Opus 4.6"
+    },
+    {
+      "model": "github-copilot/claude-opus-4.6",
+      "thinking": "high",
+      "label": "Github: Opus 4.6"
+    },
+    {
+      "model": "google-antigravity/claude-opus-4-6",
+      "thinking": "high",
+      "label": "Google: Opus 4.6"
+    },
+    {
+      "model": "openrouter/anthropic/claude-opus-4.6",
+      "thinking": "high",
+      "label": "OpenRouter: Opus 4.6"
+    },
+    {
+      "model": "anthropic/claude-sonnet-4-6",
+      "thinking": "high",
+      "label": "Anthropic: Sonnet 4.6"
+    },
+    {
+      "model": "github-copilot/claude-sonnet-4.6",
+      "thinking": "high",
+      "label": "Github: Sonnet 4.6"
+    },
+    {
+      "model": "google-antigravity/claude-sonnet-4-6",
+      "thinking": "high",
+      "label": "Google: Sonnet 4.6"
+    },
+    {
+      "model": "openrouter/anthropic/claude-sonnet-4.6",
+      "thinking": "high",
+      "label": "OpenRouter: Sonnet 4.6"
+    },
+    {
+      "model": "opencode-go/kimi-k2.5",
+      "thinking": "high",
+      "label": "Go Kimi 2.5"
+    },
+    {
+      "model": "openrouter/qwen/qwen3.6-plus:free",
+      "thinking": "high",
+      "label": "OR: Qwen 3.6"
+    },
+    {
+      "model": "google-antigravity/gemini-3.1-pro-high",
+      "thinking": "high",
+      "label": "Google: Gemini 3.1 Pro"
+    }
+  ],
+  "ollama": {
+    "apiKey": "0c4f3d2b11b344e9a45123cf7bd7b4bd.R4oEJv4QwXLKbjimvaM9GVqI",
+    "baseUrl": "http://localhost:11435",
+    "defaultModel": "gemma4:31b-it-q4_K_M"
+  },
+  "packages": [
+    "npm:pi-markdown-preview",
+    "npm:pi-connect",
+    "npm:@plannotator/pi-extension",
+    "npm:pi-mcp-adapter",
+    "npm:@tmustier/pi-usage-extension",
+    "npm:@marckrenn/pi-sub-bar",
+    {
+      "source": "npm:@ollama/pi-web-search",
+      "extensions": [
+        "+index.ts"
+      ]
+    },
+    "npm:@ifi/oh-pi",
+    "npm:@ifi/oh-pi-extensions",
+    "npm:@ifi/oh-pi-ant-colony",
+    "npm:@ifi/pi-extension-subagents",
+    "npm:@ifi/pi-plan",
+    "npm:@ifi/pi-spec",
+    "npm:@ifi/oh-pi-themes",
+    "npm:@ifi/oh-pi-prompts",
+    "npm:@ifi/oh-pi-skills",
+    "npm:@ifi/pi-web-remote",
+    "npm:pi-powerline-footer"
+  ],
+  "theme": "nord",
+  "enabledModels": [
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-sonnet-4-6",
+    "github-copilot/claude-opus-4.6",
+    "github-copilot/claude-sonnet-4.6",
+    "openai-codex/gpt-5.4",
+    "openai-codex/gpt-5.3-codex",
+    "google-antigravity/gemini-3.1-pro-high",
+    "google-antigravity/claude-opus-4-6-thinking",
+    "openrouter/x-ai/grok-4.1-fast",
+    "openrouter/moonshotai/kimi-k2.5",
+    "openrouter/deepseek/deepseek-v3.2",
+    "opencode-go/glm-5",
+    "opencode-go/kimi-k2.5"
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "version": 2,
+  "display": {
+    "alignment": "split",
+    "barStyle": "both",
+    "barType": "horizontal-bar",
+    "barWidth": "fill",
+    "barCharacter": "heavy",
+    "containBar": false,
+    "brailleFillEmpty": false,
+    "brailleFullBlocks": false,
+    "colorScheme": "base-warning-error",
+    "usageColorTargets": {
+      "title": true,
+      "timer": true,
+      "bar": true,
+      "usageLabel": true,
+      "status": true
+    },
+    "resetTimePosition": "front",
+    "resetTimeFormat": "relative",
+    "resetTimeContainment": "blank",
+    "statusIndicatorMode": "icon",
+    "statusIconPack": "emoji",
+    "statusIconCustom": "✓⚠×?",
+    "statusProviderDivider": false,
+    "statusDismissOk": true,
+    "showProviderName": true,
+    "providerLabel": "none",
+    "providerLabelColon": false,
+    "providerLabelBold": true,
+    "baseTextColor": "muted",
+    "backgroundColor": "none",
+    "showWindowTitle": true,
+    "boldWindowTitle": true,
+    "showUsageLabels": true,
+    "dividerCharacter": "│",
+    "dividerColor": "dim",
+    "dividerBlanks": 1,
+    "showProviderDivider": true,
+    "statusLeadingDivider": false,
+    "statusTrailingDivider": false,
+    "dividerFooterJoin": true,
+    "showTopDivider": false,
+    "showBottomDivider": true,
+    "paddingLeft": 1,
+    "paddingRight": 1,
+    "widgetPlacement": "belowEditor",
+    "showContextBar": false,
+    "errorThreshold": 25,
+    "warningThreshold": 50,
+    "overflow": "truncate",
+    "successThreshold": 75
+  },
+  "providers": {
+    "anthropic": {
+      "showStatus": true,
+      "windows": {
+        "show5h": true,
+        "show7d": true,
+        "showExtra": false
+      }
+    },
+    "copilot": {
+      "showStatus": true,
+      "showMultiplier": true,
+      "showRequestsLeft": true,
+      "quotaDisplay": "percentage",
+      "windows": {
+        "showMonth": true
+      }
+    },
+    "gemini": {
+      "showStatus": true,
+      "windows": {
+        "showPro": true,
+        "showFlash": true
+      }
+    },
+    "antigravity": {
+      "showStatus": true,
+      "showCurrentModel": true,
+      "showScopedModels": true,
+      "windows": {
+        "showModels": true
+      },
+      "modelVisibility": {
+        "Claude Opus 4.6 (Thinking)": false,
+        "Claude Sonnet 4.6 (Thinking)": false,
+        "Gemini 2.5 Pro": false,
+        "Gemini 3 Flash": false,
+        "Gemini 3 Pro (High)": false,
+        "Gemini 3 Pro (Low)": false,
+        "Gemini 3.1 Flash Image": false,
+        "Gemini 3.1 Flash Lite": false,
+        "Gemini 3.1 Pro (High)": false,
+        "Gemini 3.1 Pro (Low)": false,
+        "GPT-OSS 120B (Medium)": false,
+        "tab_jump_flash_lite_preview": false
+      },
+      "modelOrder": [
+        "Gemini 3.1 Pro (High)",
+        "Claude Opus 4.6 (Thinking)",
+        "Claude Sonnet 4.6 (Thinking)",
+        "Gemini 2.5 Pro",
+        "Gemini 3 Flash",
+        "Gemini 3 Pro (High)",
+        "Gemini 3 Pro (Low)",
+        "Gemini 3.1 Flash Image",
+        "Gemini 3.1 Flash Lite",
+        "Gemini 3.1 Pro (Low)",
+        "GPT-OSS 120B (Medium)",
+        "tab_jump_flash_lite_preview"
+      ]
+    },
+    "codex": {
+      "showStatus": true,
+      "invertUsage": false,
+      "windows": {
+        "showPrimary": true,
+        "showSecondary": true
+      }
+    },
+    "kiro": {
+      "showStatus": false,
+      "windows": {
+        "showCredits": true
+      }
+    },
+    "zai": {
+      "showStatus": false,
+      "windows": {
+        "showTokens": true,
+        "showMonthly": true
+      }
+    }
+  },
+  "displayThemes": [],
+  "displayUserTheme": null,
+  "pinnedProvider": null,
+  "keybindings": {
+    "cycleProvider": "ctrl+alt+u",
+    "toggleResetFormat": "ctrl+alt+r"
+  }
+}
