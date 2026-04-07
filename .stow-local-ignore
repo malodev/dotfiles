@@ -3,3 +3,4 @@ fonts
 LICENSE
 \.DS_Store
 \.nvim
+\.gitignore
