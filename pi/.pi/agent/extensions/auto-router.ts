@@ -7,10 +7,13 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
  * Supporta fallback multi-provider per Claude (anthropic → github-copilot → google-antigravity → openrouter).
  *
  * Comandi:
- *   /route          → mostra stato e route corrente
- *   /route toggle   → attiva/disattiva routing automatico
- *   /route <nome>   → forza una route specifica
- *   /route list     → elenca tutte le route disponibili
+ *   /route              → mostra stato e route corrente
+ *   /route toggle       → attiva/disattiva routing automatico
+ *   /route <nome>       → forza una route specifica
+ *   /route list         → elenca tutte le route disponibili
+ *   /route mode         → mostra la modalità attiva (local | orauto)
+ *   /route mode local   → routing locale via keyword matching
+ *   /route mode orauto  → delega routing a openrouter/auto
  */
 
 // === CONFIGURAZIONE ROUTE ===
@@ -99,6 +102,17 @@ const ROUTES: Record<string, RouteConfig> = {
       ["openrouter", "moonshotai/kimi-k2.5"],
     ],
   },
+  uiux: {
+    label: "🎨 GPT-5.4 + Qwen — UI/UX",
+    thinking: "medium",
+    candidates: [
+      ["openai-codex", "gpt-5.4"],
+      ["github-copilot", "gpt-5.4"],
+      ["openrouter", "qwen/qwen3.6-plus:free"],
+      ["openrouter", "openai/gpt-5.4"],
+      ["anthropic", "claude-sonnet-4-6"],
+    ],
+  },
   glm: {
     label: "🔵 GLM-5 — long-horizon",
     thinking: "medium",
@@ -162,6 +176,20 @@ function classifyTask(prompt: string): keyof typeof ROUTES {
     return "general";
   }
 
+  // 🎨 UI/UX: design, frontend, componenti visivi
+  if (
+    /\b(figma|mockup|wireframe|prototype|sketch)\b/.test(p) ||
+    /\b(ui|ux|user.?interface|user.?experience|design.?system)\b/.test(p) ||
+    /\b(landing.?page|hero|banner|card|modal|sidebar|navbar|footer)\b/.test(p) ||
+    /\b(css|tailwind|styled.?components|emotion|sass|scss)\b/.test(p) ||
+    /\b(animation|transition|hover|focus|responsive|breakpoint)\b/.test(p) ||
+    /\b(color.?palette|typography|font|spacing|layout|grid|flexbox)\b/.test(p) ||
+    /\b(dark.?mode|light.?mode|theme|brand|visual)\b/.test(p) ||
+    /\b(component.*(visual|look|style)|styl.*(component|element))\b/.test(p)
+  ) {
+    return "uiux";
+  }
+
   // 🔵 Budget: documentazione, test, formattazione
   if (
     /\b(docstring|jsdoc|comment|readme|documentation|documenta)\b/.test(p) ||
@@ -178,8 +206,11 @@ function classifyTask(prompt: string): keyof typeof ROUTES {
 
 // === EXTENSION ===
 
+type RouterMode = "local" | "orauto";
+
 export default function (pi: ExtensionAPI) {
   let autoRouting = true;
+  let routerMode: RouterMode = "local";
   let lastRoute = "";
 
   // Trova il primo modello disponibile tra i candidati
@@ -220,6 +251,51 @@ export default function (pi: ExtensionAPI) {
             `💡 /route list | /route toggle | /route <nome>`,
           "info"
         );
+        return;
+      }
+
+      if (arg === "mode" || arg.startsWith("mode ")) {
+        const sub = arg.slice(4).trim();
+
+        if (!sub) {
+          ctx.ui.notify(
+            `⚙️  Modalità corrente: ${routerMode === "orauto" ? "🌐 orauto (OpenRouter Auto)" : "🧠 local (keyword matching)"}
+💡 /route mode local | /route mode orauto`,
+            "info"
+          );
+          return;
+        }
+
+        if (sub === "local") {
+          routerMode = "local";
+          ctx.ui.notify("🧠 Modalità: local — routing via keyword matching", "info");
+          ctx.ui.setStatus("router", "🔀 auto:local");
+          return;
+        }
+
+        if (sub === "orauto") {
+          routerMode = "orauto";
+          const model = ctx.modelRegistry.find("openrouter", "auto");
+          if (!model) {
+            ctx.ui.notify("❌ openrouter/auto non trovato — verifica OPENROUTER_API_KEY", "error");
+            return;
+          }
+          const ok = await pi.setModel(model);
+          if (!ok) {
+            ctx.ui.notify("❌ Nessuna API key per OpenRouter", "error");
+            return;
+          }
+          pi.setThinkingLevel("medium");
+          lastRoute = "orauto";
+          ctx.ui.notify(
+            "🌐 Modalità: orauto — OpenRouter sceglie il modello per ogni prompt",
+            "info"
+          );
+          ctx.ui.setStatus("router", "🌐 orauto");
+          return;
+        }
+
+        ctx.ui.notify(`❌ Modalità sconosciuta: "${sub}". Usa: local | orauto`, "warning");
         return;
       }
 
@@ -268,10 +344,12 @@ export default function (pi: ExtensionAPI) {
   pi.on("input", async (event, ctx) => {
     if (!autoRouting) return { action: "continue" as const };
     if (event.source !== "interactive") return { action: "continue" as const };
-
-    // Non routare comandi
     if (event.text.startsWith("/")) return { action: "continue" as const };
 
+    // In modalità orauto il modello è già impostato su openrouter/auto — non serve fare nulla
+    if (routerMode === "orauto") return { action: "continue" as const };
+
+    // Modalità local: classificazione keyword
     const routeName = classifyTask(event.text);
     const config = ROUTES[routeName];
     await applyRoute(routeName, config, ctx);
@@ -282,9 +360,9 @@ export default function (pi: ExtensionAPI) {
   // === STARTUP ===
   pi.on("session_start", async (_event, ctx) => {
     ctx.ui.notify(
-      "🔀 Auto-router attivo — /route list per le route, /route toggle per on/off",
+      "🔀 Auto-router attivo — /route list | /route mode orauto | /route toggle",
       "info"
     );
-    ctx.ui.setStatus("router", "🔀 auto");
+    ctx.ui.setStatus("router", "🔀 auto:local");
   });
 }
