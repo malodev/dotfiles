@@ -85,8 +85,8 @@
         "showModels": true
       },
       "modelVisibility": {
-        "Claude Opus 4.6 (Thinking)": false,
         "Claude Sonnet 4.6 (Thinking)": false,
+        "Claude Opus 4.6 (Thinking)": false,
         "Gemini 2.5 Pro": false,
         "Gemini 3 Flash": false,
         "Gemini 3 Pro (High)": false,
