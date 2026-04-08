@@ -209,7 +209,7 @@ function classifyTask(prompt: string): keyof typeof ROUTES {
 type RouterMode = "local" | "orauto";
 
 export default function (pi: ExtensionAPI) {
-  let autoRouting = true;
+  let autoRouting = false;
   let routerMode: RouterMode = "local";
   let lastRoute = "";
 
