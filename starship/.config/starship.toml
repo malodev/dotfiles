@@ -1,7 +1,7 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 palette = "catppuccin_mocha"
 # right_format = """$battery $time"""
-format = """$os $username${custom.hostname_local}${custom.hostname_ssh} $directory $git_branch $git_status
+format = """$os $username${custom.hostname_local}${custom.hostname_ssh} $directory $git_branch $git_status $python
 $character"""
 command_timeout = 5000
 # Starship modules
@@ -351,6 +351,8 @@ symbol = " "
 
 [python]
 symbol = " "
+format = '[$symbol($version )($virtualenv)]($style) '
+style = "mauve"
 
 [rlang]
 symbol = "󰟔 "
