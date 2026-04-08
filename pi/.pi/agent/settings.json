@@ -1,8 +1,8 @@
 {
-  "defaultModel": "claude-sonnet-4-6",
-  "defaultProvider": "anthropic",
+  "defaultModel": "gemini-3.1-pro-high",
+  "defaultProvider": "google-antigravity",
   "defaultThinkingLevel": "medium",
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "lastChangelogVersion": "0.65.2",
   "modelProfiles": [
     {
@@ -69,7 +69,6 @@
   "packages": [
     "npm:pi-markdown-preview",
     "npm:pi-connect",
-    "npm:@plannotator/pi-extension",
     "npm:pi-mcp-adapter",
     "npm:@tmustier/pi-usage-extension",
     "npm:@marckrenn/pi-sub-bar",
