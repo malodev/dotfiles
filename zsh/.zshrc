@@ -74,6 +74,8 @@ fi
 # COMPLETION
 #=============================================================================
 export ZSH_DISABLE_COMPFIX="true"
+# User custom completions (drop _mytool files here)
+fpath=($HOME/.zsh/completions $fpath)
 # Add system functions path if it exists (Linux)
 [[ -d /usr/share/zsh/$ZSH_VERSION/functions ]] && fpath=(/usr/share/zsh/$ZSH_VERSION/functions $fpath)
 # On macOS, zsh functions are in a different location
@@ -215,7 +217,19 @@ elif [ -n "${XDG_CONFIG_HOME-}" ] && [ -d "${XDG_CONFIG_HOME}/nvm" ]; then
 fi
 if [ -s "$NVM_DIR/nvm.sh" ]; then
   # Add nvm's default node to PATH immediately (no subprocess cost)
-  [ -s "$NVM_DIR/alias/default" ] && PATH="$NVM_DIR/versions/node/$(cat "$NVM_DIR/alias/default")/bin:$PATH"
+  # Resolves alias chains (lts/* → lts/iron → v20.x.x) and partial versions (24 → v24.14.0)
+  if [ -s "$NVM_DIR/alias/default" ]; then
+    NVM_DEFAULT=$(cat "$NVM_DIR/alias/default" 2>/dev/null)
+    # Resolve lts/* alias chains
+    while [[ "$NVM_DEFAULT" == lts/* ]]; do
+      NVM_DEFAULT=$(cat "$NVM_DIR/alias/$NVM_DEFAULT" 2>/dev/null)
+    done
+    # Resolve partial version (e.g. "24" → "v24.14.0")
+    if [ -n "$NVM_DEFAULT" ] && [ "${NVM_DEFAULT#v}" = "$NVM_DEFAULT" ] && [ "${NVM_DEFAULT#lts/}" = "$NVM_DEFAULT" ]; then
+      NVM_DEFAULT=$(ls "$NVM_DIR/versions/node/" 2>/dev/null | grep "^v${NVM_DEFAULT}[.-]" | sort -V | tail -1)
+    fi
+    [ -n "$NVM_DEFAULT" ] && PATH="$NVM_DIR/versions/node/$NVM_DEFAULT/bin:$PATH"
+  fi
   # Lazy-load nvm itself — only runs when you first call nvm/node/npm/npx
   nvm() {
     unfunction nvm node npm npx 2>/dev/null
@@ -271,3 +285,6 @@ bindkey "^[[B" history-substring-search-down
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
 
 echo "🛠️zshrc loaded."
+
+# bun completions
+[ -s "/Users/mauro/.bun/_bun" ] && source "/Users/mauro/.bun/_bun"
