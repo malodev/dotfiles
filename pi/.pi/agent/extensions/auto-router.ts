@@ -31,9 +31,9 @@ const ROUTES: Record<string, RouteConfig> = {
     label: "🔴 Opus 4.6 — chirurgia",
     thinking: "high",
     candidates: [
-      ["anthropic", "claude-opus-4-6"],
-      ["github-copilot", "claude-opus-4.6"],
       ["google-antigravity", "claude-opus-4-6-thinking"],
+      ["github-copilot", "claude-opus-4.6"],
+      ["anthropic", "claude-opus-4-6"],
       ["openrouter", "anthropic/claude-opus-4.6"],
     ],
   },
@@ -52,9 +52,9 @@ const ROUTES: Record<string, RouteConfig> = {
     label: "🟡 Sonnet 4.6 — quotidiano",
     thinking: "medium",
     candidates: [
-      ["anthropic", "claude-sonnet-4-6"],
-      ["github-copilot", "claude-sonnet-4.6"],
       ["google-antigravity", "claude-sonnet-4-6"],
+      ["github-copilot", "claude-sonnet-4.6"],
+      ["anthropic", "claude-sonnet-4-6"],
       ["openrouter", "anthropic/claude-sonnet-4.6"],
     ],
   },
