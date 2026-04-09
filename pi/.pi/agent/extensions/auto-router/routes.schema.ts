@@ -6,11 +6,20 @@
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
+/**
+ * A single provider+model candidate.
+ * Candidates are tried in order; the first one whose model is found
+ * and whose API key is available wins.
+ */
+export type Candidate = [provider: string, modelId: string];
+
 export interface RouteConfig {
-  /** Provider id as registered in pi (e.g. "anthropic", "openai") */
-  provider: string;
-  /** Model id as registered in pi's model registry */
-  modelId: string;
+  /**
+   * Ordered list of [provider, modelId] pairs to try.
+   * The first available candidate is used; the rest are fallbacks.
+   * Fix #1: replaces single provider/modelId with multi-candidate fallback chain.
+   */
+  candidates: Candidate[];
   /** Thinking level to apply when this route is selected */
   thinking: ThinkingLevel;
   /** Human-readable label shown in status bar and notifications */
@@ -21,13 +30,16 @@ export interface RouteConfig {
    */
   manualOnly?: boolean;
   /**
-   * Keyword patterns (lowercase) that trigger this route.
-   * Matched against the user's prompt before sending to the LLM.
+   * Weighted keyword patterns (lowercase) that trigger this route.
+   * Each entry is [keyword, weight]. Higher weight = stronger signal.
+   * Fix #2: replaces flat string[] with weighted pairs to avoid
+   * generic words ("fix", "add") dominating over specific ones.
    */
-  keywords?: string[];
+  keywords?: [keyword: string, weight: number][];
   /**
    * Minimum prompt length (chars) to consider this route.
-   * Useful to avoid routing short clarification messages to heavy models.
+   * Fix #7: avoid routing very short prompts to heavy models.
+   * Recommended minimum: 10 for fast routes, 30+ for deep/surgical.
    */
   minPromptLength?: number;
 }
