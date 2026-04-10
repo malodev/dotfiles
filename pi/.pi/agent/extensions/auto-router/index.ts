@@ -104,7 +104,7 @@ function classifyPrompt(prompt: string): RouteKey | null {
 export default function (pi: ExtensionAPI) {
   // Safe defaults — session_start will overwrite with persisted state.
   let state: RouterState = {
-    mode: "off",
+    mode: "local",
     pinnedRoute: null,
     lastAutoRoute: null,
     hysteresisCount: 0,
@@ -205,7 +205,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     state = {
-      mode:            restored.mode          ?? "off",
+      mode:            restored.mode          ?? "local",
       pinnedRoute:     restored.pinnedRoute   ?? null,
       lastAutoRoute:   restored.lastAutoRoute ?? null,
       hysteresisCount: 0, // always reset — cross-session count is meaningless
@@ -250,34 +250,53 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_agent_start", async (event, ctx) => {
     // orauto: openrouter/auto already set — OpenRouter handles it, nothing to do
-    if (state.mode === "orauto" && !state.pinnedRoute) return;
+    if (state.mode === "orauto" && !state.pinnedRoute) {
+      ctx.ui.setStatus("auto-router", statusLabel());
+      return;
+    }
 
     // off: routing disabled
-    if (state.mode === "off") return;
+    if (state.mode === "off") {
+      ctx.ui.setStatus("auto-router", "router:off");
+      return;
+    }
 
-    // pin: model already applied at pin time, nothing to do per prompt
-    if (state.pinnedRoute) return;
+    // pin: model already applied at pin time, show current pin
+    if (state.pinnedRoute) {
+      ctx.ui.setStatus("auto-router", statusLabel());
+      return;
+    }
 
     // local: run classifier + hysteresis
     const candidate = classifyPrompt(event.prompt);
-    if (!candidate) return;
+
+    if (!candidate) {
+      // No route matched — show current state so user sees something
+      ctx.ui.setStatus("auto-router", statusLabel());
+      return;
+    }
 
     // Case A — same route as last turn: increment counter, no switch needed
     if (candidate === state.lastAutoRoute) {
       state.hysteresisCount++;
       persistState();
+      ctx.ui.setStatus("auto-router", `${statusLabel()} =${state.hysteresisCount}`);
       return;
     }
 
     // Case B — different route: enforce minimum dwell time before switching
     if (state.lastAutoRoute !== null && state.hysteresisCount < HYSTERESIS_TURNS) {
-      return; // too early to switch
+      // Hysteresis blocking — show what's active and what would switch
+      const blocked = `router:⏳${ROUTES[state.lastAutoRoute].label}→${candidate}`;
+      ctx.ui.setStatus("auto-router", blocked);
+      return;
     }
 
     // Switch to new route
     state.lastAutoRoute = candidate;
     state.hysteresisCount = 0;
     persistState();
+    ctx.ui.notify(`[auto-router] → ${ROUTES[candidate].label}`, "info");
     await applyRoute(candidate, ctx);
   });
 
