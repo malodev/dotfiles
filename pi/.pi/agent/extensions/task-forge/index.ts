@@ -454,6 +454,25 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setStatus("task-forge", statusLabel(state));
   }
 
+  function makeExecutionResumable(reason: string) {
+    if (!state) return false;
+
+    const wasActiveExecution = state.status === "executing" || state.status === "reviewing" || state.tasks.some((t) => t.status === "running");
+    if (!wasActiveExecution) return false;
+
+    for (const task of state.tasks) {
+      if (task.status === "running") {
+        task.status = "pending";
+        task.error = reason;
+      }
+    }
+
+    state.status = "paused";
+    state.nextAction = "executePlan";
+    state.phaseLabel = state.currentPhase >= 6 ? "Integration Review (interrupted)" : "Execution (interrupted)";
+    return true;
+  }
+
   async function saveArtifact(ctx: any, relativePath: string, content: string) {
     const path = outputPath(ctx.cwd, relativePath);
     await atomicWrite(path, content);
@@ -1801,10 +1820,16 @@ export default function (pi: ExtensionAPI) {
     }
 
     state = restored;
+    if (makeExecutionResumable("Recovered after pi restart during active execution")) {
+      await persistState(ctx, "resume_recovered_execution");
+    }
     ctx.ui.setStatus("task-forge", statusLabel(state));
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event: any, ctx: any) => {
     runAbortController?.abort();
+    if (makeExecutionResumable("Interrupted because pi exited during active execution")) {
+      await persistState(ctx, "session_shutdown_interrupted_execution");
+    }
   });
 }

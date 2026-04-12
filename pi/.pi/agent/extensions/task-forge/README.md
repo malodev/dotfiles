@@ -450,6 +450,18 @@ You may see:
 
 These files are useful for debugging and resuming runs.
 
+### Exiting pi during execution
+
+TaskForge now performs a resumable interruption step on shutdown.
+
+If pi exits while TaskForge is actively executing or reviewing:
+- in-flight `running` tasks are converted back to `pending`
+- orchestration status is moved to `paused`
+- `nextAction` is set so `/forge execute` can resume safely
+- interruption is persisted into `state.json` and `state.log`
+
+So exiting pi is no longer expected to leave TaskForge stuck in a fake `executing` state with orphaned running tasks.
+
 ---
 
 ## Configuration
