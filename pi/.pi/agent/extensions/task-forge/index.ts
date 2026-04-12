@@ -1615,7 +1615,14 @@ export default function (pi: ExtensionAPI) {
       const sub = parts[0];
 
       if (!sub || sub === "status") {
-        ctx.ui.notify(statusSummary(), "info");
+        pi.sendMessage(
+          {
+            customType: "task-forge-status",
+            content: statusSummary(),
+            display: true,
+          },
+          { triggerTurn: false },
+        );
         return;
       }
 
