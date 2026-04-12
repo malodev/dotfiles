@@ -265,9 +265,37 @@ function statusIcon(status: ForgeStatus) {
 
 function statusLabel(state: ForgeState | null) {
   if (!state) return "forge:idle";
-  const done = state.tasks.filter((t) => t.status === "completed").length;
+
   const total = state.tasks.length;
-  const suffix = total > 0 ? ` [${done}/${total}]` : "";
+  const done = state.tasks.filter((t) => t.status === "completed").length;
+  const running = state.tasks.filter((t) => t.status === "running").length;
+  const blocked = state.tasks.filter((t) => t.status === "blocked").length;
+  const failed = state.tasks.filter((t) => t.status === "failed").length;
+
+  const parts: string[] = [];
+  if (total > 0) parts.push(`${done}/${total}`);
+  if (running > 0) parts.push(`r${running}`);
+  if (blocked > 0) parts.push(`b${blocked}`);
+  if (failed > 0) parts.push(`f${failed}`);
+
+  if (state.status === "executing") {
+    const iterativeRunning = state.tasks.filter(
+      (t) => t.status === "running" && t.taskMode === "iterative" && t.tddPhase && t.tddPhase !== "complete",
+    );
+    const red = iterativeRunning.filter((t) => t.tddPhase === "red").length;
+    const green = iterativeRunning.filter((t) => t.tddPhase === "green").length;
+    const refactor = iterativeRunning.filter((t) => t.tddPhase === "refactor").length;
+    if (red > 0) parts.push(`red${red}`);
+    if (green > 0) parts.push(`green${green}`);
+    if (refactor > 0) parts.push(`ref${refactor}`);
+  }
+
+  if (state.status === "awaiting_approval") {
+    if (state.nextAction === "continuePlanning") parts.push("next:plan");
+    if (state.nextAction === "executePlan") parts.push("next:exec");
+  }
+
+  const suffix = parts.length > 0 ? ` [${parts.join("|")}]` : "";
   return `forge:${statusIcon(state.status)}${state.status}${suffix}`;
 }
 
