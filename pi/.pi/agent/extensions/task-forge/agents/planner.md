@@ -105,6 +105,8 @@ Example top-level shape:
 
 - Optimize for inspectability.
 - Avoid lossy handoffs.
+- Treat the original PRD as authoritative when it contains detail compressed by the requirements summary.
+- Preserve explicit UI kit, design-system, and UX constraints as real planning inputs, not decorative notes.
 - Prefer explicit dependency edges over implicit sequencing.
 - If the requirements are too vague to decompose safely, say so and reduce confidence.
 - If a task seems too large for context safety, split it.

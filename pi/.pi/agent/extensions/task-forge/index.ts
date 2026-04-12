@@ -243,6 +243,10 @@ function genId() {
   return `forge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function seconds(value: number) {
+  return value * 1000;
+}
+
 function statusIcon(status: ForgeStatus) {
   switch (status) {
     case "idle": return "💤";
@@ -524,6 +528,10 @@ export default function (pi: ExtensionAPI) {
       "pi",
       [
         "--no-session",
+        "--no-extensions",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-themes",
         "--model",
         model,
         "--tools",
@@ -537,7 +545,7 @@ export default function (pi: ExtensionAPI) {
       {
         cwd: ctx.cwd,
         signal: runAbortController?.signal,
-        timeout: options?.timeout ?? 600,
+        timeout: seconds(options?.timeout ?? 600),
       } as any,
     );
 
@@ -553,7 +561,7 @@ export default function (pi: ExtensionAPI) {
         "-lc",
         "find . -maxdepth 3 \( -path './node_modules' -o -path './.git' -o -path './.task-forge' \) -prune -o -type f | sort | head -n 400",
       ],
-      { cwd: ctx.cwd, timeout: 20 } as any,
+      { cwd: ctx.cwd, timeout: seconds(20) } as any,
     );
     return result.stdout?.trim() || "";
   }
@@ -674,10 +682,14 @@ export default function (pi: ExtensionAPI) {
       "- User stories",
       "- Functional requirements (must/should/could)",
       "- Non-functional requirements",
+      "- UI / UX Constraints and Design System Requirements",
       "- Constraints and assumptions",
       "- Success metrics",
       "- Risks and dependencies",
       "- Ambiguities and open questions",
+      "",
+      "# Special instruction",
+      "If the PRD contains a UI kit, design system, component catalog, style guide, interaction rules, layout rules, visual tokens, or accessibility section, preserve it as a first-class requirements section. Do not collapse it into a generic note.",
       "",
       "# Existing codebase file tree",
       tree || "(none)",
@@ -767,6 +779,7 @@ export default function (pi: ExtensionAPI) {
     await persistState(ctx, "phase_start", { phase: 2 });
 
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
+    const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
     const tree = await gatherCodebaseSummary(ctx);
 
     const prompt = [
@@ -792,6 +805,9 @@ export default function (pi: ExtensionAPI) {
       "",
       "# Requirements",
       requirements,
+      "",
+      "# Original PRD",
+      originalPrd,
     ].join("\n");
 
     const raw = await spawnAgent(ctx, "planner", prompt, {
@@ -840,6 +856,7 @@ export default function (pi: ExtensionAPI) {
     await persistState(ctx, "phase_start", { phase: 3 });
 
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
+    const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
     const plan = await readArtifactMaybe(ctx, state.planFile);
     const tasksJson = await readArtifactMaybe(ctx, state.tasksFile);
     const tree = await gatherCodebaseSummary(ctx);
@@ -863,6 +880,9 @@ export default function (pi: ExtensionAPI) {
       "",
       "# Requirements",
       requirements,
+      "",
+      "# Original PRD",
+      originalPrd,
       "",
       "# Plan",
       plan,
@@ -1060,7 +1080,7 @@ export default function (pi: ExtensionAPI) {
     const result = await pi.exec(
       "bash",
       ["-lc", command],
-      { cwd: ctx.cwd, signal: runAbortController?.signal, timeout: 900 } as any,
+      { cwd: ctx.cwd, signal: runAbortController?.signal, timeout: seconds(900) } as any,
     );
 
     let output = [

@@ -669,13 +669,13 @@ So today the source of truth is:
 
 ### Worker execution model
 
-TaskForge currently spawns subprocess pi runs with:
+TaskForge currently spawns subprocess pi runs with a minimal isolated runtime, roughly like:
 
 ```text
-pi --no-session --model ... --tools ... --system-prompt ... -p ...
+pi --no-session --no-extensions --no-skills --no-prompt-templates --no-themes --model ... --tools ... --system-prompt ... -p ...
 ```
 
-So each worker has isolated context.
+So each worker has isolated context and does not recursively load your full interactive extension stack.
 
 ---
 

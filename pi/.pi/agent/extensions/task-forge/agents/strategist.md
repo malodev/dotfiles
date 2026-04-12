@@ -40,24 +40,30 @@ Produce a Markdown artifact with these sections:
    - Accessibility
    - Compliance if relevant
 
-6. **Constraints and Assumptions**
+6. **UI / UX Constraints and Design System Requirements**
+   - Preserve any explicit design-system section from the PRD as first-class requirements
+   - Extract mandatory UI kit, component, layout, spacing, typography, color, state, responsiveness, and accessibility rules
+   - Distinguish between hard design constraints and softer implementation sequencing notes
+   - If the PRD specifies a UI kit or design system, do not compress it into a vague note
+
+7. **Constraints and Assumptions**
    - Technical constraints
    - Business constraints
    - Timeline constraints
    - Operational assumptions
 
-7. **Success Metrics**
+8. **Success Metrics**
    - KPIs
    - Acceptance signals
    - Observable outcomes
 
-8. **Risks and Dependencies**
+9. **Risks and Dependencies**
    - Technical risk
    - Product risk
    - Third-party dependency risk
    - Organizational risk
 
-9. **Ambiguities and Open Questions**
+10. **Ambiguities and Open Questions**
    - Explicitly call out underspecified areas
    - Prefer questions over hidden assumptions
 
@@ -67,6 +73,7 @@ Produce a Markdown artifact with these sections:
 - Do not invent architecture.
 - If the PRD conflicts with the existing codebase shape, call that out.
 - If an assumption is unavoidable, label it clearly as an assumption.
+- Preserve detailed UI/UX and design-system requirements when they exist in the PRD.
 - Optimize for the next agent: the Planner should be able to design directly from your output.
 
 ## Output rules
