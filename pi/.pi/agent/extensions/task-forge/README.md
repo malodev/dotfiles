@@ -550,6 +550,21 @@ Example:
 
 ---
 
+## V2 rewrite status
+
+A structural V2 rewrite is in progress under:
+
+- `ARCHITECTURE-V2.md`
+- `v2/types.ts`
+- `v2/events.ts`
+- `v2/derive.ts`
+- `v2/storage.ts`
+- `v2/preflight.ts`
+- `v2/engine.ts`
+- `v2/migrate.ts`
+
+The goal is to replace the current mutable orchestration loop with a durable event-sourced engine and derived snapshot state.
+
 ## Commands
 
 ### Start planning only
@@ -572,12 +587,15 @@ Stops before execution.
 ```
 
 Runs the whole workflow.
+The command now starts execution asynchronously and returns control immediately so you can keep using `/forge status`, `/forge cost`, or `/forge abort` while the run is active.
 
 ### Execute an approved plan
 
 ```text
 /forge execute
 ```
+
+Starts execution in the background and returns immediately.
 
 ### Show status
 
@@ -596,6 +614,24 @@ Runs the whole workflow.
 ```text
 /forge resume
 ```
+
+Resumes execution in the background and returns immediately.
+
+### Human-intervention behavior
+
+TaskForge now treats several failure classes as immediate human-help blockers instead of blind retries, including:
+- missing runtime tools/scripts (`playwright: not found`, exit 127)
+- test path / working-directory mismatches (`No tests found`)
+- dependency service reachability failures (`ECONNREFUSED`, `fetch failed`)
+- CORS policy failures
+- native binary / platform mismatches (`Exec format error`, `ERR_DLOPEN_FAILED`, wrong-platform `esbuild`/`better-sqlite3`)
+
+When detected, TaskForge:
+- blocks the task immediately
+- pauses orchestration in a resumable state
+- emits a persistent visible message with the reason, suggested human action, and next commands
+
+TaskForge also emits a human-help message when a task appears stalled for an extended period during execution.
 
 ### Abort run
 
