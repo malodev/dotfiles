@@ -15,6 +15,10 @@ import type { AutocompleteItem } from "@mariozechner/pi-tui";
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { appendEvent as appendV2Event, createLayout, deriveSnapshot as deriveV2Snapshot, loadSnapshot as loadV2Snapshot, readEvents as readV2Events, writeSnapshot as writeV2Snapshot } from "./v2/storage";
+import { migrateV1StateToEvents, migrateV1StateToSnapshot } from "./v2/migrate";
+import { TaskForgeV2Engine } from "./v2/engine";
+import type { RunSnapshot as V2RunSnapshot, RunStatus as V2RunStatus } from "./v2/types";
 
 type ModelTier = "reasoning" | "coding" | "bulk" | "endurance";
 type Role =
@@ -109,6 +113,8 @@ interface ForgeTask {
   completedAt?: string;
   iterationCount?: number;
   resolutionInstruction?: string;
+  failureSignature?: string;
+  stallWarnedAt?: string;
 }
 
 interface TestSpecEntry {
@@ -222,6 +228,9 @@ const DEFAULT_CONFIG: TaskForgeConfig = {
 };
 
 const STATE_ENTRY_TYPE = "task-forge-state";
+const TASK_STALL_WARNING_MS = seconds(20 * 60);
+const TASK_STALL_ESCALATION_MS = TASK_STALL_WARNING_MS;
+const TASK_SUPERVISOR_SWEEP_MS = Math.min(TASK_STALL_WARNING_MS, seconds(60));
 const SUBCOMMANDS = [
   "execute",
   "status",
@@ -247,7 +256,7 @@ function seconds(value: number) {
   return value * 1000;
 }
 
-function statusIcon(status: ForgeStatus) {
+function statusIcon(status: ForgeStatus | V2RunStatus | "needs_human_intervention") {
   switch (status) {
     case "idle": return "💤";
     case "analyzing": return "🔍";
@@ -260,6 +269,7 @@ function statusIcon(status: ForgeStatus) {
     case "aborted": return "🛑";
     case "blocked": return "🚧";
     case "failed": return "❌";
+    case "needs_human_intervention": return "⚠️";
   }
 }
 
@@ -297,6 +307,314 @@ function statusLabel(state: ForgeState | null) {
 
   const suffix = parts.length > 0 ? ` [${parts.join("|")}]` : "";
   return `forge:${statusIcon(state.status)}${state.status}${suffix}`;
+}
+
+function overdueSupervisors(snapshot: V2RunSnapshot | null) {
+  if (!snapshot) return [] as Array<V2RunSnapshot["supervisors"][string]>;
+  const now = Date.now();
+  return Object.values(snapshot.supervisors).filter((supervisor) => {
+    const runtime = snapshot.taskState[supervisor.taskId];
+    if (!runtime || runtime.status !== "running") return false;
+    const deadline = Date.parse(supervisor.watchdogDeadlineAt);
+    return Number.isFinite(deadline) && deadline <= now;
+  });
+}
+
+function statusLabelFromV2(snapshot: V2RunSnapshot | null) {
+  if (!snapshot) return "forge:idle";
+
+  const taskState = Object.values(snapshot.taskState);
+  const total = snapshot.tasks.length || taskState.length;
+  const done = taskState.filter((t) => t.status === "completed").length;
+  const running = taskState.filter((t) => t.status === "running").length;
+  const blocked = taskState.filter((t) => t.status === "blocked").length;
+  const failed = taskState.filter((t) => t.status === "failed").length;
+  const overdue = overdueSupervisors(snapshot).length;
+
+  const parts: string[] = [];
+  if (total > 0) parts.push(`${done}/${total}`);
+  if (running > 0) parts.push(`r${running}`);
+  if (blocked > 0) parts.push(`b${blocked}`);
+  if (failed > 0) parts.push(`f${failed}`);
+  if (overdue > 0) parts.push(`ov${overdue}`);
+  if (snapshot.status === "executing") {
+    const iterativeRunning = taskState.filter(
+      (t) => t.status === "running" && t.tddPhase && t.tddPhase !== "complete",
+    );
+    const red = iterativeRunning.filter((t) => t.tddPhase === "red").length;
+    const green = iterativeRunning.filter((t) => t.tddPhase === "green").length;
+    const refactor = iterativeRunning.filter((t) => t.tddPhase === "refactor").length;
+    if (red > 0) parts.push(`red${red}`);
+    if (green > 0) parts.push(`green${green}`);
+    if (refactor > 0) parts.push(`ref${refactor}`);
+  }
+  if (snapshot.status === "awaiting_approval" || snapshot.status === "paused") {
+    if (snapshot.nextAction === "continuePlanning") parts.push("next:plan");
+    if (snapshot.nextAction === "executePlan") parts.push("next:exec");
+  }
+
+  const suffix = parts.length > 0 ? ` [${parts.join("|")}]` : "";
+  return `forge:${statusIcon(snapshot.status)}${snapshot.status}${suffix}`;
+}
+
+function statusSummaryFromV2(snapshot: V2RunSnapshot | null) {
+  if (!snapshot) return "[task-forge] No active orchestration";
+
+  const taskState = Object.values(snapshot.taskState);
+  const overdue = overdueSupervisors(snapshot);
+  const counts = {
+    ready: taskState.filter((t) => t.status === "ready").length,
+    running: taskState.filter((t) => t.status === "running").length,
+    completed: taskState.filter((t) => t.status === "completed").length,
+    pending: taskState.filter((t) => t.status === "pending").length,
+    failed: taskState.filter((t) => t.status === "failed").length,
+    blocked: taskState.filter((t) => t.status === "blocked").length,
+  };
+  const blockerIds = new Set([
+    ...snapshot.blockers.filter((b) => !b.resolvedAt).map((b) => b.taskId),
+    ...(snapshot.pendingHumanIntervention ? [snapshot.pendingHumanIntervention.taskId] : []),
+  ]);
+
+  return [
+    `[task-forge] ${statusIcon(snapshot.status)} ${snapshot.status}`,
+    `mode: ${snapshot.orchestrationMode ?? "n/a"}`,
+    `phase: ${snapshot.phaseLabel}`,
+    snapshot.nextAction ? `next action: ${snapshot.nextAction}` : "",
+    `prd: ${snapshot.prdFile ?? "n/a"}`,
+    `tasks: ${counts.completed}/${snapshot.tasks.length || taskState.length} completed, ${counts.running} running, ${counts.ready} ready, ${counts.pending} pending, ${counts.failed} failed, ${counts.blocked} blocked`,
+    overdue.length > 0 ? `overdue supervisors: ${overdue.map((s) => s.taskId).join(", ")}` : "overdue supervisors: none",
+    blockerIds.size > 0 ? `blockers: ${Array.from(blockerIds).join(", ")}` : "blockers: none",
+  ].filter(Boolean).join("\n");
+}
+
+async function ensureV2BootstrappedFromCurrentState(cwd: string, outputDir: string) {
+  const layout = createLayout(cwd, outputDir);
+  const existingEvents = await readV2Events(layout);
+  if (existingEvents.length > 0) return;
+  if (!existsSync(layout.snapshotFile)) return;
+
+  try {
+    const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8"));
+    if (raw?.schemaVersion === 2) return;
+    const events = migrateV1StateToEvents(raw as any);
+    for (const event of events) {
+      await appendV2Event(layout, event);
+    }
+    const derived = await deriveV2Snapshot(layout);
+    if (derived) {
+      await writeV2Snapshot(layout, derived);
+    }
+  } catch {
+    // Ignore bootstrap failures; caller will fall back to v1 state.
+  }
+}
+
+async function loadAuthoritativeSnapshot(cwd: string, outputDir: string): Promise<V2RunSnapshot | null> {
+  const layout = createLayout(cwd, outputDir);
+
+  const derived = await deriveV2Snapshot(layout);
+  if (derived) return derived;
+
+  const storedV2 = await loadV2Snapshot(layout);
+  if (storedV2?.schemaVersion === 2) return storedV2;
+
+  if (!existsSync(layout.snapshotFile)) return null;
+  try {
+    const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8"));
+    if (raw?.schemaVersion === 2) return raw as V2RunSnapshot;
+    return migrateV1StateToSnapshot(raw as any);
+  } catch {
+    return null;
+  }
+}
+
+function mapV2StatusToV1(status: V2RunStatus): ForgeStatus {
+  return status === "needs_human_intervention"
+    ? "paused"
+    : status === "idle"
+      ? "idle"
+      : status === "planning"
+        ? "planning"
+        : status === "awaiting_approval"
+          ? "awaiting_approval"
+          : status === "paused"
+            ? "paused"
+            : status === "executing"
+              ? "executing"
+              : status === "reviewing"
+                ? "reviewing"
+                : status === "completed"
+                  ? "completed"
+                  : status === "aborted"
+                    ? "aborted"
+                    : "failed";
+}
+
+function createV1StateFromV2(snapshot: V2RunSnapshot): ForgeState {
+  const blockers = snapshot.blockers.filter((b) => !b.resolvedAt);
+  const tasks = snapshot.tasks.map((task) => {
+    const runtime = snapshot.taskState[task.id];
+    return {
+      ...task,
+      status: (runtime?.status ?? "pending") as TaskStatus,
+      retries: runtime?.retries ?? 0,
+      resolvedModel: runtime?.resolvedModel,
+      result: runtime?.result,
+      gateReview: runtime?.gateReview,
+      blocker: runtime?.blocker,
+      error: runtime?.error,
+      validationOutput: runtime?.validationOutput,
+      validationFramework: runtime?.validationFramework,
+      lastCoverage: runtime?.lastCoverage,
+      startedAt: runtime?.startedAt,
+      completedAt: runtime?.completedAt,
+      resolutionInstruction: runtime?.resolutionInstruction,
+      diagnostic: runtime?.diagnostic,
+      diagnosticCount: runtime?.diagnosticCount,
+      failureSignature: runtime?.failureSignature,
+      stallWarnedAt: runtime?.stallWarnedAt,
+      tddPhase: runtime?.tddPhase,
+      redEstablishedAt: runtime?.redEstablishedAt,
+      greenAchievedAt: runtime?.greenAchievedAt,
+      refactorValidatedAt: runtime?.refactorValidatedAt,
+      iterationCount: runtime?.iterationCount,
+    } as ForgeTask;
+  });
+
+  if (snapshot.pendingHumanIntervention && !blockers.some((b) => b.taskId === snapshot.pendingHumanIntervention?.taskId)) {
+    blockers.push({
+      taskId: snapshot.pendingHumanIntervention.taskId,
+      reason: snapshot.pendingHumanIntervention.reason,
+      suggestion: snapshot.pendingHumanIntervention.suggestion,
+      blockedTasks: [snapshot.pendingHumanIntervention.taskId],
+    });
+  }
+
+  return {
+    orchestrationId: snapshot.orchestrationId,
+    status: mapV2StatusToV1(snapshot.status),
+    currentPhase: snapshot.currentPhase as ForgeState["currentPhase"],
+    phaseLabel: snapshot.phaseLabel,
+    orchestrationMode: snapshot.orchestrationMode,
+    nextAction: snapshot.nextAction as ForgeState["nextAction"] | undefined,
+    routingRationale: snapshot.routingRationale,
+    prdFile: snapshot.prdFile,
+    resolvedModels: snapshot.resolvedModels,
+    requirementsFile: snapshot.requirementsFile,
+    planFile: snapshot.planFile,
+    tasksFile: snapshot.tasksFile,
+    tasksMarkdownFile: snapshot.tasksMarkdownFile,
+    costFile: snapshot.costFile,
+    testSpecFile: snapshot.testSpecFile,
+    testSpecMarkdownFile: snapshot.testSpecMarkdownFile,
+    reviewFile: snapshot.reviewFile,
+    cost: snapshot.cost,
+    blockers,
+    tasks,
+    testSpecs: snapshot.testSpecs,
+    timestamps: snapshot.timestamps,
+  };
+}
+
+function applyAuthoritativeSnapshotToV1(snapshot: V2RunSnapshot) {
+  state = createV1StateFromV2(snapshot);
+}
+
+async function withV2Engine<T>(ctx: any, fn: (engine: TaskForgeV2Engine) => Promise<T>) {
+  try {
+    await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+    const engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
+    return await fn(engine);
+  } catch {
+    return undefined as T;
+  }
+}
+
+async function reconcileFromAuthoritative(ctx: any) {
+  const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+  if (authoritative) {
+    applyAuthoritativeSnapshotToV1(authoritative);
+    ctx.ui.setStatus("task-forge", statusLabelFromV2(authoritative));
+  } else {
+    ctx.ui.setStatus("task-forge", statusLabel(state));
+  }
+  return authoritative;
+}
+
+async function loadCommandSnapshot(ctx: any) {
+  config = await loadConfig(ctx.cwd);
+  await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+  const authoritative = await reconcileFromAuthoritative(ctx);
+  return await sweepOverdueSupervisors(ctx, authoritative);
+}
+
+function effectiveCommandStatus(authoritative: V2RunSnapshot | null) {
+  return authoritative?.status ?? state?.status ?? "idle";
+}
+
+function isTerminalCommandStatus(status: V2RunStatus | ForgeStatus | "needs_human_intervention") {
+  return ["idle", "completed", "aborted", "failed"].includes(status);
+}
+
+function taskListFromAuthoritative(snapshot: V2RunSnapshot | null) {
+  if (!snapshot) return state?.tasks ?? [];
+  if (state?.orchestrationId === snapshot.orchestrationId) return state.tasks;
+  return createV1StateFromV2(snapshot).tasks;
+}
+
+function executionFactsFromAuthoritative(snapshot: V2RunSnapshot | null) {
+  const tasks = taskListFromAuthoritative(snapshot);
+  const ready = tasks.filter((t) => t.status === "ready");
+  const running = tasks.filter((t) => t.status === "running");
+  const pending = tasks.filter((t) => t.status === "pending");
+  const blocked = tasks.filter((t) => t.status === "blocked");
+  const failed = tasks.filter((t) => t.status === "failed");
+  const unfinished = tasks.filter((t) => !["completed", "failed", "blocked", "skipped"].includes(t.status));
+  return { tasks, ready, running, pending, blocked, failed, unfinished };
+}
+
+async function syncExecutionSnapshot(ctx: any) {
+  const authoritative = await sweepOverdueSupervisors(ctx, await reconcileFromAuthoritative(ctx));
+  return {
+    authoritative,
+    effectiveStatus: effectiveCommandStatus(authoritative),
+    ...executionFactsFromAuthoritative(authoritative),
+  };
+}
+
+async function preflightExecutableTasks(ctx: any, v2Engine: TaskForgeV2Engine) {
+  if (!state) return false;
+
+  await syncPendingTaskSchedulingState(ctx);
+
+  const candidates = state.tasks.filter((task) => task.status === "ready");
+  let normalizedAnyCommand = false;
+  for (const task of candidates) {
+    const originalCommand = task.acceptanceSignal || task.testCommand;
+    const result = await v2Engine.preflightTask(task as any);
+    if (!result.ok) {
+      await withV2Engine(ctx, (engine) => engine.markApprovalRequired("executePlan", "Execution (human intervention required)"));
+      await reconcileFromAuthoritative(ctx);
+      const effectiveTask = state?.tasks.find((candidate) => candidate.id === task.id) ?? task;
+      await persistState(ctx, "task_preflight_blocked", { taskId: task.id, blocker: result.blocker?.reason });
+      await emitHumanInterventionMessage(ctx, effectiveTask, result.blocker as any);
+      return false;
+    }
+
+    if (result.normalizedCommand && result.normalizedCommand !== originalCommand) {
+      if (task.acceptanceSignal) task.acceptanceSignal = result.normalizedCommand;
+      else if (task.testCommand) task.testCommand = result.normalizedCommand;
+      normalizedAnyCommand = true;
+      await persistState(ctx, "task_acceptance_normalized", { taskId: task.id, command: result.normalizedCommand });
+    }
+  }
+
+  if (normalizedAnyCommand) {
+    await persistTaskDefinitions(ctx);
+    await reconcileFromAuthoritative(ctx);
+  }
+
+  return true;
 }
 
 function modelRefParts(ref: string) {
@@ -373,6 +691,13 @@ export default function (pi: ExtensionAPI) {
   let runAbortController: AbortController | null = null;
   let executionPromise: Promise<void> | null = null;
   const agentCache = new Map<Role, AgentDefinition>();
+
+  function ensureRunAbortController() {
+    if (!runAbortController || runAbortController.signal.aborted) {
+      runAbortController = new AbortController();
+    }
+    return runAbortController;
+  }
   const roleFiles: Record<Role, string> = {
     scopeClassifier: "scope-classifier.md",
     strategist: "strategist.md",
@@ -451,26 +776,291 @@ export default function (pi: ExtensionAPI) {
       `${JSON.stringify({ time: nowIso(), event, details: details ?? {}, status: state.status })}\n`,
       "utf-8"
     );
-    ctx.ui.setStatus("task-forge", statusLabel(state));
+    const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    ctx.ui.setStatus("task-forge", authoritative ? statusLabelFromV2(authoritative) : statusLabel(state));
   }
 
-  function makeExecutionResumable(reason: string) {
-    if (!state) return false;
+  function normalizeFailureSignature(text: string | undefined) {
+    return String(text ?? "")
+      .toLowerCase()
+      .replace(/\b\d+\b/g, "#")
+      .replace(/[a-f0-9]{8,}/g, "<hex>")
+      .replace(/\/users\/[^\s)]+/g, "<path>")
+      .replace(/\/app\/[^\s)]+/g, "<path>")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 500);
+  }
 
-    const wasActiveExecution = state.status === "executing" || state.status === "reviewing" || state.tasks.some((t) => t.status === "running");
-    if (!wasActiveExecution) return false;
+  function classifyEnvironmentFailure(task: ForgeTask) {
+    const combined = [task.error, task.validationOutput, task.gateReview?.notes, task.result]
+      .filter(Boolean)
+      .join("\n\n");
+    const normalized = combined.toLowerCase();
 
-    for (const task of state.tasks) {
-      if (task.status === "running") {
-        task.status = "pending";
-        task.error = reason;
+    const matchers = [
+      {
+        signature: "environment:missing-runtime",
+        regex: /playwright: not found|command not found|missing script|exit:\s*127/,
+        reason: "Acceptance environment is not executable",
+        suggestion: "Install or expose the missing CLI/script inside the validation environment, then rerun the acceptance command.",
+      },
+      {
+        signature: "environment:test-path-mismatch",
+        regex: /no tests found|make sure that arguments are regular expressions matching test files/,
+        reason: "Acceptance test path or working directory is misconfigured",
+        suggestion: "Fix the test path or working directory mapping so the acceptance command resolves the intended test file inside the runtime environment.",
+      },
+      {
+        signature: "environment:dependency-service-unreachable",
+        regex: /econnrefused|fetch failed|net::err_failed|failed to fetch|connect .*:3000|service.*unreachable/,
+        reason: "A dependent service is unreachable from the validation environment",
+        suggestion: "Start or repair the dependent service/container and verify network reachability from the validation environment before rerunning acceptance.",
+      },
+      {
+        signature: "environment:cors-policy",
+        regex: /cors|access-control-allow-origin|preflight request/,
+        reason: "Cross-origin access is blocked by backend policy",
+        suggestion: "Allow the frontend dev origin in backend CORS configuration before rerunning browser-based acceptance tests.",
+      },
+      {
+        signature: "environment:native-platform-mismatch",
+        regex: /exec format error|err_dlopen_failed|another platform|platform-specific binary|esbuild.*platform|better-sqlite3.*exec format error/,
+        reason: "Native dependencies were built for the wrong runtime platform",
+        suggestion: "Reinstall or rebuild native dependencies inside the target container/runtime, restart the affected service, then rerun acceptance.",
+      },
+    ] as const;
+
+    for (const matcher of matchers) {
+      if (matcher.regex.test(normalized)) {
+        return matcher;
       }
     }
 
-    state.status = "paused";
-    state.nextAction = "executePlan";
-    state.phaseLabel = state.currentPhase >= 6 ? "Integration Review (interrupted)" : "Execution (interrupted)";
-    return true;
+    return null;
+  }
+
+  function createHumanInterventionBlocker(task: ForgeTask, reason: string, suggestion: string): Blocker {
+    const commandHint = task.acceptanceSignal ? `\nAcceptance command: ${task.acceptanceSignal}` : "";
+    return {
+      taskId: task.id,
+      reason,
+      suggestion: `${suggestion}${commandHint}`,
+      blockedTasks: [task.id],
+    };
+  }
+
+  function failedDependencies(task: ForgeTask) {
+    return task.dependencies.filter((dep) => {
+      const status = state?.tasks.find((t) => t.id === dep)?.status;
+      return status === "failed" || status === "blocked";
+    });
+  }
+
+  function createDependencyBlocker(task: ForgeTask, blockingDeps: string[]): Blocker {
+    return {
+      taskId: task.id,
+      reason: `Blocked by failed dependency: ${blockingDeps.join(", ")}`,
+      suggestion: `Resolve the upstream dependency task${blockingDeps.length > 1 ? "s" : ""} (${blockingDeps.join(", ")}) and then rerun /forge execute.`,
+      blockedTasks: [task.id, ...blockingDeps],
+    };
+  }
+
+  async function persistTaskDefinitions(ctx: any) {
+    if (!state) return;
+    if (state.tasksFile) {
+      await saveArtifact(ctx, state.tasksFile, JSON.stringify({ tasks: state.tasks, costEstimate: state.cost }, null, 2));
+    }
+    await withV2Engine(ctx, (engine) => engine.registerTasks(state!.tasks as any));
+  }
+
+  async function syncPendingTaskSchedulingState(ctx: any) {
+    if (!state) return { changed: false, readyPromoted: false, dependencyBlocked: false };
+
+    let changed = false;
+    let readyPromoted = false;
+    let dependencyBlocked = false;
+
+    for (const task of state.tasks) {
+      if (task.status !== "pending") continue;
+
+      const blockingDeps = failedDependencies(task);
+      if (blockingDeps.length > 0) {
+        dependencyBlocked = true;
+        changed = true;
+        const blocker = createDependencyBlocker(task, blockingDeps);
+        await withV2Engine(ctx, (engine) => engine.markTaskBlocked(task.id, blocker));
+        continue;
+      }
+
+      if (dependenciesResolved(task)) {
+        readyPromoted = true;
+        changed = true;
+        await withV2Engine(ctx, (engine) => engine.markTaskReady(task.id));
+      }
+    }
+
+    if (changed) {
+      await reconcileFromAuthoritative(ctx);
+      await persistTaskDefinitions(ctx);
+      await persistState(ctx, "task_scheduling_state_synced", { readyPromoted, dependencyBlocked });
+    }
+
+    return { changed, readyPromoted, dependencyBlocked };
+  }
+
+  async function emitHumanInterventionMessage(ctx: any, task: ForgeTask, blocker: Blocker, heading = "Human intervention required") {
+    const content = [
+      `[task-forge] ${heading}`,
+      `task: ${task.id} — ${task.title}`,
+      `reason: ${blocker.reason}`,
+      `suggestion: ${blocker.suggestion}`,
+      task.error ? `evidence: ${task.error}` : "",
+      `next: /forge blocker ${task.id} --resolve "..." then /forge execute`,
+    ].filter(Boolean).join("\n");
+
+    pi.sendMessage(
+      {
+        customType: "task-forge-human-help",
+        content,
+        display: true,
+      },
+      { triggerTurn: false },
+    );
+    ctx.ui.notify(`[task-forge] ${heading}: ${task.id}`, "warning");
+  }
+
+  async function sweepOverdueSupervisors(ctx: any, authoritative?: V2RunSnapshot | null) {
+    const snapshot = authoritative ?? await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    if (!snapshot) return snapshot;
+
+    const now = Date.now();
+    const overdue = Object.values(snapshot.supervisors).filter((supervisor) => {
+      const runtime = snapshot.taskState[supervisor.taskId];
+      if (!runtime || runtime.status !== "running") return false;
+      const deadline = Date.parse(supervisor.watchdogDeadlineAt);
+      return Number.isFinite(deadline) && deadline <= now;
+    });
+
+    if (overdue.length === 0) return snapshot;
+
+    for (const supervisor of overdue) {
+      const meta = snapshot.tasks.find((task) => task.id === supervisor.taskId);
+      const runtime = snapshot.taskState[supervisor.taskId];
+      const taskForMessage = state?.tasks.find((task) => task.id === supervisor.taskId) ?? {
+        ...(meta ?? {
+          id: supervisor.taskId,
+          title: supervisor.taskId,
+          description: "",
+          complexity: "M",
+          taskMode: "single-pass",
+          contextManifest: {},
+          outputManifest: [],
+          dependencies: [],
+          acceptanceCriteria: [],
+          escalationTriggers: [],
+          status: "running",
+          retries: runtime?.retries ?? 0,
+        }),
+        status: "running",
+        retries: runtime?.retries ?? 0,
+        error: runtime?.error,
+        acceptanceSignal: meta?.acceptanceSignal,
+      } as ForgeTask;
+      const blocker = createHumanInterventionBlocker(
+        taskForMessage,
+        "Task execution appears stalled",
+        "Inspect the task output, container logs, and validation environment. If the task is genuinely stuck, resolve the blocker with the needed human action, then rerun /forge execute.",
+      );
+
+      if (!runtime?.stallWarnedAt) {
+        const warnedAt = nowIso();
+        await withV2Engine(ctx, (engine) => engine.markTaskRuntime(supervisor.taskId, { stallWarnedAt: warnedAt }));
+        if (state) {
+          const liveTask = state.tasks.find((task) => task.id === supervisor.taskId);
+          if (liveTask) {
+            liveTask.stallWarnedAt = warnedAt;
+          }
+          await persistState(ctx, "task_supervisor_overdue", { taskId: supervisor.taskId, watchdogDeadlineAt: supervisor.watchdogDeadlineAt });
+        }
+        await emitHumanInterventionMessage(ctx, taskForMessage, blocker, "Execution stall detected");
+        continue;
+      }
+
+      const warnedAt = Date.parse(runtime.stallWarnedAt);
+      const alreadyRequestedHumanHelp = snapshot.pendingHumanIntervention?.taskId === supervisor.taskId;
+      if (!alreadyRequestedHumanHelp && Number.isFinite(warnedAt) && now - warnedAt >= TASK_STALL_ESCALATION_MS) {
+        await withV2Engine(ctx, async (engine) => {
+          await engine.markTaskBlocked(supervisor.taskId, blocker);
+          await engine.requestHumanIntervention(supervisor.taskId, blocker.reason, blocker.suggestion);
+          await engine.markApprovalRequired("executePlan", "Execution (human intervention required)");
+        });
+        await reconcileFromAuthoritative(ctx);
+        if (state) {
+          await persistState(ctx, "task_supervisor_escalated", { taskId: supervisor.taskId, watchdogDeadlineAt: supervisor.watchdogDeadlineAt });
+        }
+        const effectiveTask = state?.tasks.find((task) => task.id === supervisor.taskId) ?? taskForMessage;
+        await emitHumanInterventionMessage(ctx, effectiveTask, blocker, "Execution stall escalated");
+      }
+    }
+
+    return await reconcileFromAuthoritative(ctx);
+  }
+
+  async function pauseForHumanIntervention(ctx: any, task: ForgeTask, blocker: Blocker, event: string, details?: Record<string, unknown>) {
+    if (!state) return;
+    await withV2Engine(ctx, async (engine) => {
+      await engine.markTaskBlocked(task.id, blocker);
+      await engine.requestHumanIntervention(task.id, blocker.reason, blocker.suggestion);
+      await engine.markApprovalRequired("executePlan", "Execution (human intervention required)");
+    });
+    await reconcileFromAuthoritative(ctx);
+    const effectiveTask = state?.tasks.find((candidate) => candidate.id === task.id) ?? task;
+    await persistState(ctx, event, { taskId: task.id, ...details });
+    await emitHumanInterventionMessage(ctx, effectiveTask, blocker);
+  }
+
+  async function executeTaskWithWatchdog(ctx: any, task: ForgeTask) {
+    const timer = setInterval(() => {
+      void sweepOverdueSupervisors(ctx);
+    }, TASK_SUPERVISOR_SWEEP_MS);
+
+    try {
+      await executeTask(ctx, task);
+    } finally {
+      clearInterval(timer);
+    }
+  }
+
+  function describeInterruptedExecution(authoritative: V2RunSnapshot | null): { label: string; nextAction: "executePlan"; requeuedTaskIds: string[] } | null {
+    const authoritativeRunning = authoritative
+      ? Object.values(authoritative.taskState)
+          .filter((task) => task.status === "running")
+          .map((task) => task.taskId)
+      : [];
+    const authoritativeWasActive = authoritative
+      ? authoritative.status === "executing" || authoritative.status === "reviewing" || authoritativeRunning.length > 0
+      : false;
+
+    if (authoritativeWasActive) {
+      return {
+        label: authoritative.currentPhase >= 6 ? "Integration Review (interrupted)" : "Execution (interrupted)",
+        nextAction: "executePlan",
+        requeuedTaskIds: authoritativeRunning,
+      };
+    }
+
+    if (!state) return null;
+
+    const localRunning = state.tasks.filter((task) => task.status === "running").map((task) => task.id);
+    const localWasActive = state.status === "executing" || state.status === "reviewing" || localRunning.length > 0;
+    if (!localWasActive) return null;
+
+    return {
+      label: state.currentPhase >= 6 ? "Integration Review (interrupted)" : "Execution (interrupted)",
+      nextAction: "executePlan",
+      requeuedTaskIds: localRunning,
+    };
   }
 
   async function saveArtifact(ctx: any, relativePath: string, content: string) {
@@ -647,7 +1237,7 @@ export default function (pi: ExtensionAPI) {
     const prdPath = resolve(ctx.cwd, prdFile);
     if (!existsSync(prdPath)) throw new Error(`PRD file not found: ${prdFile}`);
 
-    runAbortController = new AbortController();
+    ensureRunAbortController();
     state = {
       orchestrationId: genId(),
       status: "planning",
@@ -668,6 +1258,10 @@ export default function (pi: ExtensionAPI) {
     await ensureDir(outputPath(ctx.cwd, "tasks"));
     await ensureDir(outputPath(ctx.cwd, "tmp"));
     await persistState(ctx, "init", { prdFile });
+    await withV2Engine(ctx, async (engine) => {
+      await engine.createRun(state!.orchestrationId, prdFile);
+      await engine.enterPhase(0, "Scope Classification");
+    });
   }
 
   async function phaseClassifyScope(ctx: any) {
@@ -677,6 +1271,7 @@ export default function (pi: ExtensionAPI) {
     state.currentPhase = 0;
     state.phaseLabel = "Scope Classification";
     await persistState(ctx, "phase_start", { phase: 0 });
+    await withV2Engine(ctx, (engine) => engine.enterPhase(0, "Scope Classification"));
 
     const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
     const tree = await gatherCodebaseSummary(ctx);
@@ -705,6 +1300,7 @@ export default function (pi: ExtensionAPI) {
     state.routingRationale = typeof parsed.rationale === "string" ? parsed.rationale : undefined;
     await saveArtifact(ctx, "00-routing.json", JSON.stringify(parsed, null, 2));
     await persistState(ctx, "phase_complete", { phase: 0, mode });
+    await withV2Engine(ctx, (engine) => engine.markRouting(mode, state?.routingRationale));
     ctx.ui.notify(`[task-forge] Routing mode: ${mode}${state.routingRationale ? ` — ${state.routingRationale}` : ""}`, "info");
   }
 
@@ -715,6 +1311,7 @@ export default function (pi: ExtensionAPI) {
     state.currentPhase = 1;
     state.phaseLabel = "PRD Analysis";
     await persistState(ctx, "phase_start", { phase: 1 });
+    await withV2Engine(ctx, (engine) => engine.enterPhase(1, "PRD Analysis"));
 
     const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
     const tree = await gatherCodebaseSummary(ctx);
@@ -752,6 +1349,7 @@ export default function (pi: ExtensionAPI) {
     await saveArtifact(ctx, "01-requirements.md", requirements);
     state.requirementsFile = "01-requirements.md";
     await persistState(ctx, "phase_complete", { phase: 1 });
+    await withV2Engine(ctx, (engine) => engine.markRequirementsWritten("01-requirements.md"));
     ctx.ui.notify("[task-forge] Phase 1 complete: requirements written", "success");
   }
 
@@ -762,6 +1360,7 @@ export default function (pi: ExtensionAPI) {
     state.currentPhase = 2;
     state.phaseLabel = "Micro Planning";
     await persistState(ctx, "phase_start", { phase: 2, mode: "micro" });
+    await withV2Engine(ctx, (engine) => engine.enterPhase(2, "Micro Planning"));
 
     const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
     const tree = await gatherCodebaseSummary(ctx);
@@ -814,6 +1413,11 @@ export default function (pi: ExtensionAPI) {
     state.phaseLabel = "Approval Gate";
     state.nextAction = "executePlan";
     await persistState(ctx, "phase_complete", { phase: 2, mode: "micro", awaitingApproval: true });
+    await withV2Engine(ctx, async (engine) => {
+      await engine.markPlanWritten("02-plan.md", "03-tasks.json", "03-tasks.md", "03-cost-estimate.md");
+      await engine.registerTasks(state!.tasks as any);
+      await engine.requireApproval("executePlan", "Approval Gate");
+    });
     ctx.ui.notify("[task-forge] Micro plan ready. Review artifacts, then run /forge execute", "success");
   }
 
@@ -824,6 +1428,7 @@ export default function (pi: ExtensionAPI) {
     state.currentPhase = 2;
     state.phaseLabel = "Planning & Decomposition";
     await persistState(ctx, "phase_start", { phase: 2 });
+    await withV2Engine(ctx, (engine) => engine.enterPhase(2, "Planning & Decomposition"));
 
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
     const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
@@ -881,6 +1486,10 @@ export default function (pi: ExtensionAPI) {
     state.tasksFile = "03-tasks.json";
     state.tasksMarkdownFile = "03-tasks.md";
     state.costFile = "03-cost-estimate.md";
+    await withV2Engine(ctx, async (engine) => {
+      await engine.markPlanWritten("02-plan.md", "03-tasks.json", "03-tasks.md", "03-cost-estimate.md");
+      await engine.registerTasks(state!.tasks as any);
+    });
 
     if (state.cost.estimatedUsd !== undefined && state.cost.estimatedUsd > config.costLimitUsd) {
       ctx.ui.notify(
@@ -901,6 +1510,7 @@ export default function (pi: ExtensionAPI) {
     state.currentPhase = 3;
     state.phaseLabel = "Test Design";
     await persistState(ctx, "phase_start", { phase: 3 });
+    await withV2Engine(ctx, (engine) => engine.enterPhase(3, "Test Design"));
 
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
     const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
@@ -971,6 +1581,11 @@ export default function (pi: ExtensionAPI) {
     state.phaseLabel = "Approval Gate";
     state.nextAction = "executePlan";
     await persistState(ctx, "phase_complete", { phase: 3, awaitingApproval: true });
+    await withV2Engine(ctx, async (engine) => {
+      await engine.markTestSpecWritten("03-test-spec.json", state!.testSpecs ?? [], state!.testSpecMarkdownFile);
+      await engine.registerTasks(state!.tasks as any);
+      await engine.requireApproval("executePlan", "Approval Gate");
+    });
     ctx.ui.notify("[task-forge] Plan and grounded test spec ready. Review artifacts, then run /forge execute", "success");
   }
 
@@ -1288,8 +1903,18 @@ export default function (pi: ExtensionAPI) {
       });
       task.iterationCount = turn + 1;
       task.result = latestResult;
+      await withV2Engine(ctx, async (engine) => {
+        await engine.markTaskHeartbeat(task.id, TASK_STALL_WARNING_MS);
+        await engine.markTaskTddProgress(task.id, task.tddPhase!, {
+          iterationCount: task.iterationCount,
+          redEstablishedAt: task.redEstablishedAt,
+          greenAchievedAt: task.greenAchievedAt,
+          refactorValidatedAt: task.refactorValidatedAt,
+        });
+      });
 
       const validation = await runValidation(ctx, task);
+      await withV2Engine(ctx, (engine) => engine.markTaskValidation(task.id, validation.passed, validation.output, task.validationFramework, validation.coverage));
       await appendFile(
         outputPath(ctx.cwd, "tasks", `${task.id}.iterations.log`),
         `${JSON.stringify({ time: nowIso(), turn: turn + 1, tddPhase: task.tddPhase, passed: validation.passed, coverage: validation.coverage, feedback: validation.output.slice(0, 12000) })}\n`,
@@ -1300,6 +1925,12 @@ export default function (pi: ExtensionAPI) {
         if (!validation.passed) {
           task.redEstablishedAt = task.redEstablishedAt ?? nowIso();
           task.tddPhase = "green";
+          await withV2Engine(ctx, (engine) => engine.markTaskTddProgress(task.id, task.tddPhase!, {
+            iterationCount: task.iterationCount,
+            redEstablishedAt: task.redEstablishedAt,
+            greenAchievedAt: task.greenAchievedAt,
+            refactorValidatedAt: task.refactorValidatedAt,
+          }));
           previousFeedback = `RED established successfully. Validation is failing as expected. Move to GREEN.\n\n${validation.output.slice(0, 12000)}`;
           continue;
         }
@@ -1311,6 +1942,12 @@ export default function (pi: ExtensionAPI) {
         if (validation.passed) {
           task.greenAchievedAt = task.greenAchievedAt ?? nowIso();
           task.tddPhase = "refactor";
+          await withV2Engine(ctx, (engine) => engine.markTaskTddProgress(task.id, task.tddPhase!, {
+            iterationCount: task.iterationCount,
+            redEstablishedAt: task.redEstablishedAt,
+            greenAchievedAt: task.greenAchievedAt,
+            refactorValidatedAt: task.refactorValidatedAt,
+          }));
           previousFeedback = `GREEN achieved successfully. Now perform one refactor pass while keeping validation green.\n\n${validation.output.slice(0, 12000)}`;
           continue;
         }
@@ -1322,9 +1959,21 @@ export default function (pi: ExtensionAPI) {
         if (validation.passed) {
           task.refactorValidatedAt = nowIso();
           task.tddPhase = "complete";
+          await withV2Engine(ctx, (engine) => engine.markTaskTddProgress(task.id, task.tddPhase!, {
+            iterationCount: task.iterationCount,
+            redEstablishedAt: task.redEstablishedAt,
+            greenAchievedAt: task.greenAchievedAt,
+            refactorValidatedAt: task.refactorValidatedAt,
+          }));
           return latestResult;
         }
         task.tddPhase = "green";
+        await withV2Engine(ctx, (engine) => engine.markTaskTddProgress(task.id, task.tddPhase!, {
+          iterationCount: task.iterationCount,
+          redEstablishedAt: task.redEstablishedAt,
+          greenAchievedAt: task.greenAchievedAt,
+          refactorValidatedAt: task.refactorValidatedAt,
+        }));
         previousFeedback = `REFACTOR broke green. Return to GREEN, restore passing behavior, then refactor again if budget remains.\n\n${validation.output.slice(0, 12000)}`;
         continue;
       }
@@ -1340,6 +1989,8 @@ export default function (pi: ExtensionAPI) {
     task.startedAt = nowIso();
     task.error = undefined;
     task.blocker = undefined;
+    task.gateReview = undefined;
+    task.stallWarnedAt = undefined;
     if (task.taskMode === "iterative") {
       task.tddPhase = "red";
       task.redEstablishedAt = undefined;
@@ -1348,6 +1999,22 @@ export default function (pi: ExtensionAPI) {
     }
     task.resolvedModel = await resolveModelForRole(ctx, task.taskMode === "iterative" ? "workerIterative" : "worker");
     await persistState(ctx, "task_start", { taskId: task.id, mode: task.taskMode });
+    await withV2Engine(ctx, async (engine) => {
+      await engine.markTaskStarted(task.id, task.retries + 1, task.resolvedModel, undefined, TASK_STALL_WARNING_MS);
+      await engine.markTaskRuntime(task.id, {
+        retries: task.retries,
+        error: null,
+        stallWarnedAt: null,
+      });
+      if (task.taskMode === "iterative") {
+        await engine.markTaskTddProgress(task.id, task.tddPhase!, {
+          iterationCount: task.iterationCount,
+          redEstablishedAt: task.redEstablishedAt,
+          greenAchievedAt: task.greenAchievedAt,
+          refactorValidatedAt: task.refactorValidatedAt,
+        });
+      }
+    });
 
     try {
       const result = task.taskMode === "iterative"
@@ -1355,17 +2022,17 @@ export default function (pi: ExtensionAPI) {
         : await runSinglePassTask(ctx, task);
 
       task.result = result;
+      await withV2Engine(ctx, (engine) => engine.markTaskHeartbeat(task.id, TASK_STALL_WARNING_MS));
       if (task.taskMode !== "iterative") {
-        await runValidation(ctx, task);
+        const validation = await runValidation(ctx, task);
+        await withV2Engine(ctx, (engine) => engine.markTaskValidation(task.id, validation.passed, validation.output, task.validationFramework, validation.coverage));
       }
       const gate = await gateReviewTask(ctx, task);
       task.gateReview = { passed: gate.passed, notes: gate.notes };
+      await withV2Engine(ctx, (engine) => engine.markTaskGateReview(task.id, gate.passed, gate.notes));
 
       if (gate.blocker) {
-        task.status = "blocked";
-        task.blocker = gate.blocker;
-        state.blockers = [...state.blockers.filter((b) => b.taskId !== task.id), gate.blocker];
-        await persistState(ctx, "task_blocked", { taskId: task.id, blocker: gate.blocker.reason });
+        await pauseForHumanIntervention(ctx, task, gate.blocker, "task_blocked", { blocker: gate.blocker.reason });
         await saveArtifact(ctx, `tasks/${task.id}.gate.json`, JSON.stringify(gate, null, 2));
         return;
       }
@@ -1375,14 +2042,58 @@ export default function (pi: ExtensionAPI) {
       }
 
       task.status = "completed";
+      task.failureSignature = undefined;
       if (task.taskMode === "iterative") task.tddPhase = "complete";
       task.completedAt = nowIso();
       await saveArtifact(ctx, `tasks/${task.id}.md`, task.result ?? "");
       await saveArtifact(ctx, `tasks/${task.id}.gate.json`, JSON.stringify(gate, null, 2));
       await persistState(ctx, "task_complete", { taskId: task.id });
+      await withV2Engine(ctx, async (engine) => {
+        await engine.markTaskRuntime(task.id, {
+          retries: task.retries,
+          error: null,
+          failureSignature: null,
+          stallWarnedAt: null,
+        });
+        await engine.markTaskCompleted(task.id, task.result);
+      });
     } catch (error: any) {
       task.retries += 1;
       task.error = String(error?.message ?? error);
+      await withV2Engine(ctx, (engine) => engine.markTaskRuntime(task.id, {
+        retries: task.retries,
+        error: task.error,
+      }));
+
+      const envFailure = classifyEnvironmentFailure(task);
+      if (envFailure) {
+        task.failureSignature = envFailure.signature;
+        await withV2Engine(ctx, (engine) => engine.markTaskRuntime(task.id, {
+          retries: task.retries,
+          error: task.error,
+          failureSignature: task.failureSignature,
+        }));
+        const blocker = createHumanInterventionBlocker(task, envFailure.reason, envFailure.suggestion);
+        await pauseForHumanIntervention(ctx, task, blocker, "task_blocked_environment", { signature: envFailure.signature });
+        return;
+      }
+
+      const failureSignature = normalizeFailureSignature(task.error);
+      if (task.failureSignature && task.failureSignature === failureSignature) {
+        const blocker = createHumanInterventionBlocker(
+          task,
+          "Repeated identical task failure requires human review",
+          "The same failure happened again without meaningful progress. Review the task result, logs, and acceptance environment, then provide a concrete resolution before retrying.",
+        );
+        await pauseForHumanIntervention(ctx, task, blocker, "task_blocked_repeated_failure", { signature: failureSignature });
+        return;
+      }
+      task.failureSignature = failureSignature;
+      await withV2Engine(ctx, (engine) => engine.markTaskRuntime(task.id, {
+        retries: task.retries,
+        error: task.error,
+        failureSignature: task.failureSignature,
+      }));
 
       if (task.retries > config.maxRetries) {
         if (needsDiagnosticReview(task) && (task.diagnosticCount ?? 0) < 1) {
@@ -1393,6 +2104,13 @@ export default function (pi: ExtensionAPI) {
               notes: String(diagnosis.notes ?? ""),
             };
             task.diagnosticCount = (task.diagnosticCount ?? 0) + 1;
+            await withV2Engine(ctx, (engine) => engine.markTaskRuntime(task.id, {
+              retries: task.retries,
+              error: task.error,
+              failureSignature: task.failureSignature,
+              diagnostic: task.diagnostic,
+              diagnosticCount: task.diagnosticCount,
+            }));
             await saveArtifact(ctx, `tasks/${task.id}.diagnostic.json`, JSON.stringify(diagnosis, null, 2));
 
             if (diagnosis.classification === "test_spec_error" && diagnosis.rewrittenTestSpec) {
@@ -1403,8 +2121,20 @@ export default function (pi: ExtensionAPI) {
               task.coverageThreshold = typeof spec.coverage_threshold === "number" ? spec.coverage_threshold : task.coverageThreshold;
               task.testSpecRefs = (spec.testFiles ?? []).map((f: any) => f.path);
               await saveArtifact(ctx, "03-test-spec.json", JSON.stringify({ testSpecs: state!.testSpecs }, null, 2));
-              task.status = "pending";
+              await persistTaskDefinitions(ctx);
+              await withV2Engine(ctx, (engine) => engine.markTestSpecWritten("03-test-spec.json", state!.testSpecs ?? [], state!.testSpecMarkdownFile));
               task.retries = 0;
+              await withV2Engine(ctx, async (engine) => {
+                await engine.markTaskRuntime(task.id, {
+                  retries: task.retries,
+                  error: task.error,
+                  failureSignature: task.failureSignature,
+                  diagnostic: task.diagnostic,
+                  diagnosticCount: task.diagnosticCount,
+                });
+                await engine.requeueTask(task.id, `diagnostic:${diagnosis.classification}`);
+              });
+              await reconcileFromAuthoritative(ctx);
               await persistState(ctx, "task_requeued_from_diagnostic", { taskId: task.id, classification: diagnosis.classification });
               return;
             }
@@ -1423,19 +2153,36 @@ export default function (pi: ExtensionAPI) {
                     suggestion: String(diagnosis.notes || "Review the requirement, plan, and generated tests together."),
                     blockedTasks: [],
                   };
-              task.status = "blocked";
-              task.blocker = blocker;
-              state!.blockers = [...state!.blockers.filter((b) => b.taskId !== task.id), blocker];
-              await persistState(ctx, "task_blocked_from_diagnostic", { taskId: task.id, classification: diagnosis.classification });
+              await pauseForHumanIntervention(ctx, task, blocker, "task_blocked_from_diagnostic", { classification: diagnosis.classification });
               return;
             }
           }
         }
 
-        task.status = "failed";
+        await withV2Engine(ctx, async (engine) => {
+          await engine.markTaskRuntime(task.id, {
+            retries: task.retries,
+            error: task.error,
+            failureSignature: task.failureSignature,
+            diagnostic: task.diagnostic,
+            diagnosticCount: task.diagnosticCount,
+          });
+          await engine.markTaskFailed(task.id, task.error ?? "Task failed");
+        });
+        await reconcileFromAuthoritative(ctx);
         await persistState(ctx, "task_failed", { taskId: task.id, error: task.error, diagnostic: task.diagnostic?.classification });
       } else {
-        task.status = "pending";
+        await withV2Engine(ctx, async (engine) => {
+          await engine.markTaskRuntime(task.id, {
+            retries: task.retries,
+            error: task.error,
+            failureSignature: task.failureSignature,
+            diagnostic: task.diagnostic,
+            diagnosticCount: task.diagnosticCount,
+          });
+          await engine.requeueTask(task.id, task.error ?? "retry");
+        });
+        await reconcileFromAuthoritative(ctx);
         await persistState(ctx, "task_retry", { taskId: task.id, retries: task.retries, error: task.error });
       }
     }
@@ -1446,10 +2193,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function hasFailedDependency(task: ForgeTask) {
-    return task.dependencies.some((dep) => {
-      const status = state?.tasks.find((t) => t.id === dep)?.status;
-      return status === "failed" || status === "blocked";
-    });
+    return failedDependencies(task).length > 0;
   }
 
   async function executeApprovedPlan(ctx: any) {
@@ -1460,69 +2204,79 @@ export default function (pi: ExtensionAPI) {
     state.currentPhase = 5;
     state.phaseLabel = "Execution";
     await persistState(ctx, "phase_start", { phase: 5 });
+    await withV2Engine(ctx, (engine) => engine.markExecutionPhaseStarted());
+    await reconcileFromAuthoritative(ctx);
 
     while (true) {
-      if (runAbortController?.signal.aborted) {
-        state.status = "aborted";
+      const executionState = await syncExecutionSnapshot(ctx);
+
+      if (runAbortController?.signal.aborted || executionState.effectiveStatus === "aborted") {
+        state!.status = "aborted";
         await persistState(ctx, "aborted");
+        await withV2Engine(ctx, (engine) => engine.markRunAborted("Execution aborted"));
+        await reconcileFromAuthoritative(ctx);
         return;
       }
 
-      if ((state as ForgeState).status === "paused") {
-        await new Promise((resolveWait) => {
-          const timer = setInterval(() => {
-            if (!state || (state as ForgeState).status !== "paused" || runAbortController?.signal.aborted) {
-              clearInterval(timer);
-              resolveWait(undefined);
-            }
-          }, 500);
-        });
-        continue;
+      if (["paused", "needs_human_intervention", "awaiting_approval"].includes(executionState.effectiveStatus)) {
+        await reconcileFromAuthoritative(ctx);
+        return;
       }
 
-      for (const task of state.tasks) {
-        if (task.status === "pending" && hasFailedDependency(task)) {
-          task.status = "blocked";
-        } else if (task.status === "pending" && dependenciesResolved(task)) {
-          task.status = "ready";
-        }
-      }
+      const schedulingSync = await syncPendingTaskSchedulingState(ctx);
+      const current = schedulingSync.changed ? await syncExecutionSnapshot(ctx) : executionState;
 
-      const ready = state.tasks.filter((t) => t.status === "ready");
-      const running = state.tasks.filter((t) => t.status === "running");
-      const unfinished = state.tasks.filter((t) => !["completed", "failed", "blocked", "skipped"].includes(t.status));
+      if (current.unfinished.length === 0 && current.running.length === 0 && current.ready.length === 0) break;
 
-      if (unfinished.length === 0 && running.length === 0 && ready.length === 0) break;
-
-      if (ready.length === 0 && running.length === 0) {
-        state.status = state.blockers.length > 0 ? "blocked" : "failed";
+      if (current.ready.length === 0 && current.running.length === 0) {
+        const blockedByHuman = current.effectiveStatus === "needs_human_intervention" || Boolean(current.authoritative?.pendingHumanIntervention) || current.blocked.length > 0;
+        state!.status = blockedByHuman ? "paused" : "failed";
         await persistState(ctx, "execution_stalled");
+        if (blockedByHuman) {
+          await withV2Engine(ctx, (engine) => engine.markApprovalRequired("executePlan", "Execution (human intervention required)"));
+        } else {
+          await withV2Engine(ctx, (engine) => engine.markRunFailed("Execution stalled with no runnable tasks"));
+        }
+        await reconcileFromAuthoritative(ctx);
         return;
       }
 
-      const batch = ready.slice(0, Math.max(0, config.maxWorkers - running.length));
-      await Promise.allSettled(batch.map((task) => executeTask(ctx, task)));
+      const batch = current.ready.slice(0, Math.max(0, config.maxWorkers - current.running.length));
+      await Promise.allSettled(batch.map((task) => executeTaskWithWatchdog(ctx, task)));
+      await reconcileFromAuthoritative(ctx);
     }
 
-    if (state.tasks.some((t) => t.status === "failed" || t.status === "blocked")) {
-      state.status = state.blockers.length > 0 ? "blocked" : "failed";
-      await persistState(ctx, "phase_complete", { phase: 5, status: state.status });
+    const finalState = await syncExecutionSnapshot(ctx);
+    if (finalState.failed.length > 0 || finalState.blocked.length > 0 || finalState.effectiveStatus === "needs_human_intervention") {
+      const blockedByHuman = finalState.effectiveStatus === "needs_human_intervention" || Boolean(finalState.authoritative?.pendingHumanIntervention) || finalState.blocked.length > 0;
+      state!.status = blockedByHuman ? "paused" : "failed";
+      await persistState(ctx, "phase_complete", { phase: 5, status: state!.status });
+      if (blockedByHuman) {
+        await withV2Engine(ctx, (engine) => engine.markApprovalRequired("executePlan", "Execution (human intervention required)"));
+      } else {
+        await withV2Engine(ctx, (engine) => engine.markRunFailed("Execution ended with failed tasks and no recovery path"));
+      }
+      await reconcileFromAuthoritative(ctx);
       return;
     }
 
-    state.status = "reviewing";
-    state.currentPhase = 6;
-    state.phaseLabel = "Integration Review";
+    state!.status = "reviewing";
+    state!.currentPhase = 6;
+    state!.phaseLabel = "Integration Review";
     await persistState(ctx, "phase_complete", { phase: 5, next: 6 });
+    await withV2Engine(ctx, (engine) => engine.markIntegrationReviewStarted());
+    await reconcileFromAuthoritative(ctx);
     await phaseIntegrationReview(ctx);
   }
 
   async function phaseIntegrationReview(ctx: any) {
     if (!state) throw new Error("No orchestration state");
 
+    const authoritative = await reconcileFromAuthoritative(ctx);
+    const reviewTasks = authoritative ? createV1StateFromV2(authoritative).tasks : state.tasks;
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
     const plan = await readArtifactMaybe(ctx, state.planFile);
-    const taskResults = state.tasks
+    const taskResults = reviewTasks
       .filter((t) => t.status === "completed")
       .map((t) => `## ${t.id} — ${t.title}\n\n${t.result ?? ""}`)
       .join("\n\n---\n\n");
@@ -1553,11 +2307,49 @@ export default function (pi: ExtensionAPI) {
     state.status = "completed";
     state.timestamps.completed = nowIso();
     await persistState(ctx, "phase_complete", { phase: 6, completed: true });
+    await withV2Engine(ctx, async (engine) => {
+      await engine.markIntegrationReviewCompleted("04-review.md");
+      await engine.markRunCompleted();
+    });
+    await reconcileFromAuthoritative(ctx);
     ctx.ui.notify("[task-forge] Review complete", "success");
   }
 
   async function continueComplexPlanningAfterCheckpoint(ctx: any) {
     await phasePlan(ctx);
+  }
+
+  function startExecutionInBackground(ctx: any, reason: string) {
+    if (executionPromise) return executionPromise;
+
+    executionPromise = (async () => {
+      try {
+        ensureRunAbortController();
+        await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+        const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        if (authoritative) {
+          applyAuthoritativeSnapshotToV1(authoritative);
+        }
+
+        const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
+        const canProceed = await preflightExecutableTasks(ctx, v2Engine);
+        if (!canProceed) return;
+
+        await executeApprovedPlan(ctx);
+      } catch (error: any) {
+        if (state) {
+          await withV2Engine(ctx, (engine) => engine.markRunFailed(String(error?.message ?? error)));
+          await reconcileFromAuthoritative(ctx);
+          await persistState(ctx, "execution_failed", { reason, error: String(error?.message ?? error) });
+        }
+        ctx.ui.notify(`[task-forge] ${String(error?.message ?? error)}`, "error");
+      } finally {
+        executionPromise = null;
+      }
+    })();
+
+    ctx.ui.notify(`[task-forge] Execution started (${reason})`, "info");
+    return executionPromise;
   }
 
   async function runPlanningFlow(ctx: any, prdFile: string, executeImmediately: boolean) {
@@ -1567,10 +2359,7 @@ export default function (pi: ExtensionAPI) {
     if (state?.orchestrationMode === "micro") {
       await phasePlanMicro(ctx);
       if (executeImmediately || config.autoExecute) {
-        executionPromise = executeApprovedPlan(ctx).finally(() => {
-          executionPromise = null;
-        });
-        await executionPromise;
+        startExecutionInBackground(ctx, executeImmediately ? "plan --execute" : "auto-execute");
       }
       return;
     }
@@ -1583,6 +2372,7 @@ export default function (pi: ExtensionAPI) {
       state.phaseLabel = "Complex Checkpoint: Requirements Review";
       state.nextAction = "continuePlanning";
       await persistState(ctx, "complex_checkpoint", { checkpoint: "requirements_review" });
+      await withV2Engine(ctx, (engine) => engine.requireApproval("continuePlanning", "Complex Checkpoint: Requirements Review"));
       ctx.ui.notify("[task-forge] Complex mode: review 01-requirements.md, then run /forge execute to continue planning", "info");
       return;
     }
@@ -1590,14 +2380,13 @@ export default function (pi: ExtensionAPI) {
     await phasePlan(ctx);
 
     if (executeImmediately || config.autoExecute) {
-      executionPromise = executeApprovedPlan(ctx).finally(() => {
-        executionPromise = null;
-      });
-      await executionPromise;
+      startExecutionInBackground(ctx, executeImmediately ? "plan --execute" : "auto-execute");
     }
   }
 
-  function statusSummary() {
+  async function statusSummary(ctx?: any) {
+    const authoritative = ctx ? await loadCommandSnapshot(ctx) : null;
+    if (authoritative) return statusSummaryFromV2(authoritative);
     if (!state) return "[task-forge] No active orchestration";
     const counts = {
       ready: state.tasks.filter((t) => t.status === "ready").length,
@@ -1637,7 +2426,7 @@ export default function (pi: ExtensionAPI) {
         pi.sendMessage(
           {
             customType: "task-forge-status",
-            content: statusSummary(),
+            content: await statusSummary(ctx),
             display: true,
           },
           { triggerTurn: false },
@@ -1688,49 +2477,90 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (sub === "pause") {
-        if (!state || state.status !== "executing") {
+        const authoritative = await loadCommandSnapshot(ctx);
+        const effectiveStatus = effectiveCommandStatus(authoritative);
+        if (!["executing", "reviewing"].includes(effectiveStatus)) {
           ctx.ui.notify("[task-forge] Nothing is executing", "warning");
           return;
         }
-        state.status = "paused";
-        await persistState(ctx, "paused");
+        const pauseLabel = state?.currentPhase >= 6 ? "Integration Review (paused)" : "Execution (paused)";
+        await withV2Engine(ctx, (engine) => engine.markRunPaused(pauseLabel, "executePlan", "Paused by user command"));
+        await reconcileFromAuthoritative(ctx);
+        if (state) {
+          await persistState(ctx, "paused");
+        }
         ctx.ui.notify("[task-forge] Paused", "info");
         return;
       }
 
       if (sub === "resume") {
-        if (!state || state.status !== "paused") {
-          ctx.ui.notify("[task-forge] Not paused", "warning");
+        const authoritative = await loadCommandSnapshot(ctx);
+        const effectiveStatus = effectiveCommandStatus(authoritative);
+        if (!state) {
+          ctx.ui.notify("[task-forge] No active orchestration", "warning");
           return;
         }
-        state.status = "executing";
-        await persistState(ctx, "resumed");
-        if (!executionPromise) {
-          executionPromise = executeApprovedPlan(ctx).finally(() => {
-            executionPromise = null;
-          });
-          await executionPromise;
+        if (!["awaiting_approval", "paused"].includes(effectiveStatus) || state.nextAction !== "executePlan") {
+          ctx.ui.notify("[task-forge] Not resumable", "warning");
+          return;
         }
+        if (authoritative?.pendingHumanIntervention) {
+          ctx.ui.notify(`[task-forge] Resolve blocker ${authoritative.pendingHumanIntervention.taskId} before resuming`, "warning");
+          return;
+        }
+        await withV2Engine(ctx, async (engine) => {
+          if (effectiveStatus === "paused") {
+            await engine.markRunResumed("Resumed by user command");
+          }
+          await engine.markApprovalGranted();
+        });
+        state.status = "executing";
+        state.nextAction = undefined;
+        await persistState(ctx, "resumed");
+        startExecutionInBackground(ctx, "resume");
         return;
       }
 
       if (sub === "abort") {
+        await loadCommandSnapshot(ctx);
         runAbortController?.abort();
         if (state) {
           state.status = "aborted";
           await persistState(ctx, "abort_command");
         }
+        await withV2Engine(ctx, (engine) => engine.markRunAborted("Aborted by user command"));
+        await reconcileFromAuthoritative(ctx);
         ctx.ui.notify("[task-forge] Aborted", "warning");
         return;
       }
 
       if (sub === "execute") {
+        const authoritative = await loadCommandSnapshot(ctx);
+
         if (!state) {
           ctx.ui.notify("[task-forge] No plan available", "warning");
           return;
         }
-        if (!["awaiting_approval", "blocked", "paused"].includes(state.status)) {
-          ctx.ui.notify(`[task-forge] Cannot execute from status ${state.status}`, "warning");
+
+        const effectiveStatus = effectiveCommandStatus(authoritative);
+
+        if (!["awaiting_approval", "paused"].includes(effectiveStatus)) {
+          ctx.ui.notify(`[task-forge] Cannot execute from status ${effectiveStatus}`, "warning");
+          return;
+        }
+        if (authoritative?.pendingHumanIntervention && !state.blockers.some((b) => b.taskId === authoritative.pendingHumanIntervention?.taskId)) {
+          state.blockers = [
+            ...state.blockers,
+            {
+              taskId: authoritative.pendingHumanIntervention.taskId,
+              reason: authoritative.pendingHumanIntervention.reason,
+              suggestion: authoritative.pendingHumanIntervention.suggestion,
+              blockedTasks: [authoritative.pendingHumanIntervention.taskId],
+            },
+          ];
+        }
+        if (authoritative?.pendingHumanIntervention) {
+          ctx.ui.notify(`[task-forge] Resolve blocker ${authoritative.pendingHumanIntervention.taskId} before executing`, "warning");
           return;
         }
         if (executionPromise) {
@@ -1742,22 +2572,38 @@ export default function (pi: ExtensionAPI) {
           state.status = "planning";
           state.phaseLabel = "Planning & Decomposition";
           await persistState(ctx, "continue_planning_command");
+          await withV2Engine(ctx, async (engine) => {
+            if (effectiveStatus === "paused") {
+              await engine.markRunResumed("Planning resumed after checkpoint approval");
+            }
+            await engine.markApprovalGranted();
+          });
           await continueComplexPlanningAfterCheckpoint(ctx);
           return;
         }
 
+        if (state.nextAction !== "executePlan") {
+          ctx.ui.notify("[task-forge] No executable approval is pending", "warning");
+          return;
+        }
+
+        await withV2Engine(ctx, async (engine) => {
+          if (effectiveStatus === "paused") {
+            await engine.markRunResumed("Execution resumed by /forge execute");
+          }
+          await engine.markApprovalGranted();
+        });
+
         state.status = "executing";
         state.nextAction = undefined;
         await persistState(ctx, "execute_command");
-        executionPromise = executeApprovedPlan(ctx).finally(() => {
-          executionPromise = null;
-        });
-        await executionPromise;
+        startExecutionInBackground(ctx, "execute command");
         return;
       }
 
       if (sub === "blocker") {
-        if (!state) {
+        const authoritative = await loadCommandSnapshot(ctx);
+        if (!state && !authoritative) {
           ctx.ui.notify("[task-forge] No active orchestration", "warning");
           return;
         }
@@ -1768,21 +2614,43 @@ export default function (pi: ExtensionAPI) {
           ctx.ui.notify("Usage: /forge blocker <task-id> --resolve \"instruction\"", "warning");
           return;
         }
-        const task = state.tasks.find((t) => t.id === taskId);
-        if (!task) {
+
+        const task = state?.tasks.find((t) => t.id === taskId);
+        const authoritativeTaskExists = authoritative?.tasks.some((t) => t.id === taskId) || authoritative?.taskState[taskId];
+        if (!authoritativeTaskExists && state && !task) {
           ctx.ui.notify(`[task-forge] Unknown task: ${taskId}`, "warning");
           return;
         }
-        task.resolutionInstruction = resolution;
-        task.blocker = undefined;
-        task.error = undefined;
-        if (task.status === "blocked") task.status = "pending";
-        state.blockers = state.blockers
-          .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: resolution, resolvedAt: nowIso() } : b))
-          .filter((b) => b.taskId !== taskId);
-        state.status = "awaiting_approval";
-        await persistState(ctx, "blocker_resolved", { taskId, resolution });
+
+        await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+        const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
+        const v2Snapshot = await v2Engine.snapshot();
+        const v2TaskExists = v2Snapshot?.tasks.some((t) => t.id === taskId) || v2Snapshot?.taskState[taskId];
+        if (v2TaskExists) {
+          await v2Engine.resolveHumanIntervention(taskId, resolution);
+        } else if (task) {
+          task.resolutionInstruction = resolution;
+          task.blocker = undefined;
+          task.error = undefined;
+          if (task.status === "blocked" || task.status === "failed") task.status = "pending";
+          state!.blockers = state!.blockers
+            .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: resolution, resolvedAt: nowIso() } : b))
+            .filter((b) => b.taskId !== taskId);
+          state!.status = "awaiting_approval";
+        }
+
+        await reconcileFromAuthoritative(ctx);
+        if (state) {
+          await persistState(ctx, "blocker_resolved", { taskId, resolution });
+        }
         ctx.ui.notify(`[task-forge] Blocker resolved for ${taskId}. Run /forge execute to continue.`, "success");
+        return;
+      }
+
+      const authoritative = await loadCommandSnapshot(ctx);
+      const activeStatus = effectiveCommandStatus(authoritative);
+      if (!isTerminalCommandStatus(activeStatus)) {
+        ctx.ui.notify(`[task-forge] Active orchestration already exists (${activeStatus}). Finish or abort it before starting a new run.`, "warning");
         return;
       }
 
@@ -1792,7 +2660,8 @@ export default function (pi: ExtensionAPI) {
         await runPlanningFlow(ctx, prdFile, executeImmediately);
       } catch (error: any) {
         if (state) {
-          state.status = "failed";
+          await withV2Engine(ctx, (engine) => engine.markRunFailed(String(error?.message ?? error)));
+          await reconcileFromAuthoritative(ctx);
           await persistState(ctx, "plan_flow_failed", { error: String(error?.message ?? error) });
         }
         ctx.ui.notify(`[task-forge] ${String(error?.message ?? error)}`, "error");
@@ -1803,33 +2672,65 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event: any, ctx: any) => {
     config = await loadConfig(ctx.cwd);
 
-    let restored: ForgeState | null = null;
-    for (const entry of ctx.sessionManager.getEntries()) {
-      if (entry.type === "custom" && (entry as any).customType === STATE_ENTRY_TYPE) {
-        restored = (entry as any).data as ForgeState;
+    await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+    const authoritative = await sweepOverdueSupervisors(ctx, await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir));
+
+    if (authoritative) {
+      applyAuthoritativeSnapshotToV1(authoritative);
+    } else {
+      let restored: ForgeState | null = null;
+      for (const entry of ctx.sessionManager.getEntries()) {
+        if (entry.type === "custom" && (entry as any).customType === STATE_ENTRY_TYPE) {
+          restored = (entry as any).data as ForgeState;
+        }
       }
+
+      if (!restored) {
+        const file = outputPath(ctx.cwd, "state.json");
+        if (existsSync(file)) {
+          try {
+            restored = JSON.parse(await readFile(file, "utf-8")) as ForgeState;
+          } catch {}
+        }
+      }
+
+      state = restored;
     }
 
-    if (!restored) {
-      const file = outputPath(ctx.cwd, "state.json");
-      if (existsSync(file)) {
-        try {
-          restored = JSON.parse(await readFile(file, "utf-8")) as ForgeState;
-        } catch {}
+    const recoveredExecution = describeInterruptedExecution(authoritative);
+    if (recoveredExecution) {
+      await withV2Engine(ctx, async (engine) => {
+        for (const taskId of recoveredExecution.requeuedTaskIds) {
+          await engine.requeueTask(taskId, "Recovered after pi restart during active execution");
+        }
+        await engine.markRunPaused(recoveredExecution.label, recoveredExecution.nextAction, "Recovered after pi restart during active execution");
+      });
+      await reconcileFromAuthoritative(ctx);
+      if (state) {
+        await persistState(ctx, "resume_recovered_execution");
       }
     }
-
-    state = restored;
-    if (makeExecutionResumable("Recovered after pi restart during active execution")) {
-      await persistState(ctx, "resume_recovered_execution");
-    }
-    ctx.ui.setStatus("task-forge", statusLabel(state));
+    const refreshed = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    ctx.ui.setStatus("task-forge", refreshed ? statusLabelFromV2(refreshed) : statusLabel(state));
   });
 
   pi.on("session_shutdown", async (_event: any, ctx: any) => {
+    config = await loadConfig(ctx.cwd);
     runAbortController?.abort();
-    if (makeExecutionResumable("Interrupted because pi exited during active execution")) {
-      await persistState(ctx, "session_shutdown_interrupted_execution");
+    await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+    const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    const interruptedExecution = describeInterruptedExecution(authoritative);
+    if (interruptedExecution) {
+      await withV2Engine(ctx, async (engine) => {
+        for (const taskId of interruptedExecution.requeuedTaskIds) {
+          await engine.requeueTask(taskId, "Interrupted because pi exited during active execution");
+        }
+        await engine.markRunPaused(interruptedExecution.label, interruptedExecution.nextAction, "Interrupted because pi exited during active execution");
+      });
+      await reconcileFromAuthoritative(ctx);
+      if (state) {
+        await persistState(ctx, "session_shutdown_interrupted_execution");
+      }
     }
   });
 }
