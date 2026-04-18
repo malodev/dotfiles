@@ -601,9 +601,49 @@ function deepMergeConfig(base: TaskForgeConfig, loaded: Partial<TaskForgeConfig>
   };
 }
 
+function extractBalancedJsonCandidate(text: string): string | null {
+  const starts = [text.indexOf("{"), text.indexOf("[")].filter((index) => index >= 0).sort((a, b) => a - b);
+  if (starts.length === 0) return null;
+
+  const start = starts[0];
+  const opener = text[start];
+  const closer = opener === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index++) {
+    const ch = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === opener) depth += 1;
+    if (ch === closer) depth -= 1;
+    if (depth === 0) {
+      return text.slice(start, index + 1);
+    }
+  }
+
+  return null;
+}
+
 function extractJson(text: string): any | null {
   const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i);
-  const candidates = fenced ? [fenced[1], text] : [text];
+  const balanced = extractBalancedJsonCandidate(text);
+  const candidates = [fenced?.[1], balanced, text]
+    .filter((candidate): candidate is string => Boolean(candidate));
   for (const candidate of candidates) {
     try {
       return JSON.parse(candidate.trim());
@@ -1453,6 +1493,7 @@ export default function (pi: ExtensionAPI) {
     });
     const parsed = extractJson(raw);
     if (!parsed || !Array.isArray(parsed.tasks)) {
+      await saveArtifact(ctx, "02-plan.raw.txt", raw);
       throw new Error("Planner did not return valid task JSON for micro mode");
     }
 
@@ -1530,6 +1571,7 @@ export default function (pi: ExtensionAPI) {
     });
     const parsed = extractJson(raw);
     if (!parsed || !Array.isArray(parsed.tasks)) {
+      await saveArtifact(ctx, "02-plan.raw.txt", raw);
       throw new Error("Planner did not return valid task JSON");
     }
 
