@@ -1,6 +1,15 @@
 # TaskForge Architecture V2
 
+> Current working implementation plan: `REFACTOR-ROADMAP-V2.md`
+> Historical refactor memory: `WORKLOG-V2.md`
+> Clean-session handoff prompt: `CONTINUE-V2-PROMPT.md`
+
 TaskForge V2 replaces the current mutable in-memory orchestration loop with a **file-first, event-sourced execution engine**.
+
+## Continuity contract
+
+Update this file when the target architecture, module boundaries, or core invariants change.
+Do not use it as a worklog; use `WORKLOG-V2.md` for that.
 
 The goal is to make TaskForge:
 - restart-safe
@@ -324,21 +333,27 @@ When this message appears:
 
 ```text
 task-forge/
-  index.ts                    # thin extension adapter
+  index.ts                    # extension shell + closure-bound runtime wiring
   v2/
     types.ts                  # durable types
     events.ts                 # event constructors + event type guards
     derive.ts                 # replay + snapshot derivation
     storage.ts                # event append/load + snapshot write
     preflight.ts              # runtime/preflight normalization and checks
-    supervisor.ts             # watchdog + heartbeat policy
+    validation.ts             # validation command normalization + coverage parsing + execution
+    gate-review.ts            # gate-review prompt assembly + parsing
+    diagnostic-review.ts      # diagnostic-review prompt assembly + parsing
+    task-runner.ts            # worker execution + task success/failure orchestration
+    command-adapter.ts        # execution-loop / command bridge helpers
+    supervisor.ts             # watchdog + heartbeat escalation policy
     engine.ts                 # orchestration API
     migrate.ts                # optional v1 -> v2 snapshot/event migration
 ```
 
 ### Boundary rules
 
-- `index.ts` handles pi command/UI integration only
+- `index.ts` handles pi command/UI integration plus closure-bound runtime wiring for `pi`, config/state, and agent spawning
+- reviewer/validator prompt construction, parsing, validation heuristics, task execution orchestration, command execution-loop control, and supervisor policy should live under `v2/`
 - `engine.ts` exposes pure orchestration operations like:
   - `createRun()`
   - `loadRun()`

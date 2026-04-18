@@ -1,5 +1,9 @@
 # TaskForge
 
+> Current working refactor plan: `REFACTOR-ROADMAP-V2.md`
+>
+> Refactor memory/work log: `WORKLOG-V2.md`
+
 TaskForge is a pi extension for **hierarchical multi-agent orchestration**.
 
 It takes a Product Requirement Document (PRD), analyzes it with the right kind of model, produces an implementation plan, decomposes that plan into tasks, and then coordinates worker agents until execution is complete.
@@ -496,8 +500,8 @@ Example:
       "anthropic/claude-sonnet-4-5"
     ],
     "bulk": [
-      "openai-codex/gpt-5.1-codex-mini",
-      "openai-codex/gpt-5.3-codex-spark",
+      "openai-codex/gpt-5.4",
+      "openai-codex/gpt-5.1",
       "opencode-go/glm-5",
       "opencode-go/kimi-k2.5",
       "anthropic/claude-sonnet-4-5"
