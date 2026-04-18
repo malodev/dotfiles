@@ -1,3 +1,5 @@
+import type { ForgeTask } from "./types";
+
 export interface PreflightCheckResult {
   ok: boolean;
   kind?:
@@ -82,14 +84,37 @@ export function classifyRuntimeFailure(text: string | undefined): PreflightCheck
   return null;
 }
 
-export function preflightAcceptanceCommand(command: string | undefined): PreflightCheckResult {
-  const normalizedCommand = normalizeFrontendContainerCommand(command);
+function taskLooksLikeManualValidationCandidate(task: Pick<ForgeTask, "title" | "description" | "outputManifest">) {
+  const haystack = `${task.title}\n${task.description}\n${task.outputManifest.join("\n")}`.toLowerCase();
+  const mentionsDocs = /\breadme\b|\bdocs?\b|documentation|troubleshooting|guide|note/.test(haystack);
+  const manifestLooksTextual = task.outputManifest.length > 0
+    && task.outputManifest.every((file) => /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(file));
+  return mentionsDocs || manifestLooksTextual;
+}
+
+function missingAcceptanceSuggestion(task: Pick<ForgeTask, "id" | "title" | "description" | "outputManifest">) {
+  if (taskLooksLikeManualValidationCandidate(task)) {
+    return [
+      "This task looks like a documentation/config/manual-review task.",
+      "Either add an executable acceptance signal, or resolve the blocker with a manual validation instruction.",
+      `Example: /forge blocker ${task.id} --resolve \"Validate by checking that the intended text/config change is present and coherent; no executable acceptance command is required for this task.\"`,
+    ].join(" ");
+  }
+
+  return [
+    "Define an executable acceptance signal before task execution.",
+    `Example: /forge blocker ${task.id} --resolve \"Use the correct project test or verification command for ${task.title}.\"`,
+  ].join(" ");
+}
+
+export function preflightAcceptanceCommand(task: Pick<ForgeTask, "id" | "title" | "description" | "outputManifest" | "acceptanceSignal" | "testCommand">): PreflightCheckResult {
+  const normalizedCommand = normalizeFrontendContainerCommand(task.acceptanceSignal ?? task.testCommand);
   if (!normalizedCommand) {
     return {
       ok: false,
       kind: "environment_invalid_test_contract",
       reason: "No acceptance command is available for this task.",
-      suggestion: "Define an executable acceptance signal before task execution.",
+      suggestion: missingAcceptanceSuggestion(task),
     };
   }
 

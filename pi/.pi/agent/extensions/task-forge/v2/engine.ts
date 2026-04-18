@@ -277,7 +277,7 @@ export class TaskForgeV2Engine {
   }
 
   async preflightTask(task: ForgeTask) {
-    const acceptance = preflightAcceptanceCommand(task.acceptanceSignal ?? task.testCommand);
+    const acceptance = preflightAcceptanceCommand(task);
     if (!acceptance.ok) {
       const blocker = createHumanInterventionBlocker(task.id, acceptance.reason ?? "Preflight failed", acceptance.suggestion ?? "Review the task runtime assumptions.");
       await this.append({
