@@ -21,6 +21,9 @@ export type ExecutionActionPlan =
 export async function applySchedulingActions(engine: TaskForgeV2Engine, snapshot: RunSnapshot | null) {
   const actions = computeSchedulingActions(snapshot);
   let latestSnapshot = snapshot;
+  for (const taskId of actions.requeueTaskIds) {
+    latestSnapshot = await engine.requeueTask(taskId, "Dependency blockers cleared");
+  }
   for (const entry of actions.blockedTasks) {
     latestSnapshot = await engine.markTaskBlocked(entry.taskId, entry.blocker);
   }
@@ -29,9 +32,10 @@ export async function applySchedulingActions(engine: TaskForgeV2Engine, snapshot
   }
   return {
     snapshot: latestSnapshot,
-    changed: actions.blockedTasks.length > 0 || actions.readyTaskIds.length > 0,
+    changed: actions.requeueTaskIds.length > 0 || actions.blockedTasks.length > 0 || actions.readyTaskIds.length > 0,
     readyPromoted: actions.readyTaskIds.length,
     dependencyBlocked: actions.blockedTasks.length,
+    dependencyReopened: actions.requeueTaskIds.length,
   };
 }
 

@@ -43,19 +43,39 @@ export function createDependencyBlocker(task: Pick<ForgeTask, "id">, blockingDep
   };
 }
 
+function isDependencyBlocker(blocker: { reason?: string } | undefined) {
+  return Boolean(blocker?.reason?.startsWith("Blocked by failed dependency:"));
+}
+
 export function computeSchedulingActions(snapshot: RunSnapshot | null) {
   if (!snapshot) {
     return {
       readyTaskIds: [] as string[],
       blockedTasks: [] as Array<{ taskId: string; blocker: Blocker }>,
+      requeueTaskIds: [] as string[],
     };
   }
 
   const readyTaskIds: string[] = [];
   const blockedTasks: Array<{ taskId: string; blocker: Blocker }> = [];
+  const requeueTaskIds: string[] = [];
+
   for (const task of snapshot.tasks) {
     const runtime = snapshot.taskState[task.id];
-    if ((runtime?.status ?? "pending") !== "pending") continue;
+    const status = runtime?.status ?? "pending";
+
+    if (status === "blocked" && isDependencyBlocker(runtime?.blocker)) {
+      const blockingDeps = failedDependencies(task, snapshot.taskState);
+      if (blockingDeps.length === 0) {
+        requeueTaskIds.push(task.id);
+        if (dependenciesResolved(task, snapshot.taskState)) {
+          readyTaskIds.push(task.id);
+        }
+      }
+      continue;
+    }
+
+    if (status !== "pending") continue;
 
     const blockingDeps = failedDependencies(task, snapshot.taskState);
     if (blockingDeps.length > 0) {
@@ -68,7 +88,7 @@ export function computeSchedulingActions(snapshot: RunSnapshot | null) {
     }
   }
 
-  return { readyTaskIds, blockedTasks };
+  return { readyTaskIds, blockedTasks, requeueTaskIds };
 }
 
 export function executionFacts(snapshot: RunSnapshot | null) {
