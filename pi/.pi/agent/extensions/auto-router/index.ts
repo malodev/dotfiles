@@ -310,24 +310,36 @@ export default function (pi: ExtensionAPI) {
       "Control the auto-router (on | off | orauto | pin <route> | unpin | now | help)",
 
     getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
-      const parts = prefix.trimStart().split(/\s+/);
+      // prefix = everything after "/route " (the argumentText from the TUI)
+      // The TUI replaces the ENTIRE prefix with item.value on selection.
+      const trimmed = prefix.trimStart();
 
-      if (parts.length <= 1) {
-        const items = SUBCOMMANDS.map((s) => ({ value: s, label: s }));
-        const filtered = items.filter((i) => i.value.startsWith(parts[0] ?? ""));
-        return filtered.length > 0 ? filtered : null;
-      }
-
-      if (parts[0] === "pin" && parts.length === 2) {
+      // If user started typing "pin" (or "pin <partial>"), show route keys
+      if (trimmed.startsWith("pin")) {
+        const partial = trimmed.slice(3).trimStart();
         const items = ROUTE_KEYS.map((k) => ({
-          value: k,
+          value: `pin ${k}`,
           label: `${k} — ${ROUTES[k].label}`,
         }));
-        const filtered = items.filter((i) => i.value.startsWith(parts[1] ?? ""));
+        const filtered = partial
+          ? items.filter((i) => i.value.slice(4).startsWith(partial))
+          : items;
         return filtered.length > 0 ? filtered : null;
       }
 
-      return null;
+      // Non-pin subcommands + pin <route> variants in one flat list
+      const subItems: AutocompleteItem[] = SUBCOMMANDS
+        .filter((s) => s !== "pin")
+        .map((s) => ({ value: s, label: s }));
+
+      const pinItems: AutocompleteItem[] = ROUTE_KEYS.map((k) => ({
+        value: `pin ${k}`,
+        label: `📌 ${k} — ${ROUTES[k].label}`,
+      }));
+
+      const all = [...subItems, ...pinItems];
+      const filtered = all.filter((i) => i.value.startsWith(trimmed));
+      return filtered.length > 0 ? filtered : null;
     },
 
     handler: async (args, ctx) => {

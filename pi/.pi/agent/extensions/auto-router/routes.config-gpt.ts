@@ -3,33 +3,25 @@
  * Route definitions for the auto-router extension.
  * Edit this file to add, remove, or tune routes without touching logic.
  *
- * Provider priority policy:
- *   1. opencode-go and openai-codex are primary pools
- *   2. openrouter is always fallback-only
+ * Primary models (all on opencode-go):
  *
- * Available opencode-go models:
- *   glm-5.1        204.8K   131.1K   thinking yes   images no
- *   kimi-k2.5      262.1K    65.5K   thinking yes   images yes
- *   mimo-v2-omni   262.1K      64K   thinking yes   images yes
- *   mimo-v2-pro      1.0M      64K   thinking yes   images no
- *   minimax-m2.5   204.8K   131.1K   thinking yes   images no
- *   minimax-m2.7   204.8K   131.1K   thinking yes   images no
+ *   model            context   max-out  thinking  images
+ *   glm-5.1          204.8K   131.1K   yes       no
+ *   kimi-k2.5        262.1K    65.5K   yes       yes
+ *   mimo-v2-omni     262.1K    64K     yes       yes
+ *   mimo-v2-pro        1.0M    64K     yes       no
+ *   minimax-m2.7     204.8K   131.1K   yes       no
  *
- * Available openai-codex models used here:
- *   gpt-5.4                 272K   128K   premium general / multimodal
- *   gpt-5.4-mini            272K   128K   fast practical default
- *   gpt-5.3-codex           272K   128K   premium code-specialized
- *   gpt-5.1-codex-max       272K   128K   value premium coding
- *   gpt-5.1-codex-mini      272K   128K   ultra-cheap coding workhorse
+ * OpenRouter fallback slugs (from provided model list, verified April 2026):
  *
- * Key selection criteria per route:
+ *   Key selection criteria per route:
  *   surgical   → max reasoning depth + large output window
  *   general    → max context + agentic tool-use
  *   daily      → best coding value + cost
  *   polyglot   → multilingual strength + large context
  *   terminal   → fast + excellent tool-use, thinking:off preferred
- *   speed      → fastest good coding model to route by default
- *   budget     → cheap/high-volume doc/test/lint
+ *   speed      → throughput, low latency, low cost
+ *   budget     → free or near-free, sufficient for doc/test/lint
  *   uiux       → images:yes required
  *   explore    → images:yes + large context
  *   glm        → max output window for large artifact generation
@@ -47,21 +39,21 @@ export const ROUTES: Record<string, RouteConfig> = {
   // ── 🔴 TIER PREMIUM ────────────────────────────────────────────────────────
 
   surgical: {
-    // Primary: glm-5.1 — best long-output engineering fit on your direct providers
-    // #2: gpt-5.1-codex-max — strong coding/reasoning at much better cost than newer premium Codex
-    // #3: gpt-5.3-codex — premium code-specialized fallback
-    // #4: mimo-v2-pro — 1M ctx if session size dominates over output window
-    // OpenRouter remains fallback-only
+    // Primary: glm-5.1 — best fit for long-horizon engineering, deep iterative work,
+    //   large-output coding and "staircase" optimization loops
+    // Primary fallback: mimo-v2-pro — 1M context when repo/session breadth matters more
+    // Primary fallback: minimax-m2.7 — still 131K output, cheaper, good safety net
+    // OR: Opus 4.6 / GPT-5.4 / o3-pro — premium deep-reasoning fallbacks
+    // OR: z-ai/glm-4.6 — huge 204.8K output window when artifact size dominates
+    // Note: z-ai/glm-5.1 on OR intentionally excluded here because max-out is only 4.1K
     candidates: [
       ["opencode-go", "glm-5.1"],
-      ["openai-codex", "gpt-5.1-codex-max"],
-      ["openai-codex", "gpt-5.3-codex"],
       ["opencode-go", "mimo-v2-pro"],
-      ["openrouter", "z-ai/glm-5.1"],
+      ["opencode-go", "minimax-m2.7"],
       ["openrouter", "anthropic/claude-opus-4.6"],
       ["openrouter", "openai/gpt-5.4"],
-      ["openrouter", "deepseek/deepseek-r1-0528"],
-      ["openrouter", "x-ai/grok-4.1-fast"],
+      ["openrouter", "openai/o3-pro"],
+      ["openrouter", "z-ai/glm-4.6"],
     ],
     thinking: "high",
     label: "🔴 GLM-5.1 — surgical",
@@ -79,21 +71,19 @@ export const ROUTES: Record<string, RouteConfig> = {
   },
 
   general: {
-    // Primary: mimo-v2-pro — 1M context still wins for large multi-file sessions
-    // #2: gpt-5.4 — premium generalist where premium spend is justified
-    // #3: glm-5.1 — strong agentic coding fallback with long output
-    // #4: gpt-5.2 — cheaper frontier-ish general fallback on direct OpenAI
-    // OpenRouter remains fallback-only
+    // Primary: mimo-v2-pro — best default large-context backbone on opencode-go
+    // Primary fallback: glm-5.1 — stronger long-horizon agentic behavior for harder runs
+    // Primary fallback: kimi-k2.5 — broad generalist fallback with multimodal support
+    // OR: xiaomi/mimo-v2-pro — closest mirror of the primary profile on OR
+    // OR: Gemini 3.1 Pro / Sonnet 4.6 / GPT-5.4 — high-end general agentic fallbacks
     candidates: [
       ["opencode-go", "mimo-v2-pro"],
-      ["openai-codex", "gpt-5.4"],
       ["opencode-go", "glm-5.1"],
-      ["openai-codex", "gpt-5.2"],
-      ["openrouter", "x-ai/grok-4.1-fast"],
+      ["opencode-go", "kimi-k2.5"],
+      ["openrouter", "xiaomi/mimo-v2-pro"],
       ["openrouter", "google/gemini-3.1-pro-preview"],
+      ["openrouter", "anthropic/claude-sonnet-4.6"],
       ["openrouter", "openai/gpt-5.4"],
-      ["openrouter", "qwen/qwen3.6-plus"],
-      ["openrouter", "z-ai/glm-5.1"],
     ],
     thinking: "medium",
     label: "🔴 MiMo-V2-Pro — general",
@@ -111,23 +101,22 @@ export const ROUTES: Record<string, RouteConfig> = {
   // ── 🟡 TIER MID ────────────────────────────────────────────────────────────
 
   daily: {
-    // Primary: gpt-5.1-codex-mini — best value daily coding default
-    // #2: gpt-5.4-mini — newer fast practical fallback when you want more quality
-    // #3: minimax-m2.7 — cheap strong non-OpenAI fallback
-    // #4: kimi-k2.5 — broad all-rounder with vision available
-    // OpenRouter remains fallback-only
+    // Primary: minimax-m2.7 — best everyday coding value on opencode-go
+    // Primary fallback: kimi-k2.5 — broader assistant fallback when the task widens
+    // OR: minimax/minimax-m2.7 — same family fallback via OR
+    // OR: Gemini 2.5 Flash — strong cost/perf for routine coding
+    // OR: Qwen3-Coder-Plus — coder-oriented large-context fallback
+    // OR: Sonnet 4.6 — quality ceiling when the "daily" task turns non-routine
     candidates: [
-      ["openai-codex", "gpt-5.1-codex-mini"],
-      ["openai-codex", "gpt-5.4-mini"],
       ["opencode-go", "minimax-m2.7"],
       ["opencode-go", "kimi-k2.5"],
-      ["openrouter", "anthropic/claude-sonnet-4.5"],
-      ["openrouter", "deepseek/deepseek-v3.2-exp"],
       ["openrouter", "minimax/minimax-m2.7"],
-      ["openrouter", "minimax/minimax-m2.5"],
+      ["openrouter", "google/gemini-2.5-flash"],
+      ["openrouter", "qwen/qwen3-coder-plus"],
+      ["openrouter", "anthropic/claude-sonnet-4.6"],
     ],
-    thinking: "medium",
-    label: "🟡 Codex-Mini — daily",
+    thinking: "low",
+    label: "🟡 MiniMax M2.7 — daily",
     minPromptLength: 10,
     keywords: [
       ["implement", 2], ["explain", 2],
@@ -138,21 +127,22 @@ export const ROUTES: Record<string, RouteConfig> = {
   },
 
   polyglot: {
-    // Primary: glm-5.1 — strongest fit for multilingual/cross-language coding
-    // #2: gpt-5.4 — premium multilingual/general fallback
-    // #3: mimo-v2-pro — 1M ctx when cross-language codebase size dominates
-    // OpenRouter remains fallback-only
+    // Primary: kimi-k2.5 — best primary fit for broad multilingual / cross-stack work
+    // Primary fallback: mimo-v2-pro — 1M context for large migration/porting sessions
+    // Primary fallback: glm-5.1 — long-horizon translation / porting / orchestration
+    // OR: Qwen3.6 Plus — strong multilingual + 1M context
+    // OR: Gemini 3.1 Pro — strong multilingual generalist with large context
+    // OR: Qwen3.5-397B — large open multilingual fallback
     candidates: [
-      ["opencode-go", "glm-5.1"],
-      ["openai-codex", "gpt-5.4"],
+      ["opencode-go", "kimi-k2.5"],
       ["opencode-go", "mimo-v2-pro"],
+      ["opencode-go", "glm-5.1"],
+      ["openrouter", "qwen/qwen3.6-plus"],
       ["openrouter", "google/gemini-3.1-pro-preview"],
       ["openrouter", "qwen/qwen3.5-397b-a17b"],
-      ["openrouter", "deepseek/deepseek-v3.2-exp"],
-      ["openrouter", "qwen/qwen3.6-plus"],
     ],
     thinking: "medium",
-    label: "🟡 GLM-5.1 — polyglot",
+    label: "🟡 Kimi K2.5 — polyglot",
     minPromptLength: 20,
     keywords: [
       ["python.*typescript", 3], ["rust.*go", 3],
@@ -167,23 +157,22 @@ export const ROUTES: Record<string, RouteConfig> = {
   // ── 🟢 TIER VELOCITÀ ───────────────────────────────────────────────────────
 
   terminal: {
-    // Primary: gpt-5.1-codex-mini — cheap, responsive, code-native terminal helper
-    // #2: gpt-5.4-mini — newer/faster-feeling fallback
-    // #3: minimax-m2.7 — strong cheap non-OpenAI fallback
-    // #4: glm-5.1 — powerful tool-use fallback
-    // OpenRouter remains fallback-only
+    // Primary: minimax-m2.7 thinking:off — best shell/CI default on opencode-go
+    // Primary fallback: kimi-k2.5 — secondary primary if MiniMax is unavailable
+    // OR: Grok Code Fast — most purpose-built terminal/code fast-path in the fallback set
+    // OR: Qwen3-Coder-Plus — large-context coder fallback for bigger scripts
+    // OR: Gemini 2.5 Flash — reliable fast general coding fallback
+    // OR: minimax/minimax-m2.7 — same-family OR safety net
     candidates: [
-      ["openai-codex", "gpt-5.1-codex-mini"],
-      ["openai-codex", "gpt-5.4-mini"],
       ["opencode-go", "minimax-m2.7"],
-      ["opencode-go", "glm-5.1"],
+      ["opencode-go", "kimi-k2.5"],
       ["openrouter", "x-ai/grok-code-fast-1"],
-      ["openrouter", "deepseek/deepseek-v3.2-exp"],
       ["openrouter", "qwen/qwen3-coder-plus"],
-      ["openrouter", "minimax/minimax-m2.5"],
+      ["openrouter", "google/gemini-2.5-flash"],
+      ["openrouter", "minimax/minimax-m2.7"],
     ],
     thinking: "off",
-    label: "🟢 Codex-Mini — terminal",
+    label: "🟢 MiniMax M2.7 — terminal",
     minPromptLength: 10,
     keywords: [
       ["bash", 3], ["chmod", 3], ["chown", 3],
@@ -198,23 +187,22 @@ export const ROUTES: Record<string, RouteConfig> = {
   },
 
   speed: {
-    // Primary: gpt-5.4-mini — fastest good coding model you want routed by default
-    // #2: gpt-5.1-codex-mini — ultra-cheap fast fallback
-    // #3: minimax-m2.7 — reliable non-OpenAI speed path
-    // #4: gpt-5.3-codex-spark — optional experimental speed path; pricing not final
-    // OpenRouter remains fallback-only
+    // Primary: minimax-m2.7 thinking:off — best throughput/cost default
+    // Primary fallback: kimi-k2.5 — second primary if needed
+    // OR: Grok 4.1 Fast — strong cheap high-throughput fallback
+    // OR: Gemini 2.5 Flash — reliable fast large-context fallback
+    // OR: Nova 2 Lite — fast 1M-context fallback
+    // OR: Qwen3.5 Flash — good throughput alternative
     candidates: [
-      ["openai-codex", "gpt-5.4-mini"],
-      ["openai-codex", "gpt-5.1-codex-mini"],
       ["opencode-go", "minimax-m2.7"],
-      ["openai-codex", "gpt-5.3-codex-spark"],
+      ["opencode-go", "kimi-k2.5"],
+      ["openrouter", "x-ai/grok-4.1-fast"],
       ["openrouter", "google/gemini-2.5-flash"],
-      ["openrouter", "minimax/minimax-m2.7"],
-      ["openrouter", "stepfun/step-3.5-flash"],
-      ["openrouter", "qwen/qwen3-coder-flash"],
+      ["openrouter", "amazon/nova-2-lite-v1"],
+      ["openrouter", "qwen/qwen3.5-flash-02-23"],
     ],
     thinking: "off",
-    label: "🟢 GPT-5.4-Mini — speed",
+    label: "🟢 MiniMax M2.7 — speed",
     minPromptLength: 10,
     keywords: [
       ["boilerplate", 3], ["scaffold", 3],
@@ -227,21 +215,17 @@ export const ROUTES: Record<string, RouteConfig> = {
   // ── 🔵 TIER ALTERNATIVO ────────────────────────────────────────────────────
 
   budget: {
-    // Primary: minimax-m2.7 — strong cheap default for high-volume low-risk work
-    // #2: minimax-m2.5 — same idea, slightly lower tier but still direct-provider
-    // #3: gpt-5.1-codex-mini — OpenAI fallback cheap enough to justify here
-    // #4: glm-5.1 — reliable fallback when cheap models are unavailable
-    // OpenRouter remains fallback-only
+    // Primary: minimax-m2.7 — cheapest sensible primary on opencode-go
+    // OR: MiniMax M2.5 free — huge free output window
+    // OR: Qwen3-Coder free — coding-oriented free fallback
+    // OR: Step 3.5 Flash free — large free output fallback
+    // OR: GPT-OSS-20B free — free reasoning-capable general fallback
     candidates: [
       ["opencode-go", "minimax-m2.7"],
-      ["opencode-go", "minimax-m2.5"],
-      ["openai-codex", "gpt-5.1-codex-mini"],
-      ["opencode-go", "glm-5.1"],
       ["openrouter", "minimax/minimax-m2.5:free"],
-      ["openrouter", "nvidia/nemotron-3-super-120b-a12b:free"],
-      ["openrouter", "z-ai/glm-4.5-air:free"],
       ["openrouter", "qwen/qwen3-coder:free"],
       ["openrouter", "stepfun/step-3.5-flash:free"],
+      ["openrouter", "openai/gpt-oss-20b:free"],
     ],
     thinking: "off",
     label: "🔵 MiniMax M2.7 — budget",
@@ -257,23 +241,21 @@ export const ROUTES: Record<string, RouteConfig> = {
   },
 
   uiux: {
-    // Primary: kimi-k2.5 — best direct multimodal default for UI work
-    // #2: mimo-v2-omni — strong multimodal fallback
-    // #3: gpt-5.4 — premium multimodal reasoning fallback
-    // #4: gpt-5.4-mini — cheaper multimodal fallback
-    // OpenRouter remains fallback-only
+    // Primary: mimo-v2-omni — best first pick when images matter
+    // Primary fallback: kimi-k2.5 — second multimodal primary
+    // OR: xiaomi/mimo-v2-omni — closest mirror of the primary profile on OR
+    // OR: Gemini 3.1 Pro / Sonnet 4.6 — strong multimodal design reasoning
+    // OR: Qwen3-VL-235B thinking — dedicated large VL fallback
     candidates: [
-      ["opencode-go", "kimi-k2.5"],
       ["opencode-go", "mimo-v2-omni"],
-      ["openai-codex", "gpt-5.4"],
-      ["openai-codex", "gpt-5.4-mini"],
-      ["openrouter", "anthropic/claude-sonnet-4.5"],
+      ["opencode-go", "kimi-k2.5"],
+      ["openrouter", "xiaomi/mimo-v2-omni"],
       ["openrouter", "google/gemini-3.1-pro-preview"],
+      ["openrouter", "anthropic/claude-sonnet-4.6"],
       ["openrouter", "qwen/qwen3-vl-235b-a22b-thinking"],
-      ["openrouter", "bytedance-seed/seed-2.0-lite"],
     ],
     thinking: "medium",
-    label: "🎨 Kimi K2.5 — UI/UX",
+    label: "🎨 MiMo V2 Omni — UI/UX",
     minPromptLength: 15,
     keywords: [
       ["figma", 3], ["mockup", 3], ["wireframe", 3],
@@ -286,48 +268,44 @@ export const ROUTES: Record<string, RouteConfig> = {
   },
 
   // ── 🔵 TIER MANUALE ────────────────────────────────────────────────────────
-  // Not auto-selected. Activate with `/route pin <key>`.
+  // Non selezionate automaticamente. Attivare con `/route pin <key>`.
 
   explore: {
-    // Primary: mimo-v2-omni — best available direct multimodal exploration model
-    // #2: kimi-k2.5 — strong visual exploration fallback
-    // #3: gpt-5.4 — premium multimodal fallback
-    // #4: gpt-5.4-mini — cheaper multimodal fallback
-    // Uses only currently available direct-provider multimodal models
+    // Primary: kimi-k2.5 + mimo-v2-omni — best for visual exploration / codebase discovery
+    // OR: Gemini 3.1 Pro — very large multimodal context
+    // OR: Sonnet 4.6 — high-quality multimodal fallback
+    // OR: Qwen3-VL-235B thinking — large visual reasoning fallback
     candidates: [
-      ["opencode-go", "mimo-v2-omni"],
       ["opencode-go", "kimi-k2.5"],
-      ["openai-codex", "gpt-5.4"],
-      ["openai-codex", "gpt-5.4-mini"],
+      ["opencode-go", "mimo-v2-omni"],
       ["openrouter", "google/gemini-3.1-pro-preview"],
-      ["openrouter", "qwen/qwen3.6-plus"],
-      ["openrouter", "bytedance-seed/seed-2.0-lite"],
-      ["openrouter", "xiaomi/mimo-v2-omni"],
+      ["openrouter", "anthropic/claude-sonnet-4.6"],
+      ["openrouter", "qwen/qwen3-vl-235b-a22b-thinking"],
     ],
     thinking: "medium",
-    label: "🔵 MiMo-V2-Omni — explore",
+    label: "🔵 Kimi K2.5 — explore",
     manualOnly: true,
   },
 
   glm: {
-    // Primary: glm-5.1 — direct-provider long-horizon artifact generation specialist
-    // #2: gpt-5.1-codex-max — best value premium Codex for long outputs
-    // #3: gpt-5.3-codex — premium code-specialized fallback
-    // #4: mimo-v2-pro — 1M ctx fallback if session size dominates
-    // OpenRouter remains fallback-only
+    // Primary: glm-5.1 — best opencode-go fit for long-horizon engineering work
+    // Primary fallback: minimax-m2.7 — same 131K output class at much lower cost
+    // Primary fallback: mimo-v2-pro — 1M context when breadth beats raw output length
+    // OR: z-ai/glm-4.6 — best GLM-family OR candidate for giant single-artifact output
+    // OR: z-ai/glm-5-turbo — faster supervised GLM fallback with 131K output
+    // OR: minimax/minimax-m2.7 — similar output-window fallback
+    // OR: Opus 4.6 — premium ceiling fallback
+    // Note: z-ai/glm-5.1 intentionally excluded here because OR max-out is only 4.1K
     candidates: [
       ["opencode-go", "glm-5.1"],
-      ["openai-codex", "gpt-5.1-codex-max"],
-      ["openai-codex", "gpt-5.3-codex"],
+      ["opencode-go", "minimax-m2.7"],
       ["opencode-go", "mimo-v2-pro"],
-      ["openrouter", "z-ai/glm-5.1"],
-      ["openrouter", "z-ai/glm-4.7"],
       ["openrouter", "z-ai/glm-4.6"],
       ["openrouter", "z-ai/glm-5-turbo"],
       ["openrouter", "minimax/minimax-m2.7"],
       ["openrouter", "anthropic/claude-opus-4.6"],
     ],
-    thinking: "medium",
+    thinking: "high",
     label: "🔵 GLM-5.1 — long-horizon",
     manualOnly: true,
   },
