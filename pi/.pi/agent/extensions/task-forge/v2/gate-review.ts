@@ -1,5 +1,6 @@
 import type { TaskExecutionBlockerLike } from "./task-executor";
 import type { TaskGateReviewResult } from "./task-success";
+import type { TaskValidationContract } from "./validation";
 
 export interface GateReviewTaskLike {
   id: string;
@@ -9,6 +10,7 @@ export interface GateReviewTaskLike {
   outputManifest: string[];
   acceptanceSignal?: string;
   testCommand?: string;
+  validation?: TaskValidationContract;
   coverageThreshold?: number;
   lastCoverage?: number;
   validationFramework?: string;
@@ -53,7 +55,10 @@ export function buildGateReviewPrompt(task: GateReviewTaskLike) {
     ...(task.outputManifest.length ? task.outputManifest.map((value) => `- ${value}`) : ["- none specified"]),
     "",
     "## Acceptance Signal",
-    task.acceptanceSignal || task.testCommand || "none",
+    task.acceptanceSignal || task.testCommand || task.validation?.command || "none",
+    "",
+    "## Manual Validation Notes",
+    task.validation?.notes ?? "none",
     "",
     "## Coverage Threshold",
     task.coverageThreshold !== undefined ? String(task.coverageThreshold) : "none",

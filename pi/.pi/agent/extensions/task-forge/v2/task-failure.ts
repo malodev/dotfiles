@@ -1,6 +1,10 @@
+import type { BlockerCategory } from "./types.ts";
+
 export interface TaskFailureDiagnosticLike {
   classification: string;
   notes: string;
+  blockerCategory?: BlockerCategory;
+  remediationMode?: import("./types.ts").BlockerResolutionMode;
 }
 
 export interface EnvironmentFailureLike {

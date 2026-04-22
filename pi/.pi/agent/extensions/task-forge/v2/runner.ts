@@ -43,8 +43,12 @@ export interface RunnerAdvanceResult<TTask extends ForgeTask = ForgeTask> {
 
 export class TaskForgeV2Runner {
   private engine: TaskForgeV2Engine;
+  private cwd: string;
+  private outputDir: string;
 
-  constructor(private cwd: string, private outputDir = ".task-forge") {
+  constructor(cwd: string, outputDir = ".task-forge") {
+    this.cwd = cwd;
+    this.outputDir = outputDir;
     this.engine = new TaskForgeV2Engine(cwd, outputDir);
   }
 

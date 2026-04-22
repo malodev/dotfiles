@@ -1,4 +1,5 @@
-import type { ForgeTask } from "./types";
+import type { ForgeTask } from "./types.ts";
+import { normalizeValidationContract } from "./validation.ts";
 
 export interface PreflightCheckResult {
   ok: boolean;
@@ -12,6 +13,7 @@ export interface PreflightCheckResult {
   reason?: string;
   suggestion?: string;
   normalizedCommand?: string;
+  message?: string;
 }
 
 export function normalizeFrontendContainerCommand(command: string | undefined): string | undefined {
@@ -29,7 +31,7 @@ export function normalizeFrontendContainerCommand(command: string | undefined): 
 export function classifyRuntimeFailure(text: string | undefined): PreflightCheckResult | null {
   const normalized = String(text ?? "").toLowerCase();
 
-  const checks: Array<Required<Omit<PreflightCheckResult, "ok" | "normalizedCommand">>> = [
+  const checks: Array<Omit<PreflightCheckResult, "ok" | "normalizedCommand">> = [
     {
       kind: "environment_missing_runtime",
       reason: "Acceptance environment is missing a required runtime tool or script.",
@@ -88,7 +90,7 @@ function taskLooksLikeManualValidationCandidate(task: Pick<ForgeTask, "title" | 
   const haystack = `${task.title}\n${task.description}\n${task.outputManifest.join("\n")}`.toLowerCase();
   const mentionsDocs = /\breadme\b|\bdocs?\b|documentation|troubleshooting|guide|note/.test(haystack);
   const manifestLooksTextual = task.outputManifest.length > 0
-    && task.outputManifest.every((file) => /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(file));
+    && task.outputManifest.every((file: string) => /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(file));
   return mentionsDocs || manifestLooksTextual;
 }
 
@@ -107,14 +109,57 @@ function missingAcceptanceSuggestion(task: Pick<ForgeTask, "id" | "title" | "des
   ].join(" ");
 }
 
-export function preflightAcceptanceCommand(task: Pick<ForgeTask, "id" | "title" | "description" | "outputManifest" | "acceptanceSignal" | "testCommand">): PreflightCheckResult {
-  const normalizedCommand = normalizeFrontendContainerCommand(task.acceptanceSignal ?? task.testCommand);
+export function preflightAcceptanceCommand(
+  task: Pick<ForgeTask, "id" | "title" | "description" | "outputManifest" | "validation">
+    & Partial<Pick<ForgeTask, "acceptanceSignal" | "testCommand" | "coverageThreshold">>
+): PreflightCheckResult {
+  let validation;
+  try {
+    validation = normalizeValidationContract({
+      validation: task.validation,
+      testCommand: task.testCommand,
+      acceptanceSignal: task.acceptanceSignal,
+      coverageThreshold: task.coverageThreshold,
+    }).validation;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("mode=command requires a non-empty validation.command")) {
+      return {
+        ok: false,
+        kind: "environment_invalid_test_contract",
+        reason: "Command validation mode requires an executable validation.command, but none was provided.",
+        suggestion: [
+          "Set validation.command to the exact test or verification command to run during preflight and validation.",
+          `Example: add validation: { mode: \"command\", command: \"<your-test-command>\" } to task ${task.id}.`,
+        ].join(" "),
+      };
+    }
+
+    return {
+      ok: false,
+      kind: "environment_invalid_test_contract",
+      reason: message,
+      suggestion: missingAcceptanceSuggestion(task),
+    };
+  }
+
+  if (validation.mode === "manual") {
+    return {
+      ok: true,
+      message: "Preflight skipped executable command checks because validation.mode=manual.",
+    };
+  }
+
+  const normalizedCommand = normalizeFrontendContainerCommand(validation.command);
   if (!normalizedCommand) {
     return {
       ok: false,
       kind: "environment_invalid_test_contract",
-      reason: "No acceptance command is available for this task.",
-      suggestion: missingAcceptanceSuggestion(task),
+      reason: "Command validation mode requires an executable validation.command, but none was provided.",
+      suggestion: [
+        "Set validation.command to the exact test or verification command to run during preflight and validation.",
+        `Example: add validation: { mode: \"command\", command: \"<your-test-command>\" } to task ${task.id}.`,
+      ].join(" "),
     };
   }
 
@@ -128,5 +173,9 @@ export function preflightAcceptanceCommand(task: Pick<ForgeTask, "id" | "title" 
     };
   }
 
-  return { ok: true, normalizedCommand };
+  return {
+    ok: true,
+    normalizedCommand,
+    message: `Preflight validated executable command checks for validation.mode=${validation.mode}.`,
+  };
 }

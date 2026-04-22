@@ -1,9 +1,11 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ForgeEvent } from "./events";
-import type { RunSnapshot } from "./types";
-import { replayEvents } from "./derive";
+import type { ForgeEvent } from "./events.ts";
+import type { RunSnapshot } from "./types.ts";
+import { replayEvents } from "./derive.ts";
+import { migrateSnapshotBlockers } from "./blocker-model.ts";
+import { migrateSnapshot } from "./migrate.ts";
 
 export interface V2StorageLayout {
   baseDir: string;
@@ -46,10 +48,12 @@ export async function deriveSnapshot(layout: V2StorageLayout): Promise<RunSnapsh
 
 export async function writeSnapshot(layout: V2StorageLayout, snapshot: RunSnapshot) {
   await ensureLayout(layout);
-  await writeFile(layout.snapshotFile, JSON.stringify(snapshot, null, 2), "utf-8");
+  const migrated = migrateSnapshotBlockers(migrateSnapshot(snapshot));
+  await writeFile(layout.snapshotFile, JSON.stringify(migrated, null, 2), "utf-8");
 }
 
 export async function loadSnapshot(layout: V2StorageLayout): Promise<RunSnapshot | null> {
   if (!existsSync(layout.snapshotFile)) return null;
-  return JSON.parse(await readFile(layout.snapshotFile, "utf-8")) as RunSnapshot;
+  const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8")) as RunSnapshot;
+  return migrateSnapshotBlockers(migrateSnapshot(raw));
 }

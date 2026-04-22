@@ -1,4 +1,5 @@
-import type { Blocker, ForgeTask, NextAction, RunSnapshot } from "./types";
+import type { Blocker, ForgeTask, NextAction, RunSnapshot } from "./types.ts";
+import { createBlocker } from "./blocker-model.ts";
 
 export type ExecutionDecision =
   | { kind: "halt"; reason: "aborted" | "awaiting_input" }
@@ -35,12 +36,13 @@ export function dependenciesResolved(
 }
 
 export function createDependencyBlocker(task: Pick<ForgeTask, "id">, blockingDeps: string[]): Blocker {
-  return {
+  return createBlocker({
     taskId: task.id,
+    category: "dependency",
     reason: `Blocked by failed dependency: ${blockingDeps.join(", ")}`,
     suggestion: `Resolve the upstream dependency task${blockingDeps.length > 1 ? "s" : ""} (${blockingDeps.join(", ")}) and then rerun /forge execute.`,
     blockedTasks: [task.id, ...blockingDeps],
-  };
+  });
 }
 
 function isDependencyBlocker(blocker: { reason?: string } | undefined) {
@@ -60,30 +62,56 @@ export function computeSchedulingActions(snapshot: RunSnapshot | null) {
   const blockedTasks: Array<{ taskId: string; blocker: Blocker }> = [];
   const requeueTaskIds: string[] = [];
 
-  for (const task of snapshot.tasks) {
-    const runtime = snapshot.taskState[task.id];
-    const status = runtime?.status ?? "pending";
+  // Build a virtual task-state overlay that simulates requeue decisions.
+  // When we decide to requeue a blocked task, we update its virtual status
+  // so downstream tasks depending on it see it as no longer "blocked",
+  // enabling cascading dependency-blocker resolution in a single pass.
+  const virtualState: Record<string, { status?: string } | undefined> = {};
+  for (const [taskId, runtime] of Object.entries(snapshot.taskState)) {
+    virtualState[taskId] = { status: runtime?.status };
+  }
 
-    if (status === "blocked" && isDependencyBlocker(runtime?.blocker)) {
-      const blockingDeps = failedDependencies(task, snapshot.taskState);
+  // Cascade: iteratively resolve dependency blockers until no more can be cleared.
+  // This ensures that clearing upstream blockers propagates downstream —
+  // e.g. unblocking Task A also unblocks Task B (which depends on A),
+  // which in turn unblocks Task C (which depends on B), all in one pass.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const task of snapshot.tasks) {
+      const currentStatus = virtualState[task.id]?.status ?? "pending";
+      if (currentStatus !== "blocked") continue;
+      if (!isDependencyBlocker(snapshot.taskState[task.id]?.blocker)) continue;
+
+      const blockingDeps = failedDependencies(task, virtualState);
       if (blockingDeps.length === 0) {
         requeueTaskIds.push(task.id);
-        if (dependenciesResolved(task, snapshot.taskState)) {
+        if (dependenciesResolved(task, virtualState)) {
+          virtualState[task.id] = { status: "ready" };
           readyTaskIds.push(task.id);
+        } else {
+          virtualState[task.id] = { status: "pending" };
         }
+        changed = true;
       }
-      continue;
     }
+  }
 
-    if (status !== "pending") continue;
+  // Evaluate remaining (non-blocked) tasks using the virtual state
+  const handled = new Set(requeueTaskIds);
+  for (const task of snapshot.tasks) {
+    if (handled.has(task.id)) continue;
 
-    const blockingDeps = failedDependencies(task, snapshot.taskState);
+    const currentStatus = virtualState[task.id]?.status ?? "pending";
+    if (currentStatus !== "pending") continue;
+
+    const blockingDeps = failedDependencies(task, virtualState);
     if (blockingDeps.length > 0) {
       blockedTasks.push({ taskId: task.id, blocker: createDependencyBlocker(task, blockingDeps) });
       continue;
     }
 
-    if (dependenciesResolved(task, snapshot.taskState)) {
+    if (dependenciesResolved(task, virtualState)) {
       readyTaskIds.push(task.id);
     }
   }

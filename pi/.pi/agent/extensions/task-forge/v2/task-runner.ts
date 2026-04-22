@@ -74,14 +74,47 @@ export interface TaskRunnerHooks<TTask extends TaskRunnerTaskLike, TBlocker exte
   reconcile: () => Promise<void>;
   persistState: (event: string, details?: Record<string, unknown>) => Promise<void>;
   runtimeFailureSync: {
-    markRuntime: (taskId: string, runtime: { retries: number; error?: string | null; failureSignature?: string | null; diagnostic?: { classification: string; notes: string }; diagnosticCount?: number }) => Promise<void>;
+    markRuntime: (taskId: string, runtime: {
+      retries: number;
+      error?: string | null;
+      failureSignature?: string | null;
+      diagnostic?: {
+        classification: string;
+        notes: string;
+        blockerCategory?: import("./types.ts").BlockerCategory;
+        remediationMode?: import("./types.ts").BlockerResolutionMode;
+      };
+      diagnosticCount?: number;
+    }) => Promise<void>;
   };
   terminalFailureSync: {
-    markRuntime: (taskId: string, runtime: { retries: number; error?: string | null; failureSignature?: string | null; diagnostic?: { classification: string; notes: string }; diagnosticCount?: number }) => Promise<void>;
+    markRuntime: (taskId: string, runtime: {
+      retries: number;
+      error?: string | null;
+      failureSignature?: string | null;
+      diagnostic?: {
+        classification: string;
+        notes: string;
+        blockerCategory?: import("./types.ts").BlockerCategory;
+        remediationMode?: import("./types.ts").BlockerResolutionMode;
+      };
+      diagnosticCount?: number;
+    }) => Promise<void>;
     markFailed: (taskId: string, error: string) => Promise<void>;
   };
   retryFailureSync: {
-    markRuntime: (taskId: string, runtime: { retries: number; error?: string | null; failureSignature?: string | null; diagnostic?: { classification: string; notes: string }; diagnosticCount?: number }) => Promise<void>;
+    markRuntime: (taskId: string, runtime: {
+      retries: number;
+      error?: string | null;
+      failureSignature?: string | null;
+      diagnostic?: {
+        classification: string;
+        notes: string;
+        blockerCategory?: import("./types.ts").BlockerCategory;
+        remediationMode?: import("./types.ts").BlockerResolutionMode;
+      };
+      diagnosticCount?: number;
+    }) => Promise<void>;
     requeue: (taskId: string, reason: string) => Promise<void>;
   };
 }
@@ -277,13 +310,20 @@ export async function executeManagedTask<TTask extends TaskRunnerTaskLike, TBloc
     if (failureDecision.kind === "diagnose") {
       const diagnosis = await hooks.runDiagnosticReview(task);
       if (diagnosis) {
+        const diagnosticDecision = decideTaskFailureDiagnosis(task.id, task.error, diagnosis);
+        const blockerCategory = diagnosticDecision.kind === "block" ? blockerFromDiagnosticDecision(task.id, diagnosticDecision).category : undefined;
+        const persistedDiagnostic = {
+          ...diagnosis,
+          blockerCategory,
+        };
+
         await applyTaskDiagnostic(task, {
           classification: String(diagnosis.classification ?? "unknown"),
           notes: String(diagnosis.notes ?? ""),
+          blockerCategory,
         }, runtimeFailureHooks);
-        await hooks.saveDiagnostic(task.id, diagnosis);
+        await hooks.saveDiagnostic(task.id, persistedDiagnostic);
 
-        const diagnosticDecision = decideTaskFailureDiagnosis(task.id, task.error, diagnosis);
         if (diagnosticDecision.kind === "rewrite_test_spec") {
           const rewritten = applyDiagnosticTestSpecRewrite(task, hooks.currentTestSpecs(), diagnosticDecision.rewrittenTestSpec as TTestSpec);
           await hooks.updateTestSpecs(rewritten.testSpecs);

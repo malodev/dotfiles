@@ -22,14 +22,18 @@ import { createTaskForgeBeginTaskExecutionHooks, createTaskForgeCompleteTaskExec
 import { executeApprovedPlanLoop, launchExecutionBatch } from "./v2/command-adapter";
 import { runIntegrationReview } from "./v2/review";
 import { runTaskDiagnosticReview, needsDiagnosticReview } from "./v2/diagnostic-review";
+import { applyBlockerResolutionPatch, deriveBlockerResolutionPatch } from "./v2/blocker-resolution";
 import { runTaskGateReview } from "./v2/gate-review";
 import { beginTaskExecution, completeTaskExecution, failTaskExecutionAttempt } from "./v2/task-executor";
 import { executeManagedTask } from "./v2/task-runner";
 import { decideSupervisorActions } from "./v2/supervisor";
-import { normalizeValidationCommand, runTaskValidation } from "./v2/validation";
-import { dependenciesResolved as dependenciesResolvedV2, describeInterruptedExecution as describeInterruptedExecutionV2, executionFacts as executionFactsV2, failedDependencies as failedDependenciesV2, overdueSupervisors as overdueSupervisorsV2 } from "./v2/execution";
+import { materializeLegacyValidationFields, normalizeGeneratedValidationContract, normalizeValidationCommand, normalizeValidationContract, runTaskValidation } from "./v2/validation";
+import { computeSchedulingActions, dependenciesResolved as dependenciesResolvedV2, describeInterruptedExecution as describeInterruptedExecutionV2, executionFacts as executionFactsV2, failedDependencies as failedDependenciesV2, overdueSupervisors as overdueSupervisorsV2 } from "./v2/execution";
+import { describeInterruptedPlanning, determineResumptionPhase } from "./v2/planning-recovery";
 import { TaskForgeV2Runner } from "./v2/runner";
 import type { RunSnapshot as V2RunSnapshot, RunStatus as V2RunStatus } from "./v2/types";
+import { renderRootActionableBlockerStatus } from "./src/commands/status/render-root-blocker.ts";
+import { v1BlockerSortOrder } from "./v1-status-helpers.ts";
 
 type ModelTier = "reasoning" | "coding" | "bulk" | "endurance";
 type Role =
@@ -64,6 +68,14 @@ type TaskStatus =
   | "skipped";
 type TaskMode = "single-pass" | "iterative";
 type TddPhase = "red" | "green" | "refactor" | "complete";
+type ValidationMode = "command" | "manual";
+
+interface TaskValidationContract {
+  mode: ValidationMode;
+  command?: string;
+  notes?: string;
+  coverageThreshold?: number;
+}
 
 interface CostEstimate {
   totalInputTokens?: number;
@@ -100,6 +112,7 @@ interface ForgeTask {
   escalationTriggers: string[];
   measurableTargets?: Record<string, number | boolean | string>;
   turnBudget?: number;
+  validation: TaskValidationContract;
   testCommand?: string;
   acceptanceSignal?: string;
   coverageThreshold?: number;
@@ -137,6 +150,7 @@ interface TestSpecEntry {
     fixtures_required?: string[];
     derived_from?: string[];
   }>;
+  validation: TaskValidationContract;
   acceptance_signal?: string;
   coverage_threshold?: number;
   ambiguities?: string[];
@@ -201,27 +215,14 @@ interface AgentDefinition {
 }
 
 const DEFAULT_CONFIG: TaskForgeConfig = {
+  // Model tiers are intentionally empty — the real config lives in task-forge.json.
+  // If no config file is found, loadConfig() will throw since there are no usable models.
+  // This prevents silent fallback to stale or plan-incompatible model lists.
   modelTiers: {
-    reasoning: [
-      "anthropic/claude-opus-4-5",
-      "opencode-go/glm-5.1",
-      "openai-codex/gpt-5.1",
-    ],
-    coding: [
-      "anthropic/claude-sonnet-4-5",
-      "opencode-go/glm-5.1",
-      "openai-codex/gpt-5.2-codex",
-    ],
-    bulk: [
-      "openai-codex/gpt-5.1-codex-mini",
-      "opencode-go/glm-5",
-      "opencode-go/kimi-k2.5",
-    ],
-    endurance: [
-      "opencode-go/glm-5.1",
-      "openai-codex/gpt-5.2-codex",
-      "anthropic/claude-sonnet-4-5",
-    ],
+    reasoning: [],
+    coding: [],
+    bulk: [],
+    endurance: [],
   },
   roleAssignment: {
     scopeClassifier: "bulk",
@@ -247,6 +248,64 @@ const DEFAULT_CONFIG: TaskForgeConfig = {
 
 const STATE_ENTRY_TYPE = "task-forge-state";
 const TASK_STALL_WARNING_MS = seconds(20 * 60);
+
+export function coercePlannerTask(raw: any, index: number): ForgeTask {
+  const taskMode: TaskMode = raw.task_mode === "iterative" ? "iterative" : "single-pass";
+  const complexity = raw.complexity === "L" || raw.complexity === "S" ? raw.complexity : "M";
+  const { validation } = normalizeGeneratedValidationContract({
+    source: "planner",
+    validation: raw.validation,
+    testCommand: raw.test_command,
+    acceptanceSignal: raw.acceptance_signal,
+    coverageThreshold: raw.coverage_threshold,
+  });
+  const legacyValidation = materializeLegacyValidationFields(validation);
+
+  return {
+    id: raw.id || `TASK-${String(index + 1).padStart(3, "0")}`,
+    title: raw.title || `Task ${index + 1}`,
+    description: raw.description || "",
+    complexity,
+    taskMode,
+    contextManifest: {
+      artifacts: raw.context_manifest?.artifacts ?? ["01-requirements.md", "02-plan.md"],
+      codebaseFiles: raw.context_manifest?.codebase_files ?? [],
+      dependencyOutputs: raw.context_manifest?.dependency_outputs ?? [],
+    },
+    outputManifest: raw.output_manifest ?? [],
+    dependencies: raw.dependencies ?? [],
+    acceptanceCriteria: raw.acceptance_criteria ?? [],
+    escalationTriggers: raw.escalation_triggers ?? [],
+    measurableTargets: raw.measurable_targets,
+    turnBudget: Math.min(Math.max(Number(raw.turn_budget ?? DEFAULT_CONFIG.defaultTurnBudget), 1), DEFAULT_CONFIG.maxTurnBudget),
+    validation,
+    testCommand: legacyValidation.testCommand,
+    acceptanceSignal: legacyValidation.acceptanceSignal,
+    coverageThreshold: legacyValidation.coverageThreshold,
+    testSpecRefs: raw.test_spec_refs ?? [],
+    status: "pending",
+    retries: 0,
+  };
+}
+
+export function coerceTestDesignerSpec(raw: any): TestSpecEntry {
+  const { validation } = normalizeGeneratedValidationContract({
+    source: "test-designer",
+    validation: raw.validation,
+    acceptanceSignal: raw.acceptance_signal,
+    coverageThreshold: raw.coverage_threshold,
+  });
+  const legacyValidation = materializeLegacyValidationFields(validation);
+
+  return {
+    taskId: String(raw.taskId ?? ""),
+    testFiles: Array.isArray(raw.testFiles) ? raw.testFiles : [],
+    validation,
+    acceptance_signal: legacyValidation.acceptanceSignal,
+    coverage_threshold: legacyValidation.coverageThreshold,
+    ambiguities: Array.isArray(raw.ambiguities) ? raw.ambiguities : [],
+  };
+}
 const TASK_STALL_ESCALATION_MS = TASK_STALL_WARNING_MS;
 const TASK_SUPERVISOR_SWEEP_MS = Math.min(TASK_STALL_WARNING_MS, seconds(60));
 const SUBCOMMANDS = [
@@ -361,6 +420,15 @@ function statusLabelFromV2(snapshot: V2RunSnapshot | null) {
   }
 
   const suffix = parts.length > 0 ? ` [${parts.join("|")}]` : "";
+
+  // Handle interrupted planning display (FR-18)
+  if (snapshot.status === "planning" && snapshot.planningRuntime?.interrupted === true) {
+    const phaseDisplay = `phase ${snapshot.currentPhase}/5`;
+    const resumableIndicator = snapshot.nextAction === "continuePlanning" ? " — resumable" : "";
+    const statusDisplay = `planning (interrupted — ${phaseDisplay}${resumableIndicator})`;
+    return `forge:${statusIcon(snapshot.status)}${statusDisplay}${suffix}`;
+  }
+
   return `forge:${statusIcon(snapshot.status)}${snapshot.status}${suffix}`;
 }
 
@@ -418,25 +486,25 @@ function statusSummaryFromV2(snapshot: V2RunSnapshot | null, localState?: ForgeS
     failed: taskState.filter((t) => t.status === "failed").length,
     blocked: taskState.filter((t) => t.status === "blocked").length,
   };
-  const unresolvedBlockers = snapshot.blockers.filter((b) => !b.resolvedAt);
-  const blockerIds = new Set([
-    ...unresolvedBlockers.map((b) => b.taskId),
-    ...(snapshot.pendingHumanIntervention ? [snapshot.pendingHumanIntervention.taskId] : []),
-  ]);
-  const primaryBlocker = snapshot.pendingHumanIntervention
-    ? unresolvedBlockers.find((b) => b.taskId === snapshot.pendingHumanIntervention?.taskId)
-      ?? {
-        taskId: snapshot.pendingHumanIntervention.taskId,
-        reason: snapshot.pendingHumanIntervention.reason,
-        suggestion: snapshot.pendingHumanIntervention.suggestion,
-        blockedTasks: [snapshot.pendingHumanIntervention.taskId],
-      }
-    : unresolvedBlockers[0];
   const planningProgress = ["planning", "awaiting_approval"].includes(snapshot.status)
     ? planningPhaseChecklist(snapshot)
     : null;
 
   const activeAgent = localState?.orchestrationId === snapshot.orchestrationId ? localState.activeAgent : undefined;
+
+  // Build interruption section when planning was interrupted (FR-19, FR-20, FR-21)
+  const interruptionSection: string[] = [];
+  if (snapshot.planningRuntime?.interrupted === true) {
+    const isResumable = snapshot.nextAction === "continuePlanning";
+    const phaseForResume = snapshot.phaseLabel?.trim().length ? snapshot.phaseLabel : `phase ${snapshot.currentPhase}`;
+
+    if (isResumable) {
+      interruptionSection.push("⚠ planning interrupted after restart");
+      interruptionSection.push(`next action: continuePlanning — /forge execute to resume from ${phaseForResume}`);
+    } else {
+      interruptionSection.push("⚠ restart required — rerun /forge <prd> to restart planning");
+    }
+  }
 
   return [
     `[task-forge] ${statusIcon(snapshot.status)} ${snapshot.status}`,
@@ -444,16 +512,14 @@ function statusSummaryFromV2(snapshot: V2RunSnapshot | null, localState?: ForgeS
     `phase: ${snapshot.phaseLabel}`,
     planningProgress?.summary ?? "",
     planningProgress ? ["planning phases:", ...planningProgress.checklist].join("\n") : "",
+    ...interruptionSection,
     activeAgent ? `active agent: ${activeAgent.role} (${activeAgent.model})${activeAgent.totalCandidates && activeAgent.attempt ? ` [candidate ${activeAgent.attempt}/${activeAgent.totalCandidates}]` : ""}` : "",
     activeAgent ? `active since: ${activeAgent.startedAt}` : "",
     snapshot.nextAction ? `next action: ${snapshot.nextAction}` : "",
     `prd: ${snapshot.prdFile ?? "n/a"}`,
     `tasks: ${counts.completed}/${snapshot.tasks.length || taskState.length} completed, ${counts.running} running, ${counts.ready} ready, ${counts.pending} pending, ${counts.failed} failed, ${counts.blocked} blocked`,
     overdue.length > 0 ? `overdue supervisors: ${overdue.map((s) => s.taskId).join(", ")}` : "overdue supervisors: none",
-    blockerIds.size > 0 ? `blockers: ${Array.from(blockerIds).join(", ")}` : "blockers: none",
-    primaryBlocker ? `blocker reason: ${primaryBlocker.reason}` : "",
-    primaryBlocker ? `blocker suggestion: ${primaryBlocker.suggestion}` : "",
-    primaryBlocker ? `next: /forge blocker ${primaryBlocker.taskId} --resolve "..." then /forge execute` : "",
+    renderRootActionableBlockerStatus(snapshot),
   ].filter(Boolean).join("\n");
 }
 
@@ -465,7 +531,7 @@ async function ensureV2BootstrappedFromCurrentState(cwd: string, outputDir: stri
 
   try {
     const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8"));
-    if (raw?.schemaVersion === 2) return;
+    if (raw?.schemaVersion === 2 || raw?.schemaVersion === 3 || raw?.schemaVersion === 4) return;
     const events = migrateV1StateToEvents(raw as any);
     for (const event of events) {
       await appendV2Event(layout, event);
@@ -486,12 +552,14 @@ async function loadAuthoritativeSnapshot(cwd: string, outputDir: string): Promis
   if (derived) return derived;
 
   const storedV2 = await loadV2Snapshot(layout);
-  if (storedV2?.schemaVersion === 2) return storedV2;
+  if (storedV2?.schemaVersion === 2 || storedV2?.schemaVersion === 3 || storedV2?.schemaVersion === 4) return storedV2;
 
   if (!existsSync(layout.snapshotFile)) return null;
   try {
     const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8"));
-    if (raw?.schemaVersion === 2) return raw as V2RunSnapshot;
+    if (raw?.schemaVersion === 2 || raw?.schemaVersion === 3 || raw?.schemaVersion === 4) {
+      return raw as V2RunSnapshot;
+    }
     return migrateV1StateToSnapshot(raw as any);
   } catch {
     return null;
@@ -640,15 +708,42 @@ function extractBalancedJsonCandidate(text: string): string | null {
 }
 
 function extractJson(text: string): any | null {
-  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i);
+  // Strategy 1: Find fenced block, but use balanced-brace extraction from inside it
+  // (non-greedy regex breaks when planMarkdown contains code fences)
+  const fenceStart = text.match(/```json\s*\n/i);
+  if (fenceStart?.index != null) {
+    const afterFence = text.slice(fenceStart.index + fenceStart[0].length);
+    const balanced = extractBalancedJsonCandidate(afterFence);
+    if (balanced) {
+      try {
+        return JSON.parse(balanced);
+      } catch {}
+      try {
+        return JSON.parse(balanced.replace(/,\s*([}\]])/g, "$1"));
+      } catch {}
+    }
+  }
+
+  // Strategy 2: Balanced extraction from full text
   const balanced = extractBalancedJsonCandidate(text);
-  const candidates = [fenced?.[1], balanced, text]
-    .filter((candidate): candidate is string => Boolean(candidate));
-  for (const candidate of candidates) {
+  if (balanced) {
     try {
-      return JSON.parse(candidate.trim());
+      return JSON.parse(balanced);
+    } catch {}
+    try {
+      return JSON.parse(balanced.replace(/,\s*([}\]])/g, "$1"));
     } catch {}
   }
+
+  // Strategy 3: Try raw text
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {}
+  try {
+    return JSON.parse(trimmed.replace(/,\s*([}\]])/g, "$1"));
+  } catch {}
+
   return null;
 }
 
@@ -850,12 +945,25 @@ export default function (pi: ExtensionAPI) {
 
   async function loadConfig(cwd: string) {
     const path = await findConfigPath(cwd);
-    if (!path) return { ...DEFAULT_CONFIG };
+    if (!path) {
+      const emptyTiers = Object.values(DEFAULT_CONFIG.modelTiers).every(tier => tier.length === 0);
+      if (emptyTiers) {
+        throw new Error("No task-forge.json config found and no model tiers configured — create task-forge.json with modelTiers");
+      }
+      return { ...DEFAULT_CONFIG };
+    }
     try {
       const loaded = JSON.parse(await readFile(path, "utf-8")) as Partial<TaskForgeConfig>;
-      return deepMergeConfig(DEFAULT_CONFIG, loaded);
-    } catch {
-      return { ...DEFAULT_CONFIG };
+      const merged = deepMergeConfig(DEFAULT_CONFIG, loaded);
+      const emptyTiers = Object.values(merged.modelTiers).some(tier => tier.length === 0);
+      if (emptyTiers) {
+        const empty = Object.entries(merged.modelTiers).filter(([, v]) => v.length === 0).map(([k]) => k);
+        throw new Error(`task-forge.json has empty model tiers: ${empty.join(", ")} — add at least one model per tier`);
+      }
+      return merged;
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("model tiers")) throw err;
+      throw new Error(`Failed to parse task-forge config at ${path}: ${err instanceof Error ? err.message : err}`);
     }
   }
 
@@ -971,13 +1079,36 @@ export default function (pi: ExtensionAPI) {
     );
   }
 
+  function summarizeEvidence(error?: string) {
+    const raw = String(error ?? "").trim();
+    if (!raw) return "";
+
+    // Collapse massive TypeScript CLI help output into one actionable hint.
+    if (raw.includes("tsc: The TypeScript Compiler") && raw.includes("COMMON COMMANDS")) {
+      const cmd = raw.match(/\$\s*(.+)/)?.[1]?.trim();
+      const exit = raw.match(/exit:\s*(\d+)/)?.[1];
+      const lines = [
+        cmd ? `command: ${cmd}` : "",
+        exit ? `exit: ${exit}` : "",
+        "tsc printed CLI help (likely no tsconfig found at validation root).",
+        "hint: use `npx tsc -p <path-to-tsconfig> --noEmit` before node --test.",
+      ].filter(Boolean);
+      return lines.join("\n");
+    }
+
+    const lines = raw.split(/\r?\n/).slice(0, 20);
+    const clipped = lines.join("\n");
+    return raw.split(/\r?\n/).length > 20 ? `${clipped}\n... (truncated)` : clipped;
+  }
+
   async function emitHumanInterventionMessage(ctx: any, task: ForgeTask, blocker: Blocker, heading = "Human intervention required") {
+    const evidence = summarizeEvidence(task.error);
     const content = [
       `[task-forge] ${heading}`,
       `task: ${task.id} — ${task.title}`,
       `reason: ${blocker.reason}`,
       `suggestion: ${blocker.suggestion}`,
-      task.error ? `evidence: ${task.error}` : "",
+      evidence ? `evidence: ${evidence}` : "",
       `next: /forge blocker ${task.id} --resolve "..." then /forge execute`,
     ].filter(Boolean).join("\n");
 
@@ -1191,6 +1322,9 @@ export default function (pi: ExtensionAPI) {
       "account",
       "unsupported",
       "not available",
+      "usage limit",
+      "hit your",
+      "try again in",
     ].some((needle) => normalized.includes(needle));
   }
 
@@ -1223,9 +1357,10 @@ export default function (pi: ExtensionAPI) {
           attempt: index + 1,
           totalCandidates: candidates.length,
         };
-        await persistState(ctx, "agent_start", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length });
+        await persistState(ctx, "agent_start", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, promptFile, tools: options?.tools || agent.tools });
       }
 
+      const execStart = Date.now();
       const result = await pi.exec(
         "pi",
         [
@@ -1250,6 +1385,7 @@ export default function (pi: ExtensionAPI) {
           timeout: seconds(options?.timeout ?? 600),
         } as any,
       );
+      const execDurationMs = Date.now() - execStart;
 
       if (result.killed) {
         if (runAbortController?.signal.aborted) {
@@ -1257,7 +1393,7 @@ export default function (pi: ExtensionAPI) {
         }
         lastError = `${modelRole} timed out on model ${model}`;
         if (state) {
-          await persistState(ctx, "agent_retry_model", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, error: lastError, reason: "timeout" });
+          await persistState(ctx, "agent_retry_model", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, error: lastError, reason: "timeout", durationMs: execDurationMs });
         }
         if (model !== candidates[candidates.length - 1]) {
           continue;
@@ -1269,19 +1405,27 @@ export default function (pi: ExtensionAPI) {
       if (result.code === 0 && stdout) {
         if (state) {
           state.activeAgent = undefined;
-          await persistState(ctx, "agent_complete", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length });
+          await persistState(ctx, "agent_complete", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, durationMs: execDurationMs, outputLength: stdout.length, outputPreview: stdout.slice(0, 200) });
         }
         state?.resolvedModels && (state.resolvedModels[modelRole] = model);
         return stdout;
       }
 
       const combined = [stderr, stdout].filter(Boolean).join("\n").trim();
-      lastError = combined || `exit code ${result.code}`;
-      if (isRetryableModelFailure(combined) && model !== candidates[candidates.length - 1]) {
+      if (result.code === 0 && !stdout) {
+        lastError = combined || `model ${model} returned empty output (exit code 0)`;
+      } else {
+        lastError = combined || `exit code ${result.code}`;
+      }
+      const isRetryable = isRetryableModelFailure(combined) || (result.code === 0 && !stdout);
+      if (isRetryable && model !== candidates[candidates.length - 1]) {
         if (state) {
-          await persistState(ctx, "agent_retry_model", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, error: lastError });
+          await persistState(ctx, "agent_retry_model", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, error: lastError, durationMs: execDurationMs, exitCode: result.code, stderrPreview: stderr.slice(0, 200), stdoutPreview: stdout.slice(0, 200) });
         }
         continue;
+      }
+      if (state) {
+        await persistState(ctx, "agent_fatal", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, error: lastError, durationMs: execDurationMs, exitCode: result.code, stderrPreview: stderr.slice(0, 300), stdoutPreview: stdout.slice(0, 300) });
       }
       break;
     }
@@ -1305,34 +1449,8 @@ export default function (pi: ExtensionAPI) {
     return result.stdout?.trim() || "";
   }
 
-  function coerceTask(raw: any, index: number): ForgeTask {
-    const taskMode: TaskMode = raw.task_mode === "iterative" ? "iterative" : "single-pass";
-    const complexity = raw.complexity === "L" || raw.complexity === "S" ? raw.complexity : "M";
-    return {
-      id: raw.id || `TASK-${String(index + 1).padStart(3, "0")}`,
-      title: raw.title || `Task ${index + 1}`,
-      description: raw.description || "",
-      complexity,
-      taskMode,
-      contextManifest: {
-        artifacts: raw.context_manifest?.artifacts ?? ["01-requirements.md", "02-plan.md"],
-        codebaseFiles: raw.context_manifest?.codebase_files ?? [],
-        dependencyOutputs: raw.context_manifest?.dependency_outputs ?? [],
-      },
-      outputManifest: raw.output_manifest ?? [],
-      dependencies: raw.dependencies ?? [],
-      acceptanceCriteria: raw.acceptance_criteria ?? [],
-      escalationTriggers: raw.escalation_triggers ?? [],
-      measurableTargets: raw.measurable_targets,
-      turnBudget: Math.min(Math.max(Number(raw.turn_budget ?? DEFAULT_CONFIG.defaultTurnBudget), 1), DEFAULT_CONFIG.maxTurnBudget),
-      testCommand: raw.test_command,
-      acceptanceSignal: raw.acceptance_signal,
-      coverageThreshold: raw.coverage_threshold,
-      testSpecRefs: raw.test_spec_refs ?? [],
-      status: "pending",
-      retries: 0,
-    };
-  }
+  const coerceTask = coercePlannerTask;
+  const coerceTestSpec = coerceTestDesignerSpec;
 
   async function initState(ctx: any, prdFile: string) {
     config = await loadConfig(ctx.cwd);
@@ -1392,6 +1510,8 @@ export default function (pi: ExtensionAPI) {
       prdContent,
     ].join("\n");
 
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("scopeClassifier", 0, "Scope Classification"));
+
     const raw = await spawnAgent(ctx, "scopeClassifier", prompt, {
       promptAppendix: "Return one JSON object in a ```json fenced block only.",
       timeout: 120,
@@ -1403,6 +1523,7 @@ export default function (pi: ExtensionAPI) {
     await saveArtifact(ctx, "00-routing.json", JSON.stringify(parsed, null, 2));
     await persistState(ctx, "phase_complete", { phase: 0, mode });
     await withV2Engine(ctx, (engine) => engine.markRouting(mode, state?.routingRationale));
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseCompleted("scopeClassifier", 0));
     ctx.ui.notify(`[task-forge] Routing mode: ${mode}${state.routingRationale ? ` — ${state.routingRationale}` : ""}`, "info");
   }
 
@@ -1414,6 +1535,7 @@ export default function (pi: ExtensionAPI) {
     state.phaseLabel = "PRD Analysis";
     await persistState(ctx, "phase_start", { phase: 1 });
     await withV2Engine(ctx, (engine) => engine.enterPhase(1, "PRD Analysis"));
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("strategist", 1, "PRD Analysis"));
 
     const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
     const tree = await gatherCodebaseSummary(ctx);
@@ -1452,6 +1574,7 @@ export default function (pi: ExtensionAPI) {
     state.requirementsFile = "01-requirements.md";
     await persistState(ctx, "phase_complete", { phase: 1 });
     await withV2Engine(ctx, (engine) => engine.markRequirementsWritten("01-requirements.md"));
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseCompleted("strategist", 1));
     ctx.ui.notify("[task-forge] Phase 1 complete: requirements written", "success");
   }
 
@@ -1463,6 +1586,7 @@ export default function (pi: ExtensionAPI) {
     state.phaseLabel = "Micro Planning";
     await persistState(ctx, "phase_start", { phase: 2, mode: "micro" });
     await withV2Engine(ctx, (engine) => engine.enterPhase(2, "Micro Planning"));
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("planner", 2, "Micro Planning"));
 
     const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
     const tree = await gatherCodebaseSummary(ctx);
@@ -1494,7 +1618,9 @@ export default function (pi: ExtensionAPI) {
     const parsed = extractJson(raw);
     if (!parsed || !Array.isArray(parsed.tasks)) {
       await saveArtifact(ctx, "02-plan.raw.txt", raw);
-      throw new Error("Planner did not return valid task JSON for micro mode");
+      const preview = raw.slice(0, 500).replace(/\n/g, "\\n");
+      await persistState(ctx, "planner_json_parse_failed", { mode: "micro", rawLength: raw.length, hasJson: !!extractJson(raw), hasTasksArray: parsed ? Array.isArray(parsed.tasks) : false, preview });
+      throw new Error(`Planner did not return valid task JSON for micro mode. Raw output preview: ${preview}`);
     }
 
     state.tasks = parsed.tasks.map(coerceTask);
@@ -1519,6 +1645,7 @@ export default function (pi: ExtensionAPI) {
     await withV2Engine(ctx, async (engine) => {
       await engine.markPlanWritten("02-plan.md", "03-tasks.json", "03-tasks.md", "03-cost-estimate.md");
       await engine.registerTasks(state!.tasks as any);
+      await engine.markPlanningPhaseCompleted("planner", 2);
       await engine.requireApproval("executePlan", "Approval Gate");
     });
     sendTaskForgeMessage("task-forge-approval-ready", "[task-forge] Micro plan ready. Review artifacts, then run /forge execute", ctx, "warning");
@@ -1532,6 +1659,7 @@ export default function (pi: ExtensionAPI) {
     state.phaseLabel = "Planning & Decomposition";
     await persistState(ctx, "phase_start", { phase: 2 });
     await withV2Engine(ctx, (engine) => engine.enterPhase(2, "Planning & Decomposition"));
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("planner", 2, "Planning & Decomposition"));
 
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
     const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
@@ -1552,6 +1680,14 @@ export default function (pi: ExtensionAPI) {
       "- Use task_mode: single-pass or iterative",
       "- iterative only when compile/test/fix loops or measurable targets justify it",
       "- include context_manifest, output_manifest, dependencies, acceptance_criteria, escalation_triggers",
+      "- every task must include validation with explicit mode",
+      "- do not omit validation.mode in any emitted task",
+      "- command validation uses validation={ mode, command, coverageThreshold? }",
+      "- command validation.command must be a runnable shell command only, not prose",
+      "- manual review uses validation={ mode, notes } and must not place guidance in test_command or acceptance_signal",
+      "- do not emit deprecated legacy validation fields such as test_command, acceptance_signal, or coverage_threshold in new task JSON",
+      "- documentation/config/manual-review tasks should usually use validation.mode=manual with reviewer notes",
+      "- implementation tasks should use validation.mode=command with a real executable command",
       "- keep tasks small enough for context budgets",
       "- use S/M/L complexity",
       "",
@@ -1572,7 +1708,9 @@ export default function (pi: ExtensionAPI) {
     const parsed = extractJson(raw);
     if (!parsed || !Array.isArray(parsed.tasks)) {
       await saveArtifact(ctx, "02-plan.raw.txt", raw);
-      throw new Error("Planner did not return valid task JSON");
+      const preview = raw.slice(0, 500).replace(/\n/g, "\\n");
+      await persistState(ctx, "planner_json_parse_failed", { mode: "standard", rawLength: raw.length, hasJson: !!extractJson(raw), hasTasksArray: parsed ? Array.isArray(parsed.tasks) : false, preview });
+      throw new Error(`Planner did not return valid task JSON. Raw output preview: ${preview}`);
     }
 
     state.tasks = parsed.tasks.map(coerceTask);
@@ -1593,6 +1731,7 @@ export default function (pi: ExtensionAPI) {
     await withV2Engine(ctx, async (engine) => {
       await engine.markPlanWritten("02-plan.md", "03-tasks.json", "03-tasks.md", "03-cost-estimate.md");
       await engine.registerTasks(state!.tasks as any);
+      await engine.markPlanningPhaseCompleted("planner", 2);
     });
 
     if (state.cost.estimatedUsd !== undefined && state.cost.estimatedUsd > config.costLimitUsd) {
@@ -1615,6 +1754,7 @@ export default function (pi: ExtensionAPI) {
     state.phaseLabel = "Test Design";
     await persistState(ctx, "phase_start", { phase: 3 });
     await withV2Engine(ctx, (engine) => engine.enterPhase(3, "Test Design"));
+    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("testDesigner", 3, "Test Design"));
 
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
     const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
@@ -1632,9 +1772,15 @@ export default function (pi: ExtensionAPI) {
       "- markdownSummary: string",
       "",
       "Each testSpecs entry should use:",
-      '{ "taskId": string, "testFiles": [{"path": string, "type": string, "targets": string[], "fixtures_required": string[], "derived_from": string[] }], "acceptance_signal": string, "coverage_threshold": number, "ambiguities": string[] }',
+      '{ "taskId": string, "testFiles": [{"path": string, "type": string, "targets": string[], "fixtures_required": string[], "derived_from": string[] }], "validation": { "mode": "command|manual", "command": string?, "notes": string?, "coverageThreshold": number? }, "ambiguities": string[] }',
       "",
       "Only design tests grounded in explicit planner commitments, acceptance criteria, or existing codebase/test interfaces.",
+      "Every emitted test spec entry must include validation.mode explicitly.",
+      "Put manual reviewer guidance in validation.notes, never in acceptance_signal or test_command.",
+      "Do not emit deprecated legacy validation fields such as acceptance_signal, test_command, or coverage_threshold in new test-spec JSON.",
+      "Documentation/config/manual-review tasks should use validation.mode=manual with reviewer notes when shell validation is not appropriate.",
+      "Implementation tasks should use validation.mode=command with a real executable command.",
+      "Command-mode validation.command must stay executable; do not mix prose into command-shaped fields.",
       "",
       "# Existing codebase file tree",
       tree || "(none)",
@@ -1662,13 +1808,14 @@ export default function (pi: ExtensionAPI) {
       throw new Error("Test Designer did not return valid test spec JSON");
     }
 
-    state.testSpecs = parsed.testSpecs as TestSpecEntry[];
+    state.testSpecs = parsed.testSpecs.map((spec: any) => coerceTestSpec(spec));
 
     for (const spec of state.testSpecs) {
       const task = state.tasks.find((t) => t.id === spec.taskId);
       if (!task) continue;
-      task.acceptanceSignal = spec.acceptance_signal || task.acceptanceSignal;
-      task.coverageThreshold = typeof spec.coverage_threshold === "number" ? spec.coverage_threshold : task.coverageThreshold;
+      task.validation = spec.validation;
+      task.acceptanceSignal = spec.acceptance_signal;
+      task.coverageThreshold = spec.coverage_threshold;
       task.testSpecRefs = (spec.testFiles ?? []).map((f) => f.path);
     }
 
@@ -1689,6 +1836,7 @@ export default function (pi: ExtensionAPI) {
       await engine.markTestSpecWritten("03-test-spec.json", state!.testSpecs ?? [], state!.testSpecMarkdownFile);
       await engine.registerTasks(state!.tasks as any);
       await engine.requireApproval("executePlan", "Approval Gate");
+      await engine.markPlanningPhaseCompleted("testDesigner", 3);
     });
     sendTaskForgeMessage("task-forge-approval-ready", "[task-forge] Plan and grounded test spec ready. Review artifacts, then run /forge execute", ctx, "warning");
   }
@@ -2128,6 +2276,7 @@ export default function (pi: ExtensionAPI) {
     return planningPromise;
   }
 
+
   async function statusSummary(ctx?: any) {
     const authoritative = ctx ? await loadCommandSnapshot(ctx) : null;
     if (authoritative) return statusSummaryFromV2(authoritative, state);
@@ -2147,7 +2296,7 @@ export default function (pi: ExtensionAPI) {
       state.nextAction ? `next action: ${state.nextAction}` : "",
       `prd: ${state.prdFile ?? "n/a"}`,
       `tasks: ${counts.completed}/${state.tasks.length} completed, ${counts.running} running, ${counts.ready} ready, ${counts.pending} pending, ${counts.failed} failed, ${counts.blocked} blocked`,
-      state.blockers.length > 0 ? `blockers: ${state.blockers.map((b) => `${b.taskId}`).join(", ")}` : "blockers: none",
+      state.blockers.length > 0 ? `blockers: ${v1BlockerSortOrder(state.blockers).map((b) => `${b.taskId}`).join(", ")}` : "blockers: none",
     ].filter(Boolean).join("\n");
   }
 
@@ -2304,6 +2453,64 @@ export default function (pi: ExtensionAPI) {
         }
 
         if (state.nextAction === "continuePlanning") {
+          // Check if this is interrupted planning resumption (vs complex-mode checkpoint)
+          const isInterruptedPlanning = authoritative?.planningRuntime?.interrupted === true;
+
+          if (isInterruptedPlanning) {
+            // Interrupted planning: determine correct phase to resume from based on artifact state
+            const layout = createLayout(ctx.cwd, config.outputDir);
+            const resumptionPhase = await determineResumptionPhase(authoritative, layout);
+
+            if (resumptionPhase === null) {
+              // Restart required - artifacts missing or corrupt
+              ctx.ui.notify(
+                "[task-forge] ⚠ restart required — planning artifacts are missing or corrupt. Rerun /forge <prd> to restart planning.",
+                "error"
+              );
+              return;
+            }
+
+            // Resume from the determined phase
+            state.status = "planning";
+            await persistState(ctx, "continue_planning_command_interrupted");
+            await withV2Engine(ctx, async (engine) => {
+              await engine.markRunResumed(`Planning resumed from phase ${resumptionPhase} after interruption`);
+              await engine.markApprovalGranted();
+            });
+
+            // Resume from the correct phase based on artifact state
+            switch (resumptionPhase) {
+              case 1:
+                state.currentPhase = 1;
+                state.phaseLabel = "PRD Analysis";
+                await phaseAnalyze(ctx);
+                break;
+              case 2:
+                state.currentPhase = 2;
+                state.phaseLabel = "Planning & Decomposition";
+                await phasePlan(ctx);
+                break;
+              case 3:
+                state.currentPhase = 3;
+                state.phaseLabel = "Test Design";
+                await phaseDesignTests(ctx);
+                break;
+              case 4:
+                state.currentPhase = 4;
+                state.phaseLabel = "Approval Gate";
+                // Phase 4 is the approval gate - just persist and continue
+                await persistState(ctx, "planning_phase_4_ready");
+                break;
+              default:
+                // Should not happen, but fallback to phasePlan
+                state.currentPhase = 2;
+                state.phaseLabel = "Planning & Decomposition";
+                await phasePlan(ctx);
+            }
+            return;
+          }
+
+          // Complex-mode checkpoint: continue from phase 2 (Planning & Decomposition)
           state.status = "planning";
           state.phaseLabel = "Planning & Decomposition";
           await persistState(ctx, "continue_planning_command");
@@ -2342,14 +2549,65 @@ export default function (pi: ExtensionAPI) {
           ctx.ui.notify("[task-forge] No active orchestration", "warning");
           return;
         }
-        const taskId = parts[1];
-        const flagIndex = raw.indexOf("--resolve");
-        const resolution = flagIndex >= 0 ? raw.slice(flagIndex + "--resolve".length).trim().replace(/^['"]|['"]$/g, "") : "";
-        if (!taskId || !resolution) {
-          ctx.ui.notify("Usage: /forge blocker <task-id> --resolve \"instruction\"", "warning");
+
+        // --- /forge blocker (no args) — list all active blockers ---
+        if (!parts[1] || parts[1].startsWith("--")) {
+          await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+          const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
+          const v2Snapshot = await v2Engine.snapshot();
+          const effectiveSnapshot = v2Snapshot ?? authoritative;
+
+          if (!effectiveSnapshot) {
+            ctx.ui.notify("[task-forge] No active orchestration", "warning");
+            return;
+          }
+
+          const allBlockers = effectiveSnapshot.blockers.filter((b) => !b.resolvedAt);
+          const blockedOrFailed = effectiveSnapshot.tasks.filter((t) => {
+            const st = effectiveSnapshot.taskState[t.id];
+            return st?.status === "blocked" || st?.status === "failed";
+          });
+
+          if (allBlockers.length === 0 && blockedOrFailed.length === 0) {
+            ctx.ui.notify("[task-forge] No active blockers. All tasks are progressing.", "success");
+            return;
+          }
+
+          const lines: string[] = ["[task-forge] Active blockers", ""];
+
+          for (const b of allBlockers) {
+            const task = effectiveSnapshot.tasks.find((t) => t.id === b.taskId);
+            const runtime = effectiveSnapshot.taskState[b.taskId];
+            const status = runtime?.status ?? "unknown";
+            const icon = status === "failed" ? "✖" : status === "blocked" ? "⊘" : "⚠";
+            lines.push(`  ${icon} ${b.taskId}  ${b.category}  ${b.reason}`);
+            if (b.suggestion) lines.push(`    suggestion: ${b.suggestion}`);
+            if (task) lines.push(`    task: ${task.title}`);
+          }
+
+          const blockerTaskIds = new Set(allBlockers.map((b) => b.taskId));
+          for (const t of blockedOrFailed) {
+            if (blockerTaskIds.has(t.id)) continue;
+            const runtime = effectiveSnapshot.taskState[t.id];
+            const icon = runtime?.status === "failed" ? "✖" : "⊘";
+            lines.push(`  ${icon} ${t.id}  ${runtime?.status}  ${t.title}`);
+            if (runtime?.error) lines.push(`    error: ${runtime.error.substring(0, 120)}`);
+          }
+
+          lines.push("");
+          lines.push("Resolve with:    /forge blocker <id> --resolve \"...\"");
+          lines.push("Retry failed:     /forge blocker <id> --retry");
+          lines.push("Force unblock:    /forge blocker <id> --force-unblock");
+          lines.push("Fix validation:   /forge blocker <id> --patch-validation \"command\"");
+          lines.push("View diagnostic:  /forge blocker <id> --diagnostic");
+          lines.push("Task details:     /forge blocker <id>");
+
+          ctx.ui.notify(lines.join("\n"), "warning");
           return;
         }
 
+        // --- /forge blocker <task-id> [flags] ---
+        const taskId = parts[1];
         const task = state?.tasks.find((t) => t.id === taskId);
         const authoritativeTaskExists = authoritative?.tasks.some((t) => t.id === taskId) || authoritative?.taskState[taskId];
         if (!authoritativeTaskExists && state && !task) {
@@ -2360,7 +2618,285 @@ export default function (pi: ExtensionAPI) {
         await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
         const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
         const v2Snapshot = await v2Engine.snapshot();
+        const effectiveSnapshot = v2Snapshot ?? authoritative;
+        const v2Task = effectiveSnapshot?.tasks.find((t) => t.id === taskId);
+        const v2Runtime = effectiveSnapshot?.taskState[taskId];
+        const v2Blocker = effectiveSnapshot?.blockers.find((b) => b.taskId === taskId && !b.resolvedAt);
+        const needsHumanResolution = effectiveSnapshot?.pendingHumanIntervention?.taskId === taskId;
+
+        // --- /forge blocker <id> --diagnostic ---
+        if (raw.includes("--diagnostic")) {
+          const diagPath = outputPath(ctx.cwd, "tasks", `${taskId}.diagnostic.json`);
+          let diagnostic: any = null;
+          if (existsSync(diagPath)) {
+            try { diagnostic = JSON.parse(await readFile(diagPath, "utf-8")); } catch {}
+          }
+
+          let lastFailEvent: any = null;
+          const logPath = outputPath(ctx.cwd, "state.log");
+          if (existsSync(logPath)) {
+            try {
+              const logContent = await readFile(logPath, "utf-8");
+              for (const line of logContent.trim().split("\n").reverse()) {
+                try {
+                  const entry = JSON.parse(line);
+                  if (entry.event === "task_failed" && entry.details?.taskId === taskId) {
+                    lastFailEvent = entry;
+                    break;
+                  }
+                } catch {}
+              }
+            } catch {}
+          }
+
+          const lines: string[] = [`[task-forge] Diagnostic for ${taskId}`, ""];
+          if (v2Runtime) {
+            lines.push(`  status: ${v2Runtime.status}`);
+            if (v2Runtime.error) lines.push(`  error: ${v2Runtime.error.substring(0, 200)}`);
+            if (v2Runtime.blocker) lines.push(`  blocker (${v2Runtime.blocker.category}): ${v2Runtime.blocker.reason}`);
+            if (v2Runtime.diagnosticCount) lines.push(`  diagnostics run: ${v2Runtime.diagnosticCount}`);
+            lines.push("");
+          }
+
+          if (diagnostic) {
+            lines.push("  Diagnostic classification:");
+            lines.push(`    category: ${diagnostic.classification ?? "unknown"}`);
+            lines.push(`    notes: ${(diagnostic.notes ?? "(none)").substring(0, 300)}`);
+            if (diagnostic.blocker) {
+              lines.push(`    blocker reason: ${diagnostic.blocker.reason ?? "(none)"}`);
+              lines.push(`    blocker suggestion: ${diagnostic.blocker.suggestion ?? "(none)"}`);
+            }
+          } else {
+            lines.push("  No diagnostic JSON found.");
+          }
+
+          if (lastFailEvent) {
+            lines.push("");
+            lines.push(`  Last failure (${lastFailEvent.time}):`);
+            lines.push(`    error: ${(lastFailEvent.details?.error ?? "").substring(0, 200)}`);
+          }
+
+          ctx.ui.notify(lines.join("\n"), "warning");
+          return;
+        }
+
+        // --- /forge blocker <id> --retry ---
+        if (raw.includes("--retry")) {
+          if (v2Task && needsHumanResolution) {
+            await v2Engine.resolveHumanIntervention(taskId, "Manual retry via /forge blocker --retry");
+            await reconcileFromAuthoritative(ctx);
+          } else if (v2Task && v2Runtime && (v2Runtime.status === "failed" || v2Runtime.status === "blocked" || v2Runtime.status === "pending")) {
+            await v2Engine.requeueTask(taskId, "Manual retry via /forge blocker --retry");
+            await reconcileFromAuthoritative(ctx);
+          }
+          if (task && (task.status === "failed" || task.status === "blocked")) {
+            task.status = "pending";
+            task.blocker = undefined;
+            task.error = undefined;
+            state!.blockers = state!.blockers
+              .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: "manual retry", resolvedAt: nowIso() } : b))
+              .filter((b) => b.taskId !== taskId);
+          }
+          if (state) {
+            if (state.status === "needs_human_intervention" || state.status === "paused") state.status = "awaiting_approval";
+            await persistState(ctx, "blocker_retry", { taskId, action: "retry" });
+          }
+          ctx.ui.notify(`[task-forge] ${taskId} requeued. Run /forge execute to continue.`, "success");
+          return;
+        }
+
+        // --- /forge blocker <id> --force-unblock ---
+        if (raw.includes("--force-unblock")) {
+          let cascadeCount = 0;
+
+          // Clear the primary task's blocker
+          if (v2Task && v2Runtime && v2Runtime.status === "blocked") {
+            await v2Engine.requeueTask(taskId, "Force unblock via /forge blocker --force-unblock");
+            cascadeCount++;
+          }
+          if (task && task.status === "blocked") {
+            task.status = "pending";
+            task.blocker = undefined;
+            task.error = undefined;
+          }
+
+          // Cascade: clear dependency blockers on all downstream tasks
+          if (effectiveSnapshot) {
+            const { readyTaskIds, requeueTaskIds } = computeSchedulingActions(effectiveSnapshot);
+            // Requeue all tasks that the cascade would unblock
+            for (const requeueId of requeueTaskIds) {
+              if (requeueId === taskId) continue; // Already handled above
+              const requeueRuntime = effectiveSnapshot.taskState[requeueId];
+              if (requeueRuntime?.status === "blocked") {
+                await v2Engine.requeueTask(requeueId, `Cascade unblock from ${taskId} force-unblock`);
+                cascadeCount++;
+                const requeueTask = state?.tasks.find((t) => t.id === requeueId);
+                if (requeueTask) {
+                  requeueTask.status = "pending";
+                  requeueTask.blocker = undefined;
+                  requeueTask.error = undefined;
+                }
+              }
+            }
+            for (const readyId of readyTaskIds) {
+              const readyRuntime = effectiveSnapshot.taskState[readyId];
+              if (readyRuntime?.status !== "ready" && readyRuntime?.status !== "pending") continue;
+              const readyTask = state?.tasks.find((t) => t.id === readyId);
+              if (readyTask && readyTask.status !== "ready") {
+                readyTask.status = "ready";
+              }
+            }
+          }
+
+          // Remove dependency blockers referencing this task in v1 state
+          if (state) {
+            state.blockers = state.blockers.filter(
+              (b) => !(b.taskId === taskId && b.category === "dependency") && !b.reason?.startsWith(`Blocked by failed dependency: ${taskId}`)
+            );
+          }
+
+          await reconcileFromAuthoritative(ctx);
+          if (state) {
+            if (state.status === "needs_human_intervention" || state.status === "paused") state.status = "awaiting_approval";
+            await persistState(ctx, "blocker_force_unblock", { taskId, action: "force-unblock", cascaded: cascadeCount });
+          }
+          ctx.ui.notify(`[task-forge] ${taskId} force-unblocked (${cascadeCount} task${cascadeCount === 1 ? "" : "s"} cascaded). Run /forge execute to continue.`, "success");
+          return;
+        }
+
+        // --- /forge blocker <id> --patch-validation <command> ---
+        if (raw.includes("--patch-validation")) {
+          const patchIndex = raw.indexOf("--patch-validation");
+          const newCommand = raw.slice(patchIndex + "--patch-validation".length).trim().replace(/^['"]|['"]$/g, "");
+          if (!newCommand) {
+            ctx.ui.notify("Usage: /forge blocker <task-id> --patch-validation \"command\"", "warning");
+            return;
+          }
+
+          let patched = 0;
+          if (task) {
+            if (task.validation?.mode === "command") {
+              task.validation.command = newCommand;
+              patched++;
+            }
+            if (task.acceptanceSignal) {
+              task.acceptanceSignal = newCommand;
+            }
+            await persistTaskDefinitions(ctx);
+          }
+
+          if (state?.testSpecs) {
+            const spec = (state.testSpecs as TestSpecEntry[]).find((s) => s.taskId === taskId);
+            if (spec && spec.validation?.mode === "command") {
+              spec.validation.command = newCommand;
+              patched++;
+            }
+            if (state.testSpecFile) {
+              await saveArtifact(ctx, state.testSpecFile, JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
+            }
+          }
+
+          // Also update task in v2 snapshot file
+          const snapshotPath = outputPath(ctx.cwd, "state.json");
+          if (existsSync(snapshotPath)) {
+            try {
+              const snapshotData = JSON.parse(await readFile(snapshotPath, "utf-8"));
+              const v2TaskDef = snapshotData.tasks?.find((t: any) => t.id === taskId);
+              if (v2TaskDef?.validation?.mode === "command") {
+                v2TaskDef.validation.command = newCommand;
+                patched++;
+              }
+              if (v2TaskDef?.acceptanceSignal) {
+                v2TaskDef.acceptanceSignal = newCommand;
+              }
+              const v2Spec = snapshotData.testSpecs?.find((s: any) => s.taskId === taskId);
+              if (v2Spec?.validation?.mode === "command") {
+                v2Spec.validation.command = newCommand;
+                patched++;
+              }
+              await atomicWrite(snapshotPath, JSON.stringify(snapshotData, null, 2));
+            } catch {}
+          }
+
+          if (v2Task && needsHumanResolution) {
+            await v2Engine.resolveHumanIntervention(taskId, `Validation command patched via /forge blocker --patch-validation: ${newCommand}`);
+          }
+
+          await reconcileFromAuthoritative(ctx);
+          if (state) {
+            await persistState(ctx, "blocker_patch_validation", { taskId, newCommand, patched, humanResolved: needsHumanResolution });
+          }
+          ctx.ui.notify(`[task-forge] Validation patched for ${taskId} (${patched} field${patched === 1 ? "" : "s"} updated). Run /forge execute or /forge blocker ${taskId} --retry.`, "success");
+          return;
+        }
+
+        // --- /forge blocker <id> --resolve <instruction> (existing) ---
+        const flagIndex = raw.indexOf("--resolve");
+        const resolution = flagIndex >= 0 ? raw.slice(flagIndex + "--resolve".length).trim().replace(/^['"]|['"]$/g, "") : "";
+        if (!resolution) {
+          // --- /forge blocker <id> (no flag) — show details ---
+          const lines: string[] = [`[task-forge] ${taskId} — ${v2Task?.title ?? task?.title ?? "Unknown task"}`, ""];
+          if (v2Runtime) {
+            lines.push(`  status: ${v2Runtime.status}`);
+            if (v2Runtime.error) lines.push(`  error: ${v2Runtime.error.substring(0, 200)}`);
+            if (v2Runtime.retries) lines.push(`  retries: ${v2Runtime.retries}`);
+            if (v2Runtime.blocker) {
+              lines.push(`  blocker (${v2Runtime.blocker.category}): ${v2Runtime.blocker.reason}`);
+              if (v2Runtime.blocker.suggestion) lines.push(`  suggestion: ${v2Runtime.blocker.suggestion}`);
+            }
+          } else if (task) {
+            lines.push(`  status: ${task.status}`);
+            if (task.error) lines.push(`  error: ${task.error?.substring(0, 200)}`);
+          }
+
+          if (v2Blocker) {
+            lines.push("");
+            lines.push(`  blocker: ${v2Blocker.reason}`);
+            lines.push(`  suggestion: ${v2Blocker.suggestion}`);
+            if (v2Blocker.remediation) lines.push(`  remediation: ${v2Blocker.remediation.mode} (${v2Blocker.remediation.category})`);
+          }
+
+          if (v2Task) {
+            lines.push("");
+            lines.push(`  dependencies: ${v2Task.dependencies.length > 0 ? v2Task.dependencies.join(", ") : "none"}`);
+            lines.push(`  validation: ${v2Task.validation?.mode ?? "unknown"}${v2Task.validation?.mode === "command" ? ` — ${v2Task.validation.command?.substring(0, 80)}` : ""}`);
+            lines.push(`  output: ${v2Task.outputManifest?.join(", ") ?? "(none)"}`);
+
+            const downstream = (effectiveSnapshot?.tasks ?? []).filter((t) => t.dependencies.includes(taskId)).map((t) => t.id);
+            if (downstream.length > 0) lines.push(`  downstream: ${downstream.join(", ")}`);
+          }
+
+          lines.push("");
+          lines.push("Actions:");
+          lines.push(`  /forge blocker ${taskId} --resolve "description of fix"`);
+          if (v2Runtime?.status === "failed" || v2Runtime?.status === "blocked" || task?.status === "failed" || task?.status === "blocked") {
+            lines.push(`  /forge blocker ${taskId} --retry`);
+            lines.push(`  /forge blocker ${taskId} --force-unblock`);
+          }
+          if (v2Task?.validation?.mode === "command") {
+            lines.push(`  /forge blocker ${taskId} --patch-validation "new command"`);
+          }
+          lines.push(`  /forge blocker ${taskId} --diagnostic`);
+
+          ctx.ui.notify(lines.join("\n"), "warning");
+          return;
+        }
+
+        // Resolve blocker with instruction (existing logic)
         const v2TaskExists = v2Snapshot?.tasks.some((t) => t.id === taskId) || v2Snapshot?.taskState[taskId];
+        const contractPatch = deriveBlockerResolutionPatch(resolution);
+        if (state && task && contractPatch) {
+          const patched = applyBlockerResolutionPatch(taskId, task, state.testSpecs as TestSpecEntry[] | undefined, contractPatch);
+          state.testSpecs = patched.testSpecs;
+          if (state.testSpecFile) {
+            await saveArtifact(ctx, state.testSpecFile, JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
+          }
+          await persistTaskDefinitions(ctx);
+          if (state.testSpecs && state.testSpecFile) {
+            await withV2Engine(ctx, (engine) => engine.markTestSpecWritten(state.testSpecFile!, state.testSpecs!, state.testSpecMarkdownFile));
+          }
+        }
+
         if (v2TaskExists) {
           await v2Engine.resolveHumanIntervention(taskId, resolution);
         } else if (task) {
@@ -2376,7 +2912,7 @@ export default function (pi: ExtensionAPI) {
 
         await reconcileFromAuthoritative(ctx);
         if (state) {
-          await persistState(ctx, "blocker_resolved", { taskId, resolution });
+          await persistState(ctx, "blocker_resolved", { taskId, resolution, contractPatched: Boolean(contractPatch) });
         }
         ctx.ui.notify(`[task-forge] Blocker resolved for ${taskId}. Run /forge execute to continue.`, "success");
         return;
@@ -2437,6 +2973,30 @@ export default function (pi: ExtensionAPI) {
         await persistState(ctx, "resume_recovered_execution");
       }
     }
+
+    // Planning recovery after execution recovery (FR-12, FR-16)
+    if (authoritative) {
+      const layout = createLayout(ctx.cwd, config.outputDir);
+      const interruptedPlanning = await describeInterruptedPlanning(authoritative, layout);
+      if (interruptedPlanning) {
+        await withV2Engine(ctx, async (engine) => {
+          if (interruptedPlanning.kind === "resumable") {
+            // Resumable: emit run_restored with reason='planning_interrupted_resumable', set nextAction='continuePlanning' (FR-13)
+            await engine.markRunRestored(authoritative.orchestrationId, "planning_interrupted_resumable");
+            await engine.markRunPaused(`Planning interrupted — resumable (phase ${interruptedPlanning.phase})`, "continuePlanning", "Planning was interrupted but can be resumed from the last completed phase");
+          } else {
+            // Restart-required: emit run_restored with reason='planning_interrupted_restart_required', clear nextAction (FR-14, FR-17)
+            await engine.markRunRestored(authoritative.orchestrationId, "planning_interrupted_restart_required");
+            await engine.markRunResumed(); // Clears nextAction
+          }
+        });
+        await reconcileFromAuthoritative(ctx);
+        if (state) {
+          await persistState(ctx, "resume_recovered_planning");
+        }
+      }
+    }
+
     const refreshed = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
     ctx.ui.setStatus("task-forge", refreshed ? statusLabelFromV2(refreshed) : statusLabel(state));
   });
@@ -2458,6 +3018,15 @@ export default function (pi: ExtensionAPI) {
       if (state) {
         await persistState(ctx, "session_shutdown_interrupted_execution");
       }
+    }
+
+    // Best-effort planning interruption detection (hard kills bypass this)
+    const planningRoles: Role[] = ["scopeClassifier", "strategist", "planner", "testDesigner"];
+    const activePlanningRole = state?.activeAgent?.role;
+    if (activePlanningRole && planningRoles.includes(activePlanningRole)) {
+      await withV2Engine(ctx, async (engine) => {
+        await engine.markPlanningPhaseInterrupted(activePlanningRole, state!.currentPhase);
+      });
     }
   });
 }

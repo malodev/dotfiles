@@ -2,29 +2,23 @@
   "modelTiers": {
     "reasoning": [
       "openai-codex/gpt-5.4",
-      "openai-codex/gpt-5.1",
       "opencode-go/glm-5.1",
-      "anthropic/claude-opus-4-5"
+      "anthropic/claude-opus-4-6"
     ],
     "coding": [
       "openai-codex/gpt-5.3-codex",
-      "openai-codex/gpt-5.2-codex",
-      "openai-codex/gpt-5.4",
-      "opencode-go/glm-5.1",
-      "anthropic/claude-sonnet-4-5"
+      "opencode-go/kimi-k2.5",
+      "anthropic/claude-sonnet-4-6"
     ],
     "bulk": [
-      "openai-codex/gpt-5.4",
-      "openai-codex/gpt-5.1",
-      "opencode-go/glm-5",
       "opencode-go/kimi-k2.5",
-      "anthropic/claude-sonnet-4-5"
+      "openai-codex/gpt-5.3-codex",
+      "anthropic/claude-sonnet-4-6"
     ],
     "endurance": [
       "openai-codex/gpt-5.3-codex",
-      "openai-codex/gpt-5.2-codex",
       "opencode-go/glm-5.1",
-      "anthropic/claude-sonnet-4-5"
+      "anthropic/claude-sonnet-4-6"
     ]
   },
   "roleAssignment": {

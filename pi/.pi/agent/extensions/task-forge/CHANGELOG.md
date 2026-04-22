@@ -4,6 +4,50 @@ All notable changes to TaskForge are documented here.
 
 ---
 
+## 2026-04-22
+
+### Root-actionable blocker preference in `/forge status`
+
+`/forge status` now prefers root actionable blockers over downstream dependency blockers when multiple tasks are blocked in a dependency chain.
+
+**Behavior change:**
+- Status projection now distinguishes between direct blockers (e.g., `plan_contract`, `validation_contract`, `runtime`) and dependency-only blockers
+- The **primary blocker** is always the upstream root cause, not a downstream symptom
+- **Downstream impact** is listed as secondary context for visibility
+
+**Example:**
+- `T5` has a direct `plan_contract` blocker (generated tests contradict task contract)
+- `T6`, `T7`, `T8` are blocked only because they depend on `T5`
+- `/forge status` now shows:
+  - `blockers: T5, T6, T7, T8`
+  - `primary blocker: T5`
+  - `downstream impact: T6, T7, T8`
+  - `next: /forge blocker T5 --resolve "..." then /forge execute`
+
+Previously, status could misleadingly suggest resolving `T6` first even though `T6` was only blocked by `T5`.
+
+**Deterministic ordering:**
+- When multiple root blockers exist, selection follows priority order: `plan_contract` > `validation_contract` > `runtime` > `environment` > `dependency`
+- Same-priority blockers are tie-broken by task ID for stable, reproducible status output
+
+**Scope note — explicit non-goal:**
+- **No execution semantic changes:** Task execution order, dependency resolution, and worker scheduling remain unchanged. This change affects only status presentation and next-step guidance.
+
+---
+
+## 2026-04-19
+
+### Blocker remediation and operations documentation
+- Added `docs/blockers/contract-aware-resolution.md`
+- Added `docs/operations/runbook.md`
+- Documented blocker categories and retry vs patch vs replan semantics
+- Documented root-actionable blocker status behavior and durable patch-before-requeue expectations
+- Added operator troubleshooting guidance for restart-recovery and event/snapshot inspection
+- Preserved explicit non-goals:
+  - no heuristic shell filtering
+  - no weakened validation
+- Recorded rollout guardrails, feature-flag strategy, and current known limitations/open questions
+
 ## 2026-04-11
 
 ### Initial architecture and implementation pass

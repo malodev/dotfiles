@@ -1,4 +1,5 @@
-import type { TaskExecutionBlockerLike, TaskExecutionTaskLike } from "./task-executor";
+import type { TaskExecutionBlockerLike, TaskExecutionTaskLike } from "./task-executor.ts";
+import { assertValidValidationContract, normalizeValidationContract, type TaskValidationContract } from "./validation.ts";
 
 export interface TaskValidationResult {
   passed: boolean;
@@ -13,6 +14,11 @@ export interface TaskGateReviewResult<TBlocker extends TaskExecutionBlockerLike 
 }
 
 export interface TaskSuccessTaskLike extends TaskExecutionTaskLike {
+  validation?: TaskValidationContract;
+  testCommand?: string;
+  acceptanceSignal?: string;
+  coverageThreshold?: number;
+  validationOutput?: string;
   validationFramework?: string;
   lastCoverage?: number;
 }
@@ -31,6 +37,20 @@ export type TaskSuccessOutcome<TBlocker extends TaskExecutionBlockerLike = TaskE
   | { kind: "completed"; gate: TaskGateReviewResult<TBlocker> }
   | { kind: "blocked"; gate: TaskGateReviewResult<TBlocker> };
 
+function shouldRunShellValidation(task: TaskSuccessTaskLike) {
+  const validation = task.validation
+    ? assertValidValidationContract(task.validation)
+    : normalizeValidationContract({
+        testCommand: task.testCommand,
+        acceptanceSignal: task.acceptanceSignal,
+        coverageThreshold: task.coverageThreshold,
+      }).validation;
+
+  task.validation = validation;
+  task.coverageThreshold = validation.coverageThreshold;
+  return validation.mode === "command";
+}
+
 export async function executeTaskSuccessPath<TTask extends TaskSuccessTaskLike, TBlocker extends TaskExecutionBlockerLike = TaskExecutionBlockerLike>(
   task: TTask,
   hooks: TaskSuccessHooks<TTask, TBlocker>
@@ -40,7 +60,7 @@ export async function executeTaskSuccessPath<TTask extends TaskSuccessTaskLike, 
 
   await hooks.markHeartbeat(task.id);
 
-  if (task.taskMode !== "iterative" && hooks.runValidation) {
+  if (task.taskMode !== "iterative" && hooks.runValidation && shouldRunShellValidation(task)) {
     const validation = await hooks.runValidation(task);
     await hooks.markValidation?.(task.id, validation, task);
   }

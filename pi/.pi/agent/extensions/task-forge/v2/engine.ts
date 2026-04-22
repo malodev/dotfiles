@@ -1,8 +1,19 @@
-import type { ForgeEvent } from "./events";
-import type { ForgeTask, NextAction, RunPhase, RunSnapshot, TestSpecEntry, TddPhase } from "./types";
-import { appendEvent, createLayout, deriveSnapshot, writeSnapshot } from "./storage";
-import { createHumanInterventionBlocker } from "./derive";
-import { classifyRuntimeFailure, preflightAcceptanceCommand } from "./preflight";
+import type { ForgeEvent } from "./events.ts";
+import type {
+  BlockerResolutionMode,
+  ForgeTask,
+  NextAction,
+  Role,
+  RunPhase,
+  RunSnapshot,
+  TestSpecEntry,
+  TddPhase,
+} from "./types.ts";
+import { appendEvent, createLayout, deriveSnapshot, writeSnapshot } from "./storage.ts";
+import { createHumanInterventionBlocker } from "./derive.ts";
+import { classifyRuntimeFailure, preflightAcceptanceCommand } from "./preflight.ts";
+import { selectBlockerResolutionMode } from "./blocker-resolution-mode.ts";
+import { assertAllowlistedTaskContractPatch, deriveBlockerResolutionPatch } from "./blocker-resolution.ts";
 
 function nowIso() {
   return new Date().toISOString();
@@ -13,7 +24,13 @@ function plusMs(ms: number) {
 }
 
 export class TaskForgeV2Engine {
-  constructor(private cwd: string, private outputDir = ".task-forge") {}
+  private cwd: string;
+  private outputDir: string;
+
+  constructor(cwd: string, outputDir = ".task-forge") {
+    this.cwd = cwd;
+    this.outputDir = outputDir;
+  }
 
   private layout() {
     return createLayout(this.cwd, this.outputDir);
@@ -57,6 +74,34 @@ export class TaskForgeV2Engine {
       at: nowIso(),
       phase,
       label,
+    });
+  }
+
+  async markPlanningPhaseStarted(role: Role, phase: RunPhase, phaseLabel: string) {
+    return await this.append({
+      type: "planning_phase_started",
+      at: nowIso(),
+      role,
+      phase,
+      phaseLabel,
+    });
+  }
+
+  async markPlanningPhaseCompleted(role: Role, phase: RunPhase) {
+    return await this.append({
+      type: "planning_phase_completed",
+      at: nowIso(),
+      role,
+      phase,
+    });
+  }
+
+  async markPlanningPhaseInterrupted(role: Role | null, phase: RunPhase) {
+    return await this.append({
+      type: "planning_phase_interrupted",
+      at: nowIso(),
+      role,
+      phase,
     });
   }
 
@@ -141,13 +186,124 @@ export class TaskForgeV2Engine {
     });
   }
 
+  private deriveInterventionResolutionMode(snapshot: RunSnapshot | null, taskId: string, resolution: string) {
+    const runtime = snapshot?.taskState[taskId];
+    const blocker = runtime?.blocker ?? snapshot?.blockers.find((entry: NonNullable<RunSnapshot["blockers"]>[number]) => entry.taskId === taskId);
+
+    if (!blocker) {
+      return undefined;
+    }
+
+    return selectBlockerResolutionMode({
+      category: blocker.category,
+      reason: blocker.reason,
+      suggestion: blocker.suggestion,
+      resolution,
+      diagnosticClassification: runtime?.diagnostic?.classification,
+      diagnosticNotes: runtime?.diagnostic?.notes,
+      blockedTasks: blocker.blockedTasks,
+    });
+  }
+
+  private async persistDurableResolutionPatch(
+    taskId: string,
+    resolution: string,
+    eventType: "task_contract_patched" | "test_spec_patched",
+  ) {
+    const patch = deriveBlockerResolutionPatch(resolution);
+    if (!patch) {
+      return;
+    }
+
+    assertAllowlistedTaskContractPatch(patch);
+    await this.append({
+      type: eventType,
+      at: nowIso(),
+      taskId,
+      patch,
+      durabilityCommitRef: `${taskId}:${Date.now()}`,
+    });
+  }
+
+  private async persistTaskContractPatch(taskId: string, resolution: string) {
+    return await this.persistDurableResolutionPatch(taskId, resolution, "task_contract_patched");
+  }
+
+  private async persistTestSpecPatch(taskId: string, resolution: string) {
+    return await this.persistDurableResolutionPatch(taskId, resolution, "test_spec_patched");
+  }
+
+  private deriveReplannedSpecs(resolution: string): TestSpecEntry[] {
+    for (const match of resolution.matchAll(/```json\s*([\s\S]*?)```/gi)) {
+      const payload = match[1]?.trim();
+      if (!payload) continue;
+
+      try {
+        const parsed = JSON.parse(payload);
+        const specs = parsed?.replan?.specs;
+        if (!Array.isArray(specs)) continue;
+
+        return specs.filter((entry) => entry && typeof entry === "object" && typeof entry.taskId === "string") as TestSpecEntry[];
+      } catch {
+        // ignore malformed JSON snippets and keep scanning
+      }
+    }
+
+    return [];
+  }
+
+  private isReplanResolutionMode(mode: BlockerResolutionMode | undefined): mode is "replan_task" | "replan_subgraph" {
+    return mode === "replan_task" || mode === "replan_subgraph";
+  }
+
+  private async persistReplannedSpecs(snapshot: RunSnapshot | null, resolution: string) {
+    const replannedSpecs = this.deriveReplannedSpecs(resolution);
+    if (replannedSpecs.length === 0) {
+      return;
+    }
+
+    await this.markTestSpecWritten(
+      snapshot?.testSpecFile ?? "test-specs.json",
+      replannedSpecs,
+      snapshot?.testSpecMarkdownFile,
+    );
+  }
+
+  private async persistResolutionArtifacts(
+    taskId: string,
+    resolution: string,
+    resolutionMode: BlockerResolutionMode | undefined,
+    snapshot: RunSnapshot | null,
+  ) {
+    if (resolutionMode === "patch_task_contract") {
+      await this.persistTaskContractPatch(taskId, resolution);
+      return;
+    }
+
+    if (resolutionMode === "patch_test_spec") {
+      await this.persistTestSpecPatch(taskId, resolution);
+      return;
+    }
+
+    if (this.isReplanResolutionMode(resolutionMode)) {
+      await this.persistReplannedSpecs(snapshot, resolution);
+    }
+  }
+
   async resolveHumanIntervention(taskId: string, resolution: string) {
+    const snapshot = await this.load();
+    const resolutionMode = this.deriveInterventionResolutionMode(snapshot, taskId, resolution);
+
     await this.append({
       type: "human_intervention_resolved",
       at: nowIso(),
       taskId,
       resolution,
+      resolutionMode,
     });
+
+    await this.persistResolutionArtifacts(taskId, resolution, resolutionMode, snapshot);
+
     await this.append({
       type: "task_requeued",
       at: nowIso(),
@@ -182,7 +338,12 @@ export class TaskForgeV2Engine {
       error?: string | null;
       failureSignature?: string | null;
       stallWarnedAt?: string | null;
-      diagnostic?: { classification: string; notes: string } | null;
+      diagnostic?: {
+        classification: string;
+        notes: string;
+        blockerCategory?: import("./types.ts").BlockerCategory;
+        remediationMode?: import("./types.ts").BlockerResolutionMode;
+      } | null;
       diagnosticCount?: number | null;
     },
   ) {
@@ -243,13 +404,14 @@ export class TaskForgeV2Engine {
     );
   }
 
-  async markTaskBlocked(taskId: string, blocker: { reason: string; suggestion: string; blockedTasks: string[] }) {
+  async markTaskBlocked(taskId: string, blocker: { reason: string; suggestion: string; blockedTasks: string[]; category?: import("./types.ts").BlockerCategory }) {
     return await this.append({
       type: "task_blocked",
       at: nowIso(),
       taskId,
       blocker: {
         taskId,
+        category: blocker.category ?? "runtime",
         reason: blocker.reason,
         suggestion: blocker.suggestion,
         blockedTasks: blocker.blockedTasks,
@@ -279,7 +441,7 @@ export class TaskForgeV2Engine {
   async preflightTask(task: ForgeTask) {
     const acceptance = preflightAcceptanceCommand(task);
     if (!acceptance.ok) {
-      const blocker = createHumanInterventionBlocker(task.id, acceptance.reason ?? "Preflight failed", acceptance.suggestion ?? "Review the task runtime assumptions.");
+      const blocker = createHumanInterventionBlocker(task.id, acceptance.reason ?? "Preflight failed", acceptance.suggestion ?? "Review the task runtime assumptions.", "validation_contract");
       await this.append({
         type: "task_blocked",
         at: nowIso(),
@@ -296,7 +458,11 @@ export class TaskForgeV2Engine {
       return { ok: false as const, blocker };
     }
 
-    return { ok: true as const, normalizedCommand: acceptance.normalizedCommand };
+    return {
+      ok: true as const,
+      normalizedCommand: acceptance.normalizedCommand,
+      message: acceptance.message,
+    };
   }
 
   async absorbRuntimeFailure(taskId: string, output: string) {
@@ -310,7 +476,7 @@ export class TaskForgeV2Engine {
       });
     }
 
-    const blocker = createHumanInterventionBlocker(taskId, classified.reason ?? "Runtime failure", classified.suggestion ?? "Review environment/runtime assumptions.");
+    const blocker = createHumanInterventionBlocker(taskId, classified.reason ?? "Runtime failure", classified.suggestion ?? "Review environment/runtime assumptions.", "environment");
     await this.append({
       type: "task_blocked",
       at: nowIso(),

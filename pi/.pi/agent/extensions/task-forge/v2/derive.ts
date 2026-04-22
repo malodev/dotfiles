@@ -1,6 +1,9 @@
-import type { Blocker, RunSnapshot, RunStatus, TaskRuntimeState } from "./types";
-import type { ForgeEvent } from "./events";
-import { initSnapshot } from "./events";
+import type { Blocker, BlockerCategory, PlanningRuntimeState, RunSnapshot, RunStatus, TaskRuntimeState } from "./types.ts";
+import type { ForgeEvent } from "./events.ts";
+import { initSnapshot } from "./events.ts";
+import { createBlocker, createRemediationRecord, normalizeBlocker } from "./blocker-model.ts";
+import { selectBlockerResolutionMode } from "./blocker-resolution-mode.ts";
+import { applyBlockerResolutionPatch, applyTestSpecResolutionPatch } from "./blocker-resolution.ts";
 
 function ensureTaskState(snapshot: RunSnapshot, taskId: string): TaskRuntimeState {
   if (!snapshot.taskState[taskId]) {
@@ -36,6 +39,25 @@ function deriveStatus(snapshot: RunSnapshot): RunStatus {
   return "planning";
 }
 
+function clearPlanningRuntimeIfExecuting(snapshot: RunSnapshot): void {
+  if (snapshot.currentPhase >= 5) {
+    snapshot.planningRuntime = undefined;
+  }
+}
+
+function ensurePlanningRuntime(snapshot: RunSnapshot, at: string, phase: PlanningRuntimeState["phase"]): PlanningRuntimeState {
+  if (!snapshot.planningRuntime) {
+    snapshot.planningRuntime = {
+      activeRole: null,
+      startedAt: at,
+      phaseStartedAt: at,
+      phase,
+      interrupted: false,
+    };
+  }
+  return snapshot.planningRuntime;
+}
+
 export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapshot {
   snapshot.timestamps.lastUpdated = event.at;
 
@@ -47,7 +69,35 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
     case "phase_entered":
       snapshot.currentPhase = event.phase;
       snapshot.phaseLabel = event.label;
+      clearPlanningRuntimeIfExecuting(snapshot);
       return snapshot;
+    case "planning_phase_started": {
+      const runtime = ensurePlanningRuntime(snapshot, event.at, event.phase);
+      snapshot.phaseLabel = event.phaseLabel;
+      runtime.activeRole = event.role;
+      runtime.phase = event.phase;
+      runtime.phaseStartedAt = event.at;
+      runtime.interrupted = false;
+      delete runtime.interruptedAt;
+      return snapshot;
+    }
+    case "planning_phase_completed": {
+      const runtime = ensurePlanningRuntime(snapshot, event.at, event.phase);
+      runtime.activeRole = null;
+      runtime.phase = event.phase;
+      runtime.interrupted = false;
+      delete runtime.interruptedAt;
+      clearPlanningRuntimeIfExecuting(snapshot);
+      return snapshot;
+    }
+    case "planning_phase_interrupted": {
+      const runtime = ensurePlanningRuntime(snapshot, event.at, event.phase);
+      runtime.activeRole = event.role;
+      runtime.phase = event.phase;
+      runtime.interrupted = true;
+      runtime.interruptedAt = event.at;
+      return snapshot;
+    }
     case "routing_decided":
       snapshot.orchestrationMode = event.mode;
       snapshot.routingRationale = event.rationale;
@@ -77,11 +127,21 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
       snapshot.tasksMarkdownFile = event.tasksMarkdownFile;
       snapshot.costFile = event.costFile;
       return snapshot;
-    case "test_spec_written":
+    case "test_spec_written": {
       snapshot.testSpecFile = event.file;
       snapshot.testSpecMarkdownFile = event.markdownFile;
-      snapshot.testSpecs = event.specs;
+
+      const existingSpecs = snapshot.testSpecs ?? [];
+      if (existingSpecs.length === 0) {
+        snapshot.testSpecs = event.specs;
+        return snapshot;
+      }
+
+      const merged = existingSpecs.map((entry) => event.specs.find((candidate) => candidate.taskId === entry.taskId) ?? entry);
+      const additions = event.specs.filter((entry) => !existingSpecs.some((existing) => existing.taskId === entry.taskId));
+      snapshot.testSpecs = [...merged, ...additions];
       return snapshot;
+    }
     case "tasks_registered":
       snapshot.tasks = event.tasks;
       for (const task of event.tasks) ensureTaskState(snapshot, task.id);
@@ -172,9 +232,59 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
     case "task_blocked": {
       const task = ensureTaskState(snapshot, event.taskId);
       task.status = "blocked";
-      task.blocker = event.blocker;
+      task.blocker = normalizeBlocker(event.blocker);
       delete snapshot.supervisors[event.taskId];
-      snapshot.blockers = [...snapshot.blockers.filter((b) => b.taskId !== event.taskId), event.blocker];
+      snapshot.blockers = [...snapshot.blockers.filter((b) => b.taskId !== event.taskId), task.blocker];
+      return snapshot;
+    }
+    case "task_contract_patched": {
+      const task = snapshot.tasks.find((entry) => entry.id === event.taskId);
+      if (!task) {
+        return snapshot;
+      }
+
+      const applied = applyBlockerResolutionPatch(event.taskId, task, snapshot.testSpecs, event.patch);
+      snapshot.testSpecs = applied.testSpecs;
+
+      const runtimeTask = snapshot.taskState[event.taskId];
+      if (runtimeTask?.blocker?.remediation) {
+        runtimeTask.blocker.remediation.durabilityCommitRef = event.durabilityCommitRef;
+        runtimeTask.blocker.remediation.durabilityCommittedAt = event.at;
+      }
+
+      snapshot.blockers = snapshot.blockers.map((blocker) => {
+        if (blocker.taskId !== event.taskId || !blocker.remediation) return blocker;
+        return {
+          ...blocker,
+          remediation: {
+            ...blocker.remediation,
+            durabilityCommitRef: event.durabilityCommitRef,
+            durabilityCommittedAt: event.at,
+          },
+        };
+      });
+      return snapshot;
+    }
+    case "test_spec_patched": {
+      snapshot.testSpecs = applyTestSpecResolutionPatch(event.taskId, snapshot.testSpecs, event.patch);
+
+      const runtimeTask = snapshot.taskState[event.taskId];
+      if (runtimeTask?.blocker?.remediation) {
+        runtimeTask.blocker.remediation.durabilityCommitRef = event.durabilityCommitRef;
+        runtimeTask.blocker.remediation.durabilityCommittedAt = event.at;
+      }
+
+      snapshot.blockers = snapshot.blockers.map((blocker) => {
+        if (blocker.taskId !== event.taskId || !blocker.remediation) return blocker;
+        return {
+          ...blocker,
+          remediation: {
+            ...blocker.remediation,
+            durabilityCommitRef: event.durabilityCommitRef,
+            durabilityCommittedAt: event.at,
+          },
+        };
+      });
       return snapshot;
     }
     case "task_requeued": {
@@ -224,14 +334,56 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
         requestedAt: event.at,
       };
       return snapshot;
-    case "human_intervention_resolved":
+    case "human_intervention_resolved": {
       if (snapshot.pendingHumanIntervention?.taskId === event.taskId) {
         snapshot.pendingHumanIntervention = undefined;
       }
-      snapshot.blockers = snapshot.blockers.map((blocker) =>
-        blocker.taskId === event.taskId ? { ...blocker, resolvedAt: event.at, resolvedBy: event.resolution } : blocker,
-      );
+      const task = snapshot.taskState[event.taskId];
+      const blockedTask = task?.blocker;
+      const resolvedMode = event.resolutionMode ?? selectBlockerResolutionMode({
+        category: blockedTask?.category ?? snapshot.blockers.find((blocker) => blocker.taskId === event.taskId)?.category ?? "runtime",
+        reason: blockedTask?.reason,
+        suggestion: blockedTask?.suggestion,
+        resolution: event.resolution,
+        diagnosticClassification: task?.diagnostic?.classification,
+        diagnosticNotes: task?.diagnostic?.notes,
+        blockedTasks: blockedTask?.blockedTasks,
+      });
+
+      snapshot.blockers = snapshot.blockers.map((blocker) => {
+        if (blocker.taskId !== event.taskId) return blocker;
+        const category = blocker.category;
+        return {
+          ...blocker,
+          resolvedAt: event.at,
+          resolvedBy: event.resolution,
+          remediation: blocker.remediation ?? createRemediationRecord({
+            mode: resolvedMode,
+            category,
+            rationale: event.resolution,
+          }),
+        };
+      });
+      if (blockedTask) {
+        task.blocker = normalizeBlocker({
+          ...blockedTask,
+          resolvedAt: event.at,
+          resolvedBy: event.resolution,
+          remediation: blockedTask.remediation ?? createRemediationRecord({
+            mode: resolvedMode,
+            category: blockedTask.category,
+            rationale: event.resolution,
+          }),
+        });
+        task.diagnostic = {
+          classification: task.diagnostic?.classification ?? "human_intervention_resolution",
+          notes: task.diagnostic?.notes ?? blockedTask.reason,
+          blockerCategory: blockedTask.category,
+          remediationMode: resolvedMode,
+        };
+      }
       return snapshot;
+    }
     case "integration_review_started":
       snapshot.currentPhase = 6;
       snapshot.phaseLabel = "Integration Review";
@@ -268,11 +420,12 @@ export function replayEvents(events: ForgeEvent[]): RunSnapshot | null {
   return snapshot;
 }
 
-export function createHumanInterventionBlocker(taskId: string, reason: string, suggestion: string): Blocker {
-  return {
+export function createHumanInterventionBlocker(taskId: string, reason: string, suggestion: string, category: BlockerCategory = "runtime"): Blocker {
+  return createBlocker({
     taskId,
     reason,
     suggestion,
     blockedTasks: [taskId],
-  };
+    category,
+  });
 }

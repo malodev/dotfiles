@@ -1,6 +1,8 @@
-import type { ForgeEvent } from "./events";
-import type { Blocker, ForgeTask, RunPhase, TestSpecEntry } from "./types";
-import { replayEvents } from "./derive";
+import type { ForgeEvent } from "./events.ts";
+import type { Blocker, ForgeTask, RunPhase, RunSnapshot, TestSpecEntry } from "./types.ts";
+import { replayEvents } from "./derive.ts";
+import { normalizeBlocker } from "./blocker-model.ts";
+import { materializeLegacyValidationFields, normalizeValidationContract } from "./validation.ts";
 
 interface V1Task {
   id: string;
@@ -34,6 +36,35 @@ interface V1Task {
   resolutionInstruction?: string;
 }
 
+interface V1TestSpecEntry {
+  taskId: string;
+  testFiles?: Array<{
+    path: string;
+    type?: string;
+    targets?: string[];
+    fixtures_required?: string[];
+    derived_from?: string[];
+  }>;
+  acceptance_signal?: string;
+  coverage_threshold?: number;
+  ambiguities?: string[];
+}
+
+function toV2TestSpec(spec: V1TestSpecEntry): TestSpecEntry {
+  const { validation } = normalizeValidationContract({
+    acceptanceSignal: spec.acceptance_signal,
+    coverageThreshold: spec.coverage_threshold,
+  });
+  const legacy = materializeLegacyValidationFields(validation);
+
+  return {
+    ...spec,
+    validation,
+    acceptance_signal: legacy.acceptanceSignal,
+    coverage_threshold: legacy.coverageThreshold,
+  };
+}
+
 interface V1State {
   orchestrationId: string;
   status: string;
@@ -53,7 +84,7 @@ interface V1State {
   reviewFile?: string;
   blockers: Blocker[];
   tasks: V1Task[];
-  testSpecs?: TestSpecEntry[];
+  testSpecs?: V1TestSpecEntry[];
   timestamps: {
     started: string;
     completed?: string;
@@ -61,6 +92,13 @@ interface V1State {
 }
 
 function toV2Task(task: V1Task): ForgeTask {
+  const { validation } = normalizeValidationContract({
+    testCommand: task.testCommand,
+    acceptanceSignal: task.acceptanceSignal,
+    coverageThreshold: task.coverageThreshold,
+  });
+  const legacy = materializeLegacyValidationFields(validation);
+
   return {
     id: task.id,
     title: task.title,
@@ -74,9 +112,10 @@ function toV2Task(task: V1Task): ForgeTask {
     escalationTriggers: task.escalationTriggers,
     measurableTargets: task.measurableTargets,
     turnBudget: task.turnBudget,
-    testCommand: task.testCommand,
-    acceptanceSignal: task.acceptanceSignal,
-    coverageThreshold: task.coverageThreshold,
+    validation,
+    testCommand: legacy.testCommand,
+    acceptanceSignal: legacy.acceptanceSignal,
+    coverageThreshold: legacy.coverageThreshold,
     testSpecRefs: task.testSpecRefs,
   };
 }
@@ -126,7 +165,7 @@ export function migrateV1StateToEvents(v1: V1State): ForgeEvent[] {
       at,
       file: v1.testSpecFile,
       markdownFile: v1.testSpecMarkdownFile,
-      specs: v1.testSpecs,
+      specs: v1.testSpecs.map(toV2TestSpec),
     });
   }
 
@@ -164,7 +203,7 @@ export function migrateV1StateToEvents(v1: V1State): ForgeEvent[] {
         type: "task_blocked",
         at: taskAt,
         taskId: task.id,
-        blocker: task.blocker,
+        blocker: normalizeBlocker(task.blocker),
       });
       events.push({
         type: "human_intervention_requested",
@@ -211,4 +250,28 @@ export function migrateV1StateToEvents(v1: V1State): ForgeEvent[] {
 
 export function migrateV1StateToSnapshot(v1: V1State) {
   return replayEvents(migrateV1StateToEvents(v1));
+}
+
+export function migrateV3ToV4(snapshot: Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 }): RunSnapshot {
+  return {
+    ...snapshot,
+    schemaVersion: 4,
+    planningRuntime: undefined,
+  };
+}
+
+export function migrateSnapshot(snapshot: RunSnapshot): RunSnapshot {
+  if (snapshot.schemaVersion === 4) {
+    return snapshot;
+  }
+
+  if (snapshot.schemaVersion === 3) {
+    return migrateV3ToV4(snapshot as Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 });
+  }
+
+  return migrateV3ToV4({
+    ...snapshot,
+    schemaVersion: 3,
+    planningRuntime: undefined,
+  } as Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 });
 }

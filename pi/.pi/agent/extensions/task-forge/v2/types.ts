@@ -35,6 +35,25 @@ export type TaskMode = "single-pass" | "iterative";
 export type TddPhase = "red" | "green" | "refactor" | "complete";
 export type RunPhase = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type NextAction = "continuePlanning" | "executePlan";
+export type ValidationMode = "command" | "manual";
+export type BlockerCategory = "environment" | "dependency" | "validation_contract" | "plan_contract" | "runtime" | "unknown";
+export type BlockerResolutionMode = "retry" | "patch_task_contract" | "patch_test_spec" | "replan_task" | "replan_subgraph" | "manual_override";
+
+export interface CommandValidationContract {
+  mode: "command";
+  command: string;
+  notes?: string;
+  coverageThreshold?: number;
+}
+
+export interface ManualValidationContract {
+  mode: "manual";
+  notes: string;
+  command?: never;
+  coverageThreshold?: never;
+}
+
+export type TaskValidationContract = CommandValidationContract | ManualValidationContract;
 
 export interface CostEstimate {
   totalInputTokens?: number;
@@ -49,11 +68,21 @@ export interface ContextManifest {
   dependencyOutputs?: string[];
 }
 
+export interface RemediationRecord {
+  mode: BlockerResolutionMode;
+  category: BlockerCategory;
+  rationale: string;
+  durabilityCommitRef?: string;
+  durabilityCommittedAt?: string;
+}
+
 export interface Blocker {
   taskId: string;
+  category: BlockerCategory;
   reason: string;
   suggestion: string;
   blockedTasks: string[];
+  remediation?: RemediationRecord;
   resolvedBy?: string;
   resolvedAt?: string;
 }
@@ -71,6 +100,7 @@ export interface ForgeTask {
   escalationTriggers: string[];
   measurableTargets?: Record<string, number | boolean | string>;
   turnBudget?: number;
+  validation: TaskValidationContract;
   testCommand?: string;
   acceptanceSignal?: string;
   coverageThreshold?: number;
@@ -94,7 +124,7 @@ export interface TaskRuntimeState {
   completedAt?: string;
   lastHeartbeatAt?: string;
   resolutionInstruction?: string;
-  diagnostic?: { classification: string; notes: string };
+  diagnostic?: { classification: string; notes: string; blockerCategory?: BlockerCategory; remediationMode?: BlockerResolutionMode };
   diagnosticCount?: number;
   failureSignature?: string;
   stallWarnedAt?: string;
@@ -114,6 +144,7 @@ export interface TestSpecEntry {
     fixtures_required?: string[];
     derived_from?: string[];
   }>;
+  validation: TaskValidationContract;
   acceptance_signal?: string;
   coverage_threshold?: number;
   ambiguities?: string[];
@@ -128,8 +159,17 @@ export interface TaskSupervisorState {
   pidHint?: number;
 }
 
+export interface PlanningRuntimeState {
+  activeRole: Role | null;
+  startedAt: string;
+  phaseStartedAt: string;
+  phase: RunPhase;
+  interrupted: boolean;
+  interruptedAt?: string;
+}
+
 export interface RunSnapshot {
-  schemaVersion: 2;
+  schemaVersion: 2 | 3 | 4;
   orchestrationId: string;
   status: RunStatus;
   currentPhase: RunPhase;
@@ -152,6 +192,7 @@ export interface RunSnapshot {
   taskState: Record<string, TaskRuntimeState>;
   blockers: Blocker[];
   supervisors: Record<string, TaskSupervisorState>;
+  planningRuntime?: PlanningRuntimeState;
   testSpecs?: TestSpecEntry[];
   pendingHumanIntervention?: {
     taskId: string;
