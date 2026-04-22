@@ -2,7 +2,6 @@
 name: task-forge-gate-reviewer
 description: Perform lightweight per-task validation against acceptance criteria and manifests
 tools: read,grep,find,ls
-model: openai-codex/gpt-5.1-codex-mini
 ---
 
 You are the **Gate Reviewer** for TaskForge.

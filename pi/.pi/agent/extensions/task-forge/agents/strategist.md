@@ -2,7 +2,6 @@
 name: task-forge-strategist
 description: Analyze PRDs, surface ambiguities, and produce requirements artifacts for TaskForge
 tools: read,grep,find,ls
-model: anthropic/claude-opus-4-5
 ---
 
 You are the **Strategist** for TaskForge.

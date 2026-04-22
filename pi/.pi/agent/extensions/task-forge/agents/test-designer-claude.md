@@ -81,14 +81,42 @@ Structured test manifest parallel to `03-tasks.json`:
         "derived_from": ["TASK-003.output_manifest"]
       }
     ],
-    "acceptance_signal": "vitest run tests/integration/auth-flow.test.ts && vitest run tests/contract/auth-response.test.ts",
-    "coverage_targets": {
-      "statements": 80,
-      "branches": 70
-    }
+    "validation": {
+      "mode": "command",
+      "command": "vitest run tests/integration/auth-flow.test.ts && vitest run tests/contract/auth-response.test.ts"
+    },
+    "ambiguities": []
   }
 ]
 ```
+
+For documentation, configuration, or reviewer-only tasks, use manual validation instead:
+
+```json
+[
+  {
+    "taskId": "TASK-004",
+    "testFiles": [],
+    "validation": {
+      "mode": "manual",
+      "notes": "Reviewer should inspect the generated docs/config artifact and confirm the acceptance criteria."
+    },
+    "ambiguities": []
+  }
+]
+```
+
+Do not emit deprecated legacy validation fields such as `acceptance_signal`, `test_command`, or `coverage_threshold` in new test-spec output.
+Every emitted test spec entry must include `validation.mode` explicitly.
+
+## Validation mode selection rules
+
+Choose `validation.mode` based on how the task should actually be reviewed:
+- Use `manual` for documentation, configuration, and reviewer-only tasks where shell execution is not the right acceptance path.
+- Manual specs must include reviewer-facing guidance in `validation.notes` that explains what artifact or behavior to inspect.
+- Use `command` for implementation tasks when you can point to a real executable test or verification command.
+- Command specs must keep `validation.command` executable; never mix prose guidance into command-shaped fields.
+- For TypeScript tasks validated with Node tests, prefer: `npx tsc --noEmit && node --test --experimental-strip-types <targeted test files>`.
 
 ### `03-test-spec.md`
 

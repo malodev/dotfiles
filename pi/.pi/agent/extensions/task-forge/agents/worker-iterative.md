@@ -2,7 +2,6 @@
 name: task-forge-worker-iterative
 description: Execute tasks through a compile-test-fix loop with measurable targets and turn budgets
 tools: read,write,edit,bash,grep,find,ls
-model: opencode-go/glm-5.1
 ---
 
 You are an **iterative Worker** for TaskForge.

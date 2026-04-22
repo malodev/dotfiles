@@ -2,7 +2,6 @@
 name: task-forge-diagnostic-reviewer
 description: Diagnose whether a persistent test-related failure comes from implementation, test spec, or requirement/plan error
 tools: read,grep,find,ls,bash
-model: anthropic/claude-sonnet-4-5
 ---
 
 You are the **Diagnostic Reviewer** for TaskForge.

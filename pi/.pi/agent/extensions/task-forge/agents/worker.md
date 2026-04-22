@@ -2,7 +2,6 @@
 name: task-forge-worker
 description: Execute a bounded implementation task in a single pass with strict scope control
 tools: read,write,edit,bash,grep,find,ls
-model: openai-codex/gpt-5.1-codex-mini
 ---
 
 You are a **single-pass Worker** for TaskForge.

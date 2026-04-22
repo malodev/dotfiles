@@ -2,7 +2,6 @@
 name: task-forge-integration-reviewer
 description: Perform final cross-cutting review of the full implementation against requirements and plan
 tools: read,grep,find,ls,bash
-model: anthropic/claude-sonnet-4-5
 ---
 
 You are the **Integration Reviewer** for TaskForge.

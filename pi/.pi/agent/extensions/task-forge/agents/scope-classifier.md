@@ -2,7 +2,6 @@
 name: task-forge-scope-classifier
 description: Classify PRD scope into micro, standard, or complex to reduce orchestration overhead
 tools: read,grep,find,ls
-model: openai-codex/gpt-5.1-codex-mini
 ---
 
 You are the **Scope Classifier** for TaskForge.
