@@ -25,12 +25,12 @@ function makeTask(): ForgeTask {
 describe("blocker-resolution", () => {
   it("deriveBlockerResolutionPatch extracts command-mode patch from explicit resolution command", () => {
     const patch = deriveBlockerResolutionPatch(
-      "Use the correct repository validation command: `deno test --allow-read --sloppy-imports --no-check integration`. Do not use pnpm/npm.",
+      "Use the correct repository validation command: `node --test --experimental-strip-types integration/blocker-resolution.test.ts`. Do not use pnpm/npm.",
     );
 
     assert(patch?.validation?.mode === "command", "expected command-mode patch");
     assert(
-      patch?.validation?.mode === "command" && patch.validation.command === "deno test --allow-read --sloppy-imports --no-check integration",
+      patch?.validation?.mode === "command" && patch.validation.command === "node --test --experimental-strip-types integration/blocker-resolution.test.ts",
       "expected extracted command to match explicit resolution command",
     );
   });
@@ -51,15 +51,15 @@ describe("blocker-resolution", () => {
     }];
 
     const patch = deriveBlockerResolutionPatch(
-      "Use this exact acceptance command: deno test --allow-read --sloppy-imports --no-check integration/planner-testdesigner-validation-mode.integration.test.ts",
+      "Use this exact acceptance command: node --test --experimental-strip-types integration/planner-testdesigner-validation-mode.integration.test.ts",
     );
     if (!patch) throw new Error("expected patch");
 
     const result = applyBlockerResolutionPatch("T5", task, specs, patch);
 
     assert(result.task.validation.mode === "command", "task validation should be command mode");
-    assert(result.task.validation.mode === "command" && result.task.validation.command.includes("--allow-read"), "task command should be replaced");
-    assert(result.task.acceptanceSignal?.includes("deno test --allow-read"), "legacy acceptance signal should mirror command");
+    assert(result.task.validation.mode === "command" && result.task.validation.command.includes("--experimental-strip-types"), "task command should be replaced");
+    assert(result.task.acceptanceSignal?.includes("node --test --experimental-strip-types"), "legacy acceptance signal should mirror command");
     assert(result.testSpecs[0].validation.mode === "command", "test spec validation should update too");
     assert(result.testSpecs[0].validation.mode === "command" && result.testSpecs[0].validation.command.includes("planner-testdesigner"), "test spec command should update");
   });
@@ -74,7 +74,7 @@ describe("blocker-resolution", () => {
     let rejected = false;
     try {
       applyBlockerResolutionPatch("T5", task, specs, {
-        validation: { mode: "command", command: "deno test" },
+        validation: { mode: "command", command: "node --test --experimental-strip-types" },
         title: "do not allow arbitrary mutation",
       });
     } catch (error: any) {

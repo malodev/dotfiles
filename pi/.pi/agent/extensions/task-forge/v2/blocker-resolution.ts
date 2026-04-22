@@ -49,19 +49,15 @@ function extractCommandCandidates(resolution: string) {
     candidates.add(match[1].trim());
   }
 
-  for (const match of resolution.matchAll(/(?:^|\s)(deno\s+test[^\n]+)/gi)) {
-    candidates.add(match[1].trim().replace(/[.\s]+$/g, ""));
-  }
-
   for (const line of resolution.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (/^(deno|npm|pnpm|yarn|bun|pytest|vitest|jest|go|cargo|make|just|bash|sh)\b/i.test(trimmed) && looksLikeValidationCommand(trimmed)) {
+    if (/^(npm|pnpm|yarn|bun|node|npx|pytest|vitest|jest|go|cargo|make|just|bash|sh)\b/i.test(trimmed) && looksLikeValidationCommand(trimmed)) {
       candidates.add(trimmed);
     }
     const colon = trimmed.indexOf(":");
     if (colon >= 0) {
       const afterColon = trimmed.slice(colon + 1).trim();
-      if (/^(deno|npm|pnpm|yarn|bun|pytest|vitest|jest|go|cargo|make|just|bash|sh)\b/i.test(afterColon) && looksLikeValidationCommand(afterColon)) {
+      if (/^(npm|pnpm|yarn|bun|node|npx|pytest|vitest|jest|go|cargo|make|just|bash|sh)\b/i.test(afterColon) && looksLikeValidationCommand(afterColon)) {
         candidates.add(afterColon);
       }
     }
