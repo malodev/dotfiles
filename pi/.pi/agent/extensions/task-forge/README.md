@@ -481,7 +481,7 @@ Subtree search currently skips common heavy directories like:
 - `node_modules`
 - `.task-forge`
 
-Example:
+Example (illustrative):
 
 ```json
 {
@@ -535,6 +535,8 @@ Example:
   "costLimitUsd": 10
 }
 ```
+
+> Note: the authoritative runtime defaults for this workspace live in `agent/extensions/task-forge/task-forge.json` and may differ from the illustrative example above.
 
 ### Config fields
 

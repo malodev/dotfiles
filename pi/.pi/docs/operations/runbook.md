@@ -56,7 +56,7 @@ Resolution patterns:
 
 Executable command fix:
 ```bash
-/forge blocker <task-id> --resolve "Use executable checker invocation: `deno test --allow-read ./agent/extensions/task-forge/v2`"
+/forge blocker <task-id> --resolve "Use executable checker invocation: `npx tsc --noEmit <target-files> && node --test --experimental-strip-types <target-test-files>`"
 ```
 
 Manual review fix:

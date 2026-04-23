@@ -164,35 +164,40 @@ V2 writes one JSON event per line.
 
 #### Planning lifecycle
 - `phase_entered`
+- `planning_phase_started`
+- `planning_phase_completed`
+- `planning_phase_interrupted`
 - `routing_decided`
 - `requirements_written`
 - `plan_written`
-- `tasks_written`
 - `test_spec_written`
+- `tasks_registered`
 - `approval_required`
 - `approval_granted`
 
 #### Task lifecycle
-- `task_queued`
 - `task_ready`
 - `task_started`
 - `task_heartbeat`
+- `task_runtime_updated`
+- `task_tdd_progress`
 - `task_validation_passed`
 - `task_validation_failed`
+- `task_gate_reviewed`
 - `task_completed`
 - `task_failed`
 - `task_blocked`
 - `task_requeued`
+- `task_contract_patched`
+- `test_spec_patched`
 
 #### Human intervention
 - `human_intervention_requested`
 - `human_intervention_resolved`
 
-#### Preflight/runtime
-- `preflight_started`
-- `preflight_failed`
-- `preflight_passed`
-- `environment_issue_detected`
+#### Run/execution control
+- `run_paused`
+- `run_resumed`
 
 #### Review
 - `integration_review_started`
