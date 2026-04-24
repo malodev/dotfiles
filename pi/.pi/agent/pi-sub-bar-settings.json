@@ -77,42 +77,6 @@
         "showFlash": true
       }
     },
-    "antigravity": {
-      "showStatus": true,
-      "showCurrentModel": true,
-      "showScopedModels": true,
-      "windows": {
-        "showModels": true
-      },
-      "modelVisibility": {
-        "Claude Sonnet 4.6 (Thinking)": false,
-        "Claude Opus 4.6 (Thinking)": false,
-        "Gemini 2.5 Pro": false,
-        "Gemini 3 Flash": false,
-        "Gemini 3 Pro (High)": false,
-        "Gemini 3 Pro (Low)": false,
-        "Gemini 3.1 Flash Image": false,
-        "Gemini 3.1 Flash Lite": false,
-        "Gemini 3.1 Pro (High)": false,
-        "Gemini 3.1 Pro (Low)": false,
-        "GPT-OSS 120B (Medium)": false,
-        "tab_jump_flash_lite_preview": false
-      },
-      "modelOrder": [
-        "Claude Opus 4.6 (Thinking)",
-        "Claude Sonnet 4.6 (Thinking)",
-        "Gemini 2.5 Pro",
-        "Gemini 3 Flash",
-        "Gemini 3 Pro (High)",
-        "Gemini 3 Pro (Low)",
-        "Gemini 3.1 Flash Image",
-        "Gemini 3.1 Flash Lite",
-        "Gemini 3.1 Pro (High)",
-        "Gemini 3.1 Pro (Low)",
-        "GPT-OSS 120B (Medium)",
-        "tab_jump_flash_lite_preview"
-      ]
-    },
     "codex": {
       "showStatus": true,
       "invertUsage": false,
