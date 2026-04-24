@@ -1,5 +1,8 @@
 {
   "tui.editor.deleteToLineStart": [],
+  "app.tree.filter.userOnly": [
+    "ctrl+alt+y"
+  ],
   "pi-sub-bar.toggle": "ctrl+alt+k",
   "plannotator.open": "ctrl+alt+p",
   "deleteToLineStart": []
