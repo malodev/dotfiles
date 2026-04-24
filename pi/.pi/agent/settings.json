@@ -1,6 +1,6 @@
 {
-  "defaultModel": "gemini-3.1-pro-high",
-  "defaultProvider": "google-antigravity",
+  "defaultModel": "qwen/qwen3.6-plus",
+  "defaultProvider": "openrouter",
   "defaultThinkingLevel": "medium",
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.65.2",
@@ -14,11 +14,6 @@
       "model": "github-copilot/claude-opus-4.6",
       "thinking": "high",
       "label": "Github: Opus 4.6"
-    },
-    {
-      "model": "google-antigravity/claude-opus-4-6",
-      "thinking": "high",
-      "label": "Google: Opus 4.6"
     },
     {
       "model": "openrouter/anthropic/claude-opus-4.6",
@@ -36,11 +31,6 @@
       "label": "Github: Sonnet 4.6"
     },
     {
-      "model": "google-antigravity/claude-sonnet-4-6",
-      "thinking": "high",
-      "label": "Google: Sonnet 4.6"
-    },
-    {
       "model": "openrouter/anthropic/claude-sonnet-4.6",
       "thinking": "high",
       "label": "OpenRouter: Sonnet 4.6"
@@ -54,11 +44,6 @@
       "model": "openrouter/qwen/qwen3.6-plus:free",
       "thinking": "high",
       "label": "OR: Qwen 3.6"
-    },
-    {
-      "model": "google-antigravity/gemini-3.1-pro-high",
-      "thinking": "high",
-      "label": "Google: Gemini 3.1 Pro"
     }
   ],
   "ollama": {
@@ -74,9 +59,7 @@
     "npm:@marckrenn/pi-sub-bar",
     {
       "source": "npm:@ollama/pi-web-search",
-      "extensions": [
-        "+index.ts"
-      ]
+      "extensions": ["+index.ts"]
     },
     "npm:@ifi/oh-pi",
     "npm:@ifi/oh-pi-extensions",
@@ -92,18 +75,17 @@
   ],
   "theme": "nord",
   "enabledModels": [
+    "opencode-go/glm-5",
+    "opencode-go/kimi-k2.5",
     "anthropic/claude-opus-4-6",
     "anthropic/claude-sonnet-4-6",
     "github-copilot/claude-opus-4.6",
     "github-copilot/claude-sonnet-4.6",
     "openai-codex/gpt-5.4",
     "openai-codex/gpt-5.3-codex",
-    "google-antigravity/gemini-3.1-pro-high",
-    "google-antigravity/claude-opus-4-6-thinking",
     "openrouter/x-ai/grok-4.1-fast",
     "openrouter/moonshotai/kimi-k2.5",
     "openrouter/deepseek/deepseek-v3.2",
-    "opencode-go/glm-5",
-    "opencode-go/kimi-k2.5"
+    "openrouter/qwen/qwen3.6-plus"
   ]
 }
