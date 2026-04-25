@@ -1,5 +1,5 @@
 import type { ForgeTask } from "./types.ts";
-import { normalizeValidationContract } from "./validation.ts";
+import { normalizeValidationContract, assertSafeValidationCommand } from "./validation.ts";
 
 export interface PreflightCheckResult {
   ok: boolean;
@@ -160,6 +160,19 @@ export function preflightAcceptanceCommand(
         "Set validation.command to the exact test or verification command to run during preflight and validation.",
         `Example: add validation: { mode: \"command\", command: \"<your-test-command>\" } to task ${task.id}.`,
       ].join(" "),
+    };
+  }
+
+  try {
+    assertSafeValidationCommand(normalizedCommand);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      kind: "environment_invalid_test_contract",
+      reason: message,
+      suggestion: "Correct the validation command to a supported Node-based test command before retrying.",
+      normalizedCommand,
     };
   }
 

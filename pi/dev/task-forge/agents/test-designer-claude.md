@@ -116,7 +116,7 @@ Choose `validation.mode` based on how the task should actually be reviewed:
 - Manual specs must include reviewer-facing guidance in `validation.notes` that explains what artifact or behavior to inspect.
 - Use `command` for implementation tasks when you can point to a real executable test or verification command.
 - Command specs must keep `validation.command` executable; never mix prose guidance into command-shaped fields.
-- For TypeScript tasks validated with Node tests, prefer: `npx tsc --noEmit && node --test --experimental-strip-types <targeted test files>`.
+- For TypeScript tasks validated with Node tests, use `node --test --experimental-strip-types <targeted test files>` directly. Do not prepend `tsc --noEmit` because bare `tsc` ignores tsconfig.json settings like `allowImportingTsExtensions` and `esModuleInterop`.
 
 ### `03-test-spec.md`
 

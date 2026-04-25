@@ -65,11 +65,11 @@ Choose `validation.mode` based on the task's validation reality:
 - Use `manual` with clear reviewer notes describing what artifact, diff, or behavior should be checked.
 - Use `command` for implementation tasks that have a real executable verification path.
 - In `command` mode, `validation.command` must be a runnable shell command only, not prose.
-- For TypeScript tasks validated with Node tests, run typecheck first: `npx tsc --noEmit && node --test --experimental-strip-types ...`.
+- For TypeScript tasks validated with Node tests, use `node --test --experimental-strip-types <targeted test files>` directly. Do not prepend `tsc --noEmit` unless `tsc -p tsconfig.json` is used, because bare `tsc --noEmit <files>` ignores tsconfig.json settings like `allowImportingTsExtensions` and `esModuleInterop`.
 
 Examples:
 - Docs/config/manual-review task -> `{ "mode": "manual", "notes": "Reviewer should inspect the updated docs/config artifact and confirm the acceptance criteria." }`
-- Code implementation task -> `{ "mode": "command", "command": "npx tsc --noEmit && node --test --experimental-strip-types path/to/test.ts" }`
+- Code implementation task -> `{ "mode": "command", "command": "node --test --experimental-strip-types path/to/test.ts" }`
 
 ## Task mode selection rules
 

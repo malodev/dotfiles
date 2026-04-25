@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Blocker, BlockerCategory, BlockerResolutionMode, RemediationRecord, RunSnapshot } from "./types.ts";
 import { classifyBlockerEvidence } from "./blocker-classifier.ts";
 

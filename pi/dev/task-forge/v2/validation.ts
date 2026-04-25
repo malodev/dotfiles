@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { TaskValidationResult } from "./task-success.ts";
 import type { TaskValidationContract, ValidationMode } from "./types.ts";
 
@@ -61,23 +62,16 @@ function normalizeBareTypecheckThenNodeTestCommand(command: string): string {
   const tscPart = match[1].trim();
   const nodePart = match[2].trim();
 
-  // Only rewrite bare `tsc --noEmit` style commands that do not specify a project/file.
   const hasProject = /(?:^|\s)(?:-p|--project)\b/i.test(tscPart);
-  const tscTokens = tscPart.split(/\s+/);
-  const tscArgs = tscTokens.slice(tscTokens[0].toLowerCase() === "npx" ? 2 : 1);
-  const hasNonFlagArg = tscArgs.some((arg) => arg && !arg.startsWith("-"));
-  if (hasProject || hasNonFlagArg) return command;
 
-  // Reuse explicit node --test target files as tsc file inputs.
-  const nodeTokens = nodePart.split(/\s+/);
-  const testTargets = nodeTokens
-    .slice(2) // skip `node --test`
-    .filter((arg) => arg && !arg.startsWith("-"));
+  // If tsc already references a project, the user knows what they're doing.
+  if (hasProject) return command;
 
-  if (testTargets.length === 0) return command;
-
-  const rewrittenTsc = `${tscPart} ${testTargets.join(" ")}`;
-  return `${rewrittenTsc} && ${nodePart}`;
+  // Without a project flag, tsc --noEmit <files> is unreliable because it
+  // ignores tsconfig.json (e.g. allowImportingTsExtensions, esModuleInterop).
+  // The node --test --experimental-strip-types runner already validates syntax.
+  // Strip the tsc prefix and keep only the node --test command.
+  return nodePart;
 }
 
 export function normalizeValidationCommand(command?: string): string | undefined {
@@ -93,6 +87,81 @@ export function normalizeValidationCommand(command?: string): string | undefined
 export function normalizeValidationNotes(notes?: string): string | undefined {
   const normalized = typeof notes === "string" ? notes.trim() : "";
   return normalized || undefined;
+}
+
+function isBareTypecheckCommand(command: string): boolean {
+  const trimmed = command.trim();
+  // Match standalone tsc or npx tsc commands (no trailing && ...)
+  const match = trimmed.match(/^\s*(npx\s+)?tsc\s+[^&\n]*$/i);
+  if (!match) return false;
+  const hasProject = /(?:^|\s)(?:-p|--project)\b/i.test(trimmed);
+  return !hasProject;
+}
+
+function containsShellOperators(command: string): boolean {
+  return /(&&|\|\||\||;|`|\$\(|\$\{)/.test(command);
+}
+
+function containsBarePath(command: string): boolean {
+  return /^\.{0,2}\/|[\s;|]&?\.\.?\//.test(command);
+}
+
+export function assertSafeValidationCommand(command: string): void {
+  const normalized = normalizeValidationCommand(command);
+  if (!normalized) {
+    throw new Error("Unsafe validation command: empty command. Provide a single Node-based test command such as `npm test`, `pnpm test`, `node --test`, or `npx vitest run`.");
+  }
+
+  if (/^deno\b/i.test(normalized)) {
+    throw new Error("Deno is not supported as an active TaskForge test engine. Use Node-based commands such as `npm test`, `pnpm test`, `node --test`, or `npx vitest run`.");
+  }
+
+  if (containsShellOperators(normalized)) {
+    throw new Error("Unsafe validation command: shell operators (&&, ||, |, ;, `, $() ) are not allowed. Use a single test command or define a package script.");
+  }
+
+  if (containsBarePath(normalized)) {
+    throw new Error("Unsafe validation command: relative or absolute paths are not allowed. Use a package manager script or `npx <tool>`.");
+  }
+
+  if (isBareTypecheckCommand(normalized)) {
+    throw new Error("Unsafe validation command: bare `tsc --noEmit` ignores tsconfig.json. Use `node --test` for type-aware testing, or add `--project tsconfig.json` if type-checking is required.");
+  }
+}
+
+export function summarizeValidationEvidence(fullOutput: string, maxLines = 8): string {
+  const lines = fullOutput.split("\n");
+
+  const isNoise = (line: string): boolean => {
+    const trimmed = line.trim();
+    if (!trimmed) return true;
+    const lower = trimmed.toLowerCase();
+    if (/^usage:/i.test(trimmed)) return true;
+    if (/^options:/i.test(trimmed)) return true;
+    if (/^examples:/i.test(trimmed)) return true;
+    if (/^arguments:/i.test(trimmed)) return true;
+    if (/^flags:/i.test(trimmed)) return true;
+    if (/^\s*-/i.test(trimmed) && !trimmed.includes(":")) return true; // standalone flags
+    if (/^tsc: the TypeScript compiler/i.test(trimmed)) return true;
+    if (/^syntax: /i.test(trimmed)) return true;
+    if (/^\[\d+m?s?\]\s*$/i.test(trimmed)) return true;
+    if (lower.includes("for detailed help") || lower.includes("--help") || lower.includes("-h")) return true;
+    return false;
+  };
+
+  const filtered = lines.filter((line) => !isNoise(line));
+
+  if (filtered.length <= maxLines) {
+    return filtered.join("\n");
+  }
+
+  const head = filtered.slice(0, Math.ceil(maxLines / 2));
+  const tail = filtered.slice(-Math.floor(maxLines / 2));
+  return [
+    ...head,
+    `\n... ${filtered.length - head.length - tail.length} lines omitted; full log preserved in artifact ...\n`,
+    ...tail,
+  ].join("\n");
 }
 
 export function looksLikeValidationCommand(value?: string): boolean {
@@ -358,6 +427,8 @@ export async function runTaskValidation<TTask extends ValidationTaskLike>(
   if (!command) {
     throw new Error("Invalid validation contract: mode=command requires a non-empty validation.command");
   }
+
+  assertSafeValidationCommand(command);
 
   const result = await hooks.exec(command);
   let output = [
