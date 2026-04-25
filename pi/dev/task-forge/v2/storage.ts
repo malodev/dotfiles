@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";

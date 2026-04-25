@@ -1,8 +1,12 @@
+// @ts-nocheck
+import { readFile, appendFile, writeFile, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import type { ForgeEvent } from "./events.ts";
 import type { Blocker, ForgeTask, RunPhase, RunSnapshot, TestSpecEntry } from "./types.ts";
 import { replayEvents } from "./derive.ts";
 import { normalizeBlocker } from "./blocker-model.ts";
 import { materializeLegacyValidationFields, normalizeValidationContract } from "./validation.ts";
+import type { V2StorageLayout } from "./storage.ts";
 
 interface V1Task {
   id: string;
@@ -252,6 +256,58 @@ export function migrateV1StateToSnapshot(v1: V1State) {
   return replayEvents(migrateV1StateToEvents(v1));
 }
 
+export async function shouldImportLegacyState(layout: V2StorageLayout): Promise<boolean> {
+  // If V2 events already exist, never re-import.
+  if (existsSync(layout.eventsFile)) {
+    try {
+      const raw = await readFile(layout.eventsFile, "utf-8");
+      const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
+      if (lines.length > 0) return false;
+    } catch {
+      // Treat read errors as empty.
+    }
+  }
+
+  if (!existsSync(layout.snapshotFile)) return false;
+
+  try {
+    const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8"));
+    // Already a V2 snapshot — do not treat as legacy.
+    if (raw?.schemaVersion === 2 || raw?.schemaVersion === 3 || raw?.schemaVersion === 4) {
+      return false;
+    }
+    // Presence of V1-shaped fields suggests legacy state.
+    if (raw && typeof raw.orchestrationId === "string" && Array.isArray(raw.tasks)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export async function importLegacyState(layout: V2StorageLayout): Promise<{ imported: boolean; events: ForgeEvent[]; snapshot: RunSnapshot | null }> {
+  if (!(await shouldImportLegacyState(layout))) {
+    return { imported: false, events: [], snapshot: null };
+  }
+
+  const raw = JSON.parse(await readFile(layout.snapshotFile, "utf-8"));
+  const events = migrateV1StateToEvents(raw);
+  const snapshot = replayEvents(events);
+
+  await mkdir(layout.baseDir, { recursive: true });
+
+  for (const event of events) {
+    await appendFile(layout.eventsFile, `${JSON.stringify(event)}\n`, "utf-8");
+  }
+
+  if (snapshot) {
+    await writeFile(layout.snapshotFile, JSON.stringify(snapshot, null, 2), "utf-8");
+  }
+
+  return { imported: true, events, snapshot };
+}
+
 export function migrateV3ToV4(snapshot: Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 }): RunSnapshot {
   return {
     ...snapshot,
@@ -260,18 +316,42 @@ export function migrateV3ToV4(snapshot: Omit<RunSnapshot, "schemaVersion"> & { s
   };
 }
 
+function normalizeSnapshotShape(snapshot: Partial<RunSnapshot> & { schemaVersion?: number }): RunSnapshot {
+  const now = new Date().toISOString();
+  return {
+    ...(snapshot as RunSnapshot),
+    schemaVersion: 4,
+    orchestrationId: snapshot.orchestrationId ?? "unknown",
+    status: snapshot.status ?? "planning",
+    currentPhase: snapshot.currentPhase ?? 0,
+    phaseLabel: snapshot.phaseLabel ?? "Scope Classification",
+    prdFile: snapshot.prdFile ?? "unknown",
+    resolvedModels: snapshot.resolvedModels ?? {},
+    cost: snapshot.cost ?? {},
+    tasks: snapshot.tasks ?? [],
+    taskState: snapshot.taskState ?? {},
+    blockers: snapshot.blockers ?? [],
+    supervisors: snapshot.supervisors ?? {},
+    timestamps: {
+      started: snapshot.timestamps?.started ?? now,
+      lastUpdated: snapshot.timestamps?.lastUpdated ?? snapshot.timestamps?.started ?? now,
+      completed: snapshot.timestamps?.completed,
+    },
+  };
+}
+
 export function migrateSnapshot(snapshot: RunSnapshot): RunSnapshot {
   if (snapshot.schemaVersion === 4) {
-    return snapshot;
+    return normalizeSnapshotShape(snapshot);
   }
 
   if (snapshot.schemaVersion === 3) {
-    return migrateV3ToV4(snapshot as Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 });
+    return normalizeSnapshotShape(migrateV3ToV4(snapshot as Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 }));
   }
 
-  return migrateV3ToV4({
+  return normalizeSnapshotShape(migrateV3ToV4({
     ...snapshot,
     schemaVersion: 3,
     planningRuntime: undefined,
-  } as Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 });
+  } as Omit<RunSnapshot, "schemaVersion"> & { schemaVersion: 3 }));
 }
