@@ -62,18 +62,6 @@ type Role =
   | "gateReviewer"
   | "diagnosticReviewer"
   | "integrationReviewer";
-type ForgeStatus =
-  | "idle"
-  | "analyzing"
-  | "planning"
-  | "awaiting_approval"
-  | "executing"
-  | "reviewing"
-  | "completed"
-  | "paused"
-  | "aborted"
-  | "blocked"
-  | "failed";
 type TaskStatus =
   | "pending"
   | "ready"
@@ -315,10 +303,9 @@ function seconds(value: number) {
   return value * 1000;
 }
 
-function statusIcon(status: ForgeStatus | V2RunStatus | "needs_human_intervention") {
+function statusIcon(status: V2RunStatus | "needs_human_intervention") {
   switch (status) {
     case "idle": return "💤";
-    case "analyzing": return "🔍";
     case "planning": return "📋";
     case "awaiting_approval": return "⏳";
     case "executing": return "⚙️";
@@ -326,7 +313,6 @@ function statusIcon(status: ForgeStatus | V2RunStatus | "needs_human_interventio
     case "completed": return "✅";
     case "paused": return "⏸️";
     case "aborted": return "🛑";
-    case "blocked": return "🚧";
     case "failed": return "❌";
     case "needs_human_intervention": return "⚠️";
   }
@@ -793,7 +779,7 @@ export default function (pi: ExtensionAPI) {
     return await deriveV2Snapshot(layout);
   }
 
-  function isTerminalCommandStatus(status: V2RunStatus | ForgeStatus | "needs_human_intervention") {
+function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention") {
     return ["idle", "completed", "aborted", "failed"].includes(status);
   }
 
@@ -1168,23 +1154,8 @@ export default function (pi: ExtensionAPI) {
     await emitHumanInterventionMessage(ctx, effectiveTask, blocker);
   }
 
-    // @deprecated V1 fallback in interrupted-execution detection — FROZEN. Do not add new behavior.
-    // Deletion target: TF-01 (V2 command service extraction). Use describeInterruptedExecutionV2() only.
   function describeInterruptedExecution(authoritative: V2RunSnapshot | null): { label: string; nextAction: "executePlan"; requeuedTaskIds: string[] } | null {
-    const described = describeInterruptedExecutionV2(authoritative);
-    if (described) return described;
-
-    if (!state) return null;
-
-    const localRunning = state.tasks.filter((task) => task.status === "running").map((task) => task.id);
-    const localWasActive = state.status === "executing" || state.status === "reviewing" || localRunning.length > 0;
-    if (!localWasActive) return null;
-
-    return {
-      label: state.currentPhase >= 6 ? "Integration Review (interrupted)" : "Execution (interrupted)",
-      nextAction: "executePlan",
-      requeuedTaskIds: localRunning,
-    };
+    return describeInterruptedExecutionV2(authoritative);
   }
 
   async function saveArtifact(ctx: any, relativePath: string, content: string) {
