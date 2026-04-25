@@ -1630,7 +1630,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     return failedDependencies(task).length > 0;
   }
 
-  // FROZEN — deferred to execution supervisor V2 extraction
+  // Execution supervisor — reads V2-synced state via loadAndSyncState()
   async function executeApprovedPlan(ctx: any) {
     await loadAndSyncState(ctx);
     if (!state) throw new Error("No plan to execute");
@@ -1699,7 +1699,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     });
   }
 
-  // FROZEN — deferred to execution supervisor V2 extraction
+  // Execution supervisor — reads V2-synced state via loadAndSyncState()
   async function phaseIntegrationReview(ctx: any) {
     await loadAndSyncState(ctx);
     if (!state) throw new Error("No orchestration state");
