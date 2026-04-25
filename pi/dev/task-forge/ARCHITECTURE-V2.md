@@ -341,7 +341,7 @@ When this message appears:
 ```text
 task-forge/
   index.ts                    # extension shell + closure-bound runtime wiring
-  v2/
+  src/
     types.ts                  # durable types
     events.ts                 # event constructors + event type guards
     derive.ts                 # replay + snapshot derivation
@@ -354,7 +354,19 @@ task-forge/
     command-adapter.ts        # execution-loop / command bridge helpers
     supervisor.ts             # watchdog + heartbeat escalation policy
     engine.ts                 # orchestration API
-    migrate.ts                # optional v1 -> v2 snapshot/event migration
+    migrate.ts                # one-way legacy state import (migration-only)
+    commands/                 # pure V2 command services
+      status.ts
+      execute.ts
+      resume.ts
+      blocker.ts
+      pause.ts
+      abort.ts
+      cost.ts
+      models.ts
+      config.ts
+      plan.ts                 # V2 planning orchestrator
+    transition-policy.ts      # centralized state gating
 ```
 
 ### Boundary rules

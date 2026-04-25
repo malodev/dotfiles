@@ -1,8 +1,8 @@
 # TaskForge
 
-> Current working refactor plan: `REFACTOR-ROADMAP-V2.md`
+> **V2-only runtime** — V1 code deleted, event-sourced engine, 320 tests, 6/6 drift checks.
 >
-> Refactor memory/work log: `WORKLOG-V2.md`
+> Historical refactor log: `WORKLOG-V2.md` | Roadmap: `REFACTOR-ROADMAP-V2.md`
 
 TaskForge is a pi extension for **hierarchical multi-agent orchestration**.
 
