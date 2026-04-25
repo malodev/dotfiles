@@ -1,0 +1,690 @@
+{
+  "defaultProfile": "online",
+  "tierLadder": [
+    "fast",
+    "coding",
+    "reasoning",
+    "endurance"
+  ],
+  "escalation": {
+    "failureThreshold": 2,
+    "failureKeywords": [
+      "still failing",
+      "still fails",
+      "same error",
+      "didn't work",
+      "doesn't work",
+      "not fixed",
+      "failed again",
+      "failing again",
+      "still broken",
+      "regression",
+      "stuck",
+      "try again",
+      "root cause"
+    ],
+    "profileEscalationHints": {
+      "offline": "online",
+      "online": "gpt",
+      "gpt": "claude",
+      "copilot": "claude",
+      "claude": "openrouter-auto"
+    }
+  },
+  "routes": {
+    "critical": {
+      "thinking": "high",
+      "label": "🔴 critical",
+      "minPromptLength": 30,
+      "keywords": [
+        [
+          "architect",
+          3
+        ],
+        [
+          "architecture",
+          3
+        ],
+        [
+          "security",
+          3
+        ],
+        [
+          "security audit",
+          3
+        ],
+        [
+          "vulnerability",
+          3
+        ],
+        [
+          "migration",
+          3
+        ],
+        [
+          "schema migration",
+          3
+        ],
+        [
+          "database migration",
+          3
+        ],
+        [
+          "race condition",
+          3
+        ],
+        [
+          "deadlock",
+          3
+        ],
+        [
+          "memory leak",
+          3
+        ],
+        [
+          "production",
+          3
+        ],
+        [
+          "outage",
+          3
+        ],
+        [
+          "incident",
+          3
+        ],
+        [
+          "root cause",
+          3
+        ],
+        [
+          "breaking change",
+          3
+        ],
+        [
+          "legacy",
+          2
+        ],
+        [
+          "refactor",
+          2
+        ],
+        [
+          "redesign",
+          2
+        ],
+        [
+          "cross-module",
+          2
+        ],
+        [
+          "cross-stack",
+          2
+        ],
+        [
+          "multi-language",
+          2
+        ],
+        [
+          "performance regression",
+          3
+        ],
+        [
+          "multi-file",
+          1
+        ]
+      ]
+    },
+    "coding": {
+      "thinking": "medium",
+      "label": "🟡 coding",
+      "minPromptLength": 10,
+      "keywords": [
+        [
+          "implement",
+          2
+        ],
+        [
+          "add feature",
+          2
+        ],
+        [
+          "create function",
+          2
+        ],
+        [
+          "write class",
+          2
+        ],
+        [
+          "fix bug",
+          2
+        ],
+        [
+          "debug",
+          2
+        ],
+        [
+          "integrate",
+          2
+        ],
+        [
+          "explain",
+          1
+        ],
+        [
+          "python.*typescript",
+          2
+        ],
+        [
+          "rust.*go",
+          2
+        ],
+        [
+          "java.*kotlin",
+          2
+        ],
+        [
+          "polyglot",
+          2
+        ],
+        [
+          "transpile",
+          2
+        ],
+        [
+          "port.*from",
+          2
+        ],
+        [
+          "convert.*language",
+          2
+        ]
+      ]
+    },
+    "terminal": {
+      "thinking": "off",
+      "label": "🟢 terminal",
+      "minPromptLength": 10,
+      "keywords": [
+        [
+          "bash",
+          3
+        ],
+        [
+          "chmod",
+          3
+        ],
+        [
+          "chown",
+          3
+        ],
+        [
+          "grep",
+          2
+        ],
+        [
+          "sed ",
+          2
+        ],
+        [
+          "awk ",
+          2
+        ],
+        [
+          "curl ",
+          2
+        ],
+        [
+          "wget ",
+          2
+        ],
+        [
+          "docker",
+          3
+        ],
+        [
+          "kubernetes",
+          3
+        ],
+        [
+          "k8s",
+          3
+        ],
+        [
+          "helm",
+          3
+        ],
+        [
+          "ci/cd",
+          3
+        ],
+        [
+          "github action",
+          3
+        ],
+        [
+          "systemctl",
+          3
+        ],
+        [
+          "systemd",
+          3
+        ],
+        [
+          "cron",
+          2
+        ],
+        [
+          "makefile",
+          3
+        ],
+        [
+          "git rebase",
+          3
+        ],
+        [
+          "git bisect",
+          3
+        ]
+      ]
+    },
+    "docs-tests": {
+      "thinking": "low",
+      "label": "🔵 docs-tests",
+      "minPromptLength": 10,
+      "keywords": [
+        [
+          "docstring",
+          3
+        ],
+        [
+          "jsdoc",
+          3
+        ],
+        [
+          "readme",
+          2
+        ],
+        [
+          "documentation",
+          2
+        ],
+        [
+          "unit test",
+          3
+        ],
+        [
+          "test case",
+          3
+        ],
+        [
+          "integration test",
+          3
+        ],
+        [
+          "e2e",
+          3
+        ],
+        [
+          "coverage",
+          2
+        ],
+        [
+          "regression",
+          2
+        ],
+        [
+          "lint",
+          2
+        ],
+        [
+          "prettier",
+          3
+        ],
+        [
+          "eslint",
+          3
+        ],
+        [
+          "i18n",
+          3
+        ],
+        [
+          "localiz",
+          3
+        ],
+        [
+          "traduc",
+          3
+        ]
+      ]
+    },
+    "uiux": {
+      "thinking": "medium",
+      "label": "🎨 UI/UX",
+      "minPromptLength": 15,
+      "keywords": [
+        [
+          "figma",
+          3
+        ],
+        [
+          "screenshot",
+          3
+        ],
+        [
+          "image",
+          2
+        ],
+        [
+          "vision",
+          2
+        ],
+        [
+          "mockup",
+          3
+        ],
+        [
+          "wireframe",
+          3
+        ],
+        [
+          "user interface",
+          3
+        ],
+        [
+          "design system",
+          3
+        ],
+        [
+          "landing page",
+          3
+        ],
+        [
+          "tailwind",
+          2
+        ],
+        [
+          "styled-components",
+          3
+        ],
+        [
+          "sass",
+          2
+        ],
+        [
+          "css animation",
+          3
+        ],
+        [
+          "dark mode",
+          2
+        ],
+        [
+          "theme ui",
+          3
+        ],
+        [
+          "ui component",
+          3
+        ],
+        [
+          "ux flow",
+          3
+        ],
+        [
+          "ux pattern",
+          3
+        ],
+        [
+          "visual regression",
+          3
+        ],
+        [
+          "color palette",
+          2
+        ],
+        [
+          "typography",
+          2
+        ]
+      ]
+    },
+    "explore": {
+      "thinking": "medium",
+      "label": "🔵 explore",
+      "manualOnly": true
+    },
+    "long-horizon": {
+      "thinking": "high",
+      "label": "🔵 long-horizon",
+      "manualOnly": true
+    }
+  },
+  "tierRules": [
+    {
+      "routes": [
+        "terminal"
+      ],
+      "keywords": [
+        "docker",
+        "kubernetes",
+        "k8s",
+        "helm",
+        "ci/cd",
+        "github action",
+        "git rebase",
+        "git bisect",
+        "systemd",
+        "systemctl"
+      ],
+      "tier": "coding"
+    },
+    {
+      "routes": [
+        "docs-tests"
+      ],
+      "keywords": [
+        "unit test",
+        "test case",
+        "coverage",
+        "regression",
+        "integration test",
+        "e2e"
+      ],
+      "tier": "coding"
+    },
+    {
+      "routes": [
+        "docs-tests"
+      ],
+      "keywords": [
+        "readme",
+        "documentation",
+        "docstring",
+        "jsdoc",
+        "lint",
+        "prettier",
+        "eslint",
+        "i18n",
+        "localiz",
+        "traduc"
+      ],
+      "tier": "fast"
+    },
+    {
+      "routes": [
+        "uiux"
+      ],
+      "keywords": [
+        "figma",
+        "screenshot",
+        "image",
+        "vision",
+        "mockup",
+        "wireframe",
+        "ux flow",
+        "visual regression"
+      ],
+      "tier": "reasoning"
+    }
+  ],
+  "profiles": {
+    "online": {
+      "modelTiers": {
+        "fast": [
+          "opencode-go/minimax-m2.7",
+          "openai-codex/gpt-5.4-mini"
+        ],
+        "coding": [
+          "opencode-go/kimi-k2.6",
+          "openai-codex/gpt-5.3-codex"
+        ],
+        "reasoning": [
+          "opencode-go/glm-5.1",
+          "openai-codex/gpt-5.5"
+        ],
+        "endurance": [
+          "opencode-go/mimo-v2-pro",
+          "openai-codex/gpt-5.5"
+        ]
+      },
+      "routeAssignment": {
+        "critical": "reasoning",
+        "coding": "coding",
+        "terminal": "fast",
+        "docs-tests": "coding",
+        "uiux": "coding",
+        "explore": "coding",
+        "long-horizon": "endurance"
+      }
+    },
+    "offline": {
+      "modelTiers": {
+        "fast": [
+          "ollama/gpt-oss:20b",
+          "ollama/lfm2.5-thinking:1.2b"
+        ],
+        "coding": [
+          "ollama/qwen3.6:35b-a3b-coding-nvfp4",
+          "ollama/qwen3-coder-next-m3:latest"
+        ],
+        "reasoning": [
+          "ollama/deepseek-r2:32b",
+          "ollama/qwen3.6:27b"
+        ],
+        "endurance": [
+          "ollama/qwen3-coder-next-m3:latest",
+          "ollama/gemma4:31b-nvfp4"
+        ]
+      },
+      "routeAssignment": {
+        "critical": "reasoning",
+        "coding": "coding",
+        "terminal": "fast",
+        "docs-tests": "coding",
+        "uiux": "coding",
+        "explore": "coding",
+        "long-horizon": "endurance"
+      }
+    },
+    "copilot": {
+      "modelTiers": {
+        "fast": [
+          "github-copilot/gpt-5.4-mini",
+          "github-copilot/grok-code-fast-1"
+        ],
+        "coding": [
+          "github-copilot/gpt-5.3-codex",
+          "github-copilot/gpt-5.1-codex-mini"
+        ],
+        "reasoning": [
+          "github-copilot/claude-sonnet-4.6",
+          "github-copilot/gpt-5.4"
+        ],
+        "endurance": [
+          "github-copilot/claude-opus-4.6",
+          "github-copilot/gpt-5.1-codex-max"
+        ]
+      },
+      "routeAssignment": {
+        "critical": "reasoning",
+        "coding": "coding",
+        "terminal": "fast",
+        "docs-tests": "coding",
+        "uiux": "coding",
+        "explore": "coding",
+        "long-horizon": "endurance"
+      }
+    },
+    "gpt": {
+      "modelTiers": {
+        "fast": [
+          "openai-codex/gpt-5.4-mini",
+          "opencode-go/minimax-m2.7"
+        ],
+        "coding": [
+          "openai-codex/gpt-5.3-codex",
+          "opencode-go/kimi-k2.6"
+        ],
+        "reasoning": [
+          "openai-codex/gpt-5.4",
+          "opencode-go/glm-5.1"
+        ],
+        "endurance": [
+          "openai-codex/gpt-5.5",
+          "opencode-go/mimo-v2-pro"
+        ]
+      },
+      "routeAssignment": {
+        "critical": "reasoning",
+        "coding": "coding",
+        "terminal": "fast",
+        "docs-tests": "coding",
+        "uiux": "coding",
+        "explore": "coding",
+        "long-horizon": "endurance"
+      }
+    },
+    "claude": {
+      "modelTiers": {
+        "fast": [
+          "anthropic/claude-haiku-4.5",
+          "opencode-go/minimax-m2.7"
+        ],
+        "coding": [
+          "anthropic/claude-sonnet-4.6",
+          "opencode-go/kimi-k2.6"
+        ],
+        "reasoning": [
+          "anthropic/claude-opus-4-7",
+          "openai-codex/gpt-5.5"
+        ],
+        "endurance": [
+          "anthropic/claude-opus-4-7",
+          "openai-codex/gpt-5.5"
+        ]
+      },
+      "routeAssignment": {
+        "critical": "reasoning",
+        "coding": "coding",
+        "terminal": "fast",
+        "docs-tests": "coding",
+        "uiux": "coding",
+        "explore": "coding",
+        "long-horizon": "endurance"
+      }
+    },
+    "openrouter-auto": {
+      "modelTiers": {
+        "auto": [
+          "openrouter/auto"
+        ]
+      },
+      "routeAssignment": {
+        "*": "auto"
+      }
+    }
+  }
+}
