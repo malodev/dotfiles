@@ -1,4 +1,0 @@
-{
-  "passed": true,
-  "notes": "Validated. Required V2 command modules are present under v2/commands and export callable functions; signatures accept snapshot/config/input as appropriate and return structured CommandResult shapes. Acceptance signal tests passed (10/10, exit 0), and module imports indicate command services are UI-agnostic and not coupled to pi runtime."
-}

@@ -1,4 +1,0 @@
-{
-  "passed": true,
-  "notes": "Validation passed. The acceptance signal test command exits 0 with all 4 tests passing, including replay parity. In code, `/forge status` now uses `statusSummaryFromV2(snapshot)` (no V1 state parameter), the legacy `statusSummary` path is absent, and `v1BlockerSortOrder` is no longer referenced in active status runtime logic."
-}

@@ -1,4 +1,0 @@
-{
-  "passed": true,
-  "notes": "Validated. Acceptance signal passes (6/6 in tests/v2/transition-policy-additions.test.ts). Spot-check confirms centralized gating in v2/transition-policy.ts is consumed by command services (execute/resume/pause/abort/blocker), and canResume now explicitly blocks needs_human_intervention/pendingHumanIntervention with run_needs_human_intervention. Regression states called out for this task are explicitly covered by tests (resume denial in intervention states, execute allowance after patched actionable task, and blocker_already_resolved case)."
-}

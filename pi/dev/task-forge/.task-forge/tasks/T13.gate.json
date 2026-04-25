@@ -1,4 +1,0 @@
-{
-  "passed": true,
-  "notes": "Verified all acceptance criteria: README.md and ARCHITECTURE-V2.md clearly declare V2 as the only active runtime; historical V1 docs (PLAN.md, PLAN-1.md, ARCHITECTURE-REVIEW.md, TASKFORGE-ENHANCEMENT-PLAN.md, TASKFORGE-IMPLEMENTATION-PRD.md) are moved to docs/history/ and clearly marked historical via docs/history/README.md; EVENTS.md exists with 36 events matching v2/events.ts and ARCHITECTURE-V2.md event log; docs/operations/runbook.md is V2-only; scripts/drift-check.sh exists and is wired via package.json; config example keys in README.md match task-forge.json; no active Deno references found in runtime code or docs. Script logic is sound and would correctly fail on the three controlled mismatch types (Deno injection, fake event, config key mismatch)."
-}
