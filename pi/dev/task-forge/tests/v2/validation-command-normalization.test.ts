@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { normalizeValidationCommand } from "../../v2/validation.ts";
+import { normalizeValidationCommand } from "../../src/validation.ts";
 
 describe("normalizeValidationCommand — tsc stripping", () => {
   it("strips tsc without -p flag (bare tsc)", () => {

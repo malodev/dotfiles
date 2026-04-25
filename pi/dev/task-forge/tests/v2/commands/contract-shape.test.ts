@@ -1,15 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import type { CommandResult } from "../../../v2/commands/contracts.ts";
-import { status } from "../../../v2/commands/status.ts";
-import { execute } from "../../../v2/commands/execute.ts";
-import { resume } from "../../../v2/commands/resume.ts";
-import { pause } from "../../../v2/commands/pause.ts";
-import { abort } from "../../../v2/commands/abort.ts";
-import { cost } from "../../../v2/commands/cost.ts";
-import { models } from "../../../v2/commands/models.ts";
-import { config } from "../../../v2/commands/config.ts";
-import { listBlockers, resolveBlocker, retryTask, patchValidation } from "../../../v2/commands/blocker.ts";
+import type { CommandResult } from "../../../src/commands/contracts.ts";
+import { status } from "../../../src/commands/status.ts";
+import { execute } from "../../../src/commands/execute.ts";
+import { resume } from "../../../src/commands/resume.ts";
+import { pause } from "../../../src/commands/pause.ts";
+import { abort } from "../../../src/commands/abort.ts";
+import { cost } from "../../../src/commands/cost.ts";
+import { models } from "../../../src/commands/models.ts";
+import { config } from "../../../src/commands/config.ts";
+import { listBlockers, resolveBlocker, retryTask, patchValidation } from "../../../src/commands/blocker.ts";
 
 function assertCommandResult(result: CommandResult<unknown>) {
   assert.strictEqual(typeof result.ok, "boolean", "CommandResult.ok must be a boolean");

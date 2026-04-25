@@ -1,11 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { pause } from "../../../v2/commands/pause.ts";
-import { abort } from "../../../v2/commands/abort.ts";
-import { cost } from "../../../v2/commands/cost.ts";
-import { models } from "../../../v2/commands/models.ts";
-import { config } from "../../../v2/commands/config.ts";
-import type { RunSnapshot } from "../../../v2/types.ts";
+import { pause } from "../../../src/commands/pause.ts";
+import { abort } from "../../../src/commands/abort.ts";
+import { cost } from "../../../src/commands/cost.ts";
+import { models } from "../../../src/commands/models.ts";
+import { config } from "../../../src/commands/config.ts";
+import type { RunSnapshot } from "../../../src/types.ts";
 
 function makeSnapshot(overrides: Partial<RunSnapshot> = {}): RunSnapshot {
   return {

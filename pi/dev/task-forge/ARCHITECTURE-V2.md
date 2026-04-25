@@ -360,7 +360,7 @@ task-forge/
 ### Boundary rules
 
 - `index.ts` handles pi command/UI integration plus closure-bound runtime wiring for `pi`, config/state, and agent spawning
-- reviewer/validator prompt construction, parsing, validation heuristics, task execution orchestration, command execution-loop control, and supervisor policy should live under `v2/`
+- reviewer/validator prompt construction, parsing, validation heuristics, task execution orchestration, command execution-loop control, and supervisor policy should live under `src/`
 - `engine.ts` exposes pure orchestration operations like:
   - `createRun()`
   - `loadRun()`
@@ -385,7 +385,7 @@ Migration phases:
 - **Phase 4** ✅ — Task execution and supervision use V2.
 - **Phase 5** ✅ — V1 mutable orchestration loop deleted; V1 helpers quarantined to `docs/history/` or migration-only modules.
 
-Legacy state import is one-way and explicit via `v2/migrate.ts`.
+Legacy state import is one-way and explicit via `src/migrate.ts`.
 
 ---
 
@@ -405,10 +405,10 @@ TaskForge V2 is successful when all of these are true:
 ## Core V2 modules
 
 The V2 runtime is built on:
-1. durable types (`v2/types.ts`)
-2. event definitions (`v2/events.ts`)
-3. snapshot derivation (`v2/derive.ts`)
-4. storage layer (`v2/storage.ts`)
-5. preflight normalization primitives (`v2/preflight.ts`)
+1. durable types (`src/types.ts`)
+2. event definitions (`src/events.ts`)
+3. snapshot derivation (`src/derive.ts`)
+4. storage layer (`src/storage.ts`)
+5. preflight normalization primitives (`src/preflight.ts`)
 
 See `EVENTS.md` for the canonical event reference and `docs/operations/runbook.md` for operator guidance.

@@ -6,7 +6,7 @@
 > `state.json` is a derived snapshot for UI/debugging only.
 > All runtime state must be reconstructible by replaying these events.
 >
-> Source of record: `v2/events.ts`
+> Source of record: `src/events.ts`
 
 ## Event families
 
@@ -296,7 +296,7 @@
 
 ## Snapshot derivation
 
-Events are replayed in order to produce a `RunSnapshot`. See `v2/derive.ts` for the derivation logic and `ARCHITECTURE-V2.md` for the status derivation rules.
+Events are replayed in order to produce a `RunSnapshot`. See `src/derive.ts` for the derivation logic and `ARCHITECTURE-V2.md` for the status derivation rules.
 
 ## Invariants
 

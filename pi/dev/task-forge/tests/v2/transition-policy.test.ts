@@ -9,8 +9,8 @@ import {
   canResolveBlocker,
   planRetryEvents,
   planPatchValidationEvents,
-} from "../../v2/transition-policy.ts";
-import type { RunSnapshot, TaskRuntimeState, ForgeTask } from "../../v2/types.ts";
+} from "../../src/transition-policy.ts";
+import type { RunSnapshot, TaskRuntimeState, ForgeTask } from "../../src/types.ts";
 
 function makeBaseSnapshot(overrides: Partial<RunSnapshot> = {}): RunSnapshot {
   return {

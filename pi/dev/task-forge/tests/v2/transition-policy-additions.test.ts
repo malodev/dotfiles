@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { canResume, canExecute, canResolveBlocker } from "../../v2/transition-policy.ts";
-import type { RunSnapshot, TaskRuntimeState } from "../../v2/types.ts";
+import { canResume, canExecute, canResolveBlocker } from "../../src/transition-policy.ts";
+import type { RunSnapshot, TaskRuntimeState } from "../../src/types.ts";
 
 function makeBaseSnapshot(overrides: Partial<RunSnapshot> = {}): RunSnapshot {
   return {

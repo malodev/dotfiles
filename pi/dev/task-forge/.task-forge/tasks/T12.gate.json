@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Acceptance signal passed (exit 0, 6/6 tests). The suite codifies and passes the required replay/regression scenarios, validates restart replay parity, and asserts shared execute/resume policy behavior on V2 snapshot-derived state, consistent with the task’s determinism and V2-only authority intent."
+}

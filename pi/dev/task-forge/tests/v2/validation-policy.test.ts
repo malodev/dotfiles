@@ -5,7 +5,7 @@ import assert from "node:assert";
 
 describe("validation command policy hardening", () => {
   it("rejects bare npx tsc --noEmit", async () => {
-    const mod = await import("../../v2/validation.ts");
+    const mod = await import("../../src/validation.ts");
     const guard = (mod as Record<string, unknown>).assertSafeValidationCommand as ((cmd: string) => void) | undefined;
 
     if (!guard) {
@@ -19,7 +19,7 @@ describe("validation command policy hardening", () => {
   });
 
   it("rejects Deno test commands", async () => {
-    const mod = await import("../../v2/validation.ts");
+    const mod = await import("../../src/validation.ts");
     const guard = (mod as Record<string, unknown>).assertSafeValidationCommand as ((cmd: string) => void) | undefined;
 
     if (!guard) {
@@ -32,7 +32,7 @@ describe("validation command policy hardening", () => {
   });
 
   it("allows safe Node validation commands", async () => {
-    const mod = await import("../../v2/validation.ts");
+    const mod = await import("../../src/validation.ts");
     const guard = (mod as Record<string, unknown>).assertSafeValidationCommand as ((cmd: string) => void) | undefined;
 
     if (!guard) {
@@ -49,7 +49,7 @@ describe("validation command policy hardening", () => {
   });
 
   it("rejects shell operators", async () => {
-    const mod = await import("../../v2/validation.ts");
+    const mod = await import("../../src/validation.ts");
     const guard = (mod as Record<string, unknown>).assertSafeValidationCommand as ((cmd: string) => void) | undefined;
 
     if (!guard) {
@@ -65,7 +65,7 @@ describe("validation command policy hardening", () => {
   });
 
   it("rejects bare paths", async () => {
-    const mod = await import("../../v2/validation.ts");
+    const mod = await import("../../src/validation.ts");
     const guard = (mod as Record<string, unknown>).assertSafeValidationCommand as ((cmd: string) => void) | undefined;
 
     if (!guard) {
@@ -78,7 +78,7 @@ describe("validation command policy hardening", () => {
   });
 
   it("summarizes noisy evidence while preserving full logs", async () => {
-    const mod = await import("../../v2/validation.ts");
+    const mod = await import("../../src/validation.ts");
     const summarize = (mod as Record<string, unknown>).summarizeValidationEvidence as ((output: string, maxLines?: number) => string) | undefined;
 
     if (!summarize) {
@@ -114,7 +114,7 @@ describe("validation command policy hardening", () => {
   });
 
   it("preflight rejects unsafe validation commands before execution", async () => {
-    const { preflightAcceptanceCommand } = await import("../../v2/preflight.ts");
+    const { preflightAcceptanceCommand } = await import("../../src/preflight.ts");
 
     const result = preflightAcceptanceCommand({
       id: "T-01",

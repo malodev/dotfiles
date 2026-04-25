@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { execute } from "../../../v2/commands/execute.ts";
-import type { RunSnapshot } from "../../../v2/types.ts";
+import { execute } from "../../../src/commands/execute.ts";
+import type { RunSnapshot } from "../../../src/types.ts";
 
 function makeSnapshot(overrides: Partial<RunSnapshot> = {}): RunSnapshot {
   return {

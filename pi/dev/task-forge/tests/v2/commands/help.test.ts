@@ -1,13 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import type { CommandResult } from "../../../v2/commands/contracts.ts";
+import type { CommandResult } from "../../../src/commands/contracts.ts";
 
 // This test verifies the committed v2/commands/help.ts interface.
 // The module is planned per PRD and task T8 but does not yet exist.
 
 describe("v2/commands/help", () => {
   it("exports a help function that returns a CommandResult", async () => {
-    const mod = await import("../../../v2/commands/help.ts");
+    const mod = await import("../../../src/commands/help.ts");
     assert.strictEqual(typeof mod.help, "function", "help.ts should export a help function");
 
     const result: CommandResult<{ commands: string[] }> = mod.help();

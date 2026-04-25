@@ -4,11 +4,11 @@ import assert from "node:assert";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendEvent, createLayout, deriveSnapshot } from "../../v2/storage.ts";
-import { canExecute, canResume } from "../../v2/transition-policy.ts";
-import { execute } from "../../v2/commands/execute.ts";
-import { resume } from "../../v2/commands/resume.ts";
-import type { ForgeEvent } from "../../v2/events.ts";
+import { appendEvent, createLayout, deriveSnapshot } from "../../src/storage.ts";
+import { canExecute, canResume } from "../../src/transition-policy.ts";
+import { execute } from "../../src/commands/execute.ts";
+import { resume } from "../../src/commands/resume.ts";
+import type { ForgeEvent } from "../../src/events.ts";
 
 async function createTempLayout() {
   const dir = await mkdtemp(join(tmpdir(), "tf-exec-res-"));

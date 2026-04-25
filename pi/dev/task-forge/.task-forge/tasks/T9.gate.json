@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Accepted. The added migration guard/import APIs in v2/migrate.ts and the passing migrate.test.ts suite satisfy the stated criteria: import only under explicit legacy conditions, one-way conversion to V2 events/snapshot authority, and safe/idempotent prevention of repeat imports."
+}

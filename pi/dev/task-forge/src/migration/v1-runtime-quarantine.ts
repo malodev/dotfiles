@@ -6,8 +6,8 @@
 
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { executionFacts as executionFactsV2 } from "../v2/execution.ts";
-import type { RunSnapshot as V2RunSnapshot, RunStatus as V2RunStatus } from "../v2/types.ts";
+import { executionFacts as executionFactsV2 } from "../src/execution.ts";
+import type { RunSnapshot as V2RunSnapshot, RunStatus as V2RunStatus } from "../src/types.ts";
 
 type ForgeStatus =
   | "idle"

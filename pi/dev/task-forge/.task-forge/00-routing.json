@@ -1,0 +1,12 @@
+{
+  "mode": "complex",
+  "estimatedTasks": 25,
+  "rationale": "This is a multi-phase architectural migration (Phases 0–9) that touches command handlers, state transition policy, event sourcing, storage, validation, documentation, and testing. It requires deleting an entire runtime path (V1) while preserving correctness of a live system, making it cross-cutting, high-risk, and inherently ambiguous.",
+  "signals": [
+    "13+ distinct work items across 9 phases",
+    "cross-cutting: commands, events, storage, engine, validation, docs",
+    "architecture-sensitive runtime migration with state authority changes",
+    "high ambiguity: hybrid runtime removal risks stuck states and regressions",
+    "requires human checkpoints to validate transition policy and replay correctness"
+  ]
+}

@@ -5,10 +5,10 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const migratePath = "../../v2/migrate.ts";
-const storagePath = "../../v2/storage.ts";
+const migratePath = "../../src/migrate.ts";
+const storagePath = "../../src/storage.ts";
 
-describe("v2/migrate one-way semantics", () => {
+describe("src/migrate one-way semantics", () => {
   it("migrates legacy state to V2 events once", async () => {
     const { shouldImportLegacyState, importLegacyState } = await import(migratePath);
     const { createLayout, readEvents, deriveSnapshot } = await import(storagePath);

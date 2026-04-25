@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Validated. Acceptance signal test suite passes (7/7), and code changes in v2/validation.ts plus v2/preflight.ts enforce pre-execution command safety checks, block Deno commands, and provide concise actionable rejection reasons. Evidence summarization support is present and tested, while full validation output remains stored in task artifacts."
+}

@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Acceptance signal passed (14/14). `execute` and `resume` both defer decisions to `canExecute`/`canResume` in `v2/transition-policy.ts` using V2 snapshots, emit only V2 events for allowed durable transitions (`approval_granted`, `run_resumed`), and regression/unit tests cover the hybrid state case (execute allowed with ready/no running; resume denied in same state), indicating the contradiction is removed."
+}

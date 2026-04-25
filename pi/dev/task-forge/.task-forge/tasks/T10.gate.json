@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Acceptance criteria are satisfied: `index.ts` no longer references V1 runtime authority helpers, V1 quarantine code exists only under `src/migration/`, and the required acceptance signal test (`no-v1-authority.structural.test.ts`) reports 7/7 passing with exit 0."
+}

@@ -1,4 +1,4 @@
-import type { RunSnapshot } from "../../../v2/types.ts";
+import type { RunSnapshot } from "../../types.ts";
 import { projectRootActionableBlocker } from "../../status/projection/root-actionable-blocker-selection.ts";
 
 export function renderRootActionableBlockerStatus(snapshot: RunSnapshot | null) {

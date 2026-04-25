@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { listBlockers, resolveBlocker, retryTask, patchValidation, forceUnblock } from "../../../v2/commands/blocker.ts";
-import type { RunSnapshot } from "../../../v2/types.ts";
+import { listBlockers, resolveBlocker, retryTask, patchValidation, forceUnblock } from "../../../src/commands/blocker.ts";
+import type { RunSnapshot } from "../../../src/types.ts";
 
 function makeSnapshot(overrides: Partial<RunSnapshot> = {}): RunSnapshot {
   return {

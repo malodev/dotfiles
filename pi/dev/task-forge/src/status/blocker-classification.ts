@@ -1,4 +1,4 @@
-import type { BlockerCategory } from "../../v2/types.ts";
+import type { BlockerCategory } from "../../src/types.ts";
 
 export type StatusBlockerClassification = "human_intervention" | "direct_blocker" | "dependency_blocked" | "unknown";
 

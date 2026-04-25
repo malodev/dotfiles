@@ -3,10 +3,10 @@ import assert from "node:assert";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendEvent, createLayout, deriveSnapshot, readEvents } from "../../v2/storage.ts";
-import { replayEvents } from "../../v2/derive.ts";
-import { status } from "../../v2/commands/status.ts";
-import type { ForgeEvent } from "../../v2/events.ts";
+import { appendEvent, createLayout, deriveSnapshot, readEvents } from "../../src/storage.ts";
+import { replayEvents } from "../../src/derive.ts";
+import { status } from "../../src/commands/status.ts";
+import type { ForgeEvent } from "../../src/events.ts";
 
 async function createTempLayout() {
   const dir = await mkdtemp(join(tmpdir(), "tf-status-"));

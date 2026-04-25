@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Validation passed. Acceptance signal tests for remaining command services and help pass (8/8). In index.ts, /forge pause, /forge abort, /forge cost, and /forge models now delegate to V2 command services and use V2 snapshot/event paths (authoritative snapshot + applyCommandEvents) rather than V1 command snapshot loading. /forge config and /forge help are V2-service delegated and read-only. No output manifest requirements were specified."
+}

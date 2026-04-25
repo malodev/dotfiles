@@ -1,0 +1,4 @@
+{
+  "passed": true,
+  "notes": "Validation passed. The acceptance signal test (`tests/integration/index-shell-delegation.structural.test.ts`) succeeds (6/6), confirming delegation-oriented structure in `index.ts` (V2 command service imports, no inline `canExecute`/`canResume`, V2 append+derive flow). Spot-check of `index.ts` also shows user-facing command surface remains `/forge` with existing subcommands (`execute`, `status`, `blocker`, `pause`, `resume`, `abort`, `cost`, `models`, `config`, `help`)."
+}

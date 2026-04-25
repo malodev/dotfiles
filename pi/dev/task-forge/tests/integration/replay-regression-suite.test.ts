@@ -3,12 +3,12 @@ import assert from "node:assert";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { replayEvents } from "../../v2/derive.ts";
-import { appendEvent, createLayout, deriveSnapshot, readEvents } from "../../v2/storage.ts";
-import type { ForgeEvent } from "../../v2/events.ts";
-import type { ForgeTask, RunSnapshot } from "../../v2/types.ts";
-import { canExecute, canResume } from "../../v2/transition-policy.ts";
-import { patchValidation as patchValidationCommandService } from "../../v2/commands/blocker.ts";
+import { replayEvents } from "../../src/derive.ts";
+import { appendEvent, createLayout, deriveSnapshot, readEvents } from "../../src/storage.ts";
+import type { ForgeEvent } from "../../src/events.ts";
+import type { ForgeTask, RunSnapshot } from "../../src/types.ts";
+import { canExecute, canResume } from "../../src/transition-policy.ts";
+import { patchValidation as patchValidationCommandService } from "../../src/commands/blocker.ts";
 
 async function createTempLayout() {
   const dir = await mkdtemp(join(tmpdir(), "tf-replay-"));

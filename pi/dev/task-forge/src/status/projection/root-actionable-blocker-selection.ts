@@ -1,5 +1,5 @@
-import { selectBlockerResolutionMode } from "../../../v2/blocker-resolution-mode.ts";
-import type { Blocker, BlockerCategory, BlockerResolutionMode, RunSnapshot } from "../../../v2/types.ts";
+import { selectBlockerResolutionMode } from "../../blocker-resolution-mode.ts";
+import type { Blocker, BlockerCategory, BlockerResolutionMode, RunSnapshot } from "../../types.ts";
 import { classifyStatusBlockedTask, parseDependencyBlockedReason } from "../blocker-classification.ts";
 
 export interface RootActionableBlockerProjection {

@@ -563,13 +563,13 @@ Key modules:
 
 - `ARCHITECTURE-V2.md` — design principles and invariants
 - `EVENTS.md` — canonical event reference
-- `v2/types.ts` — durable types
-- `v2/events.ts` — event constructors and type guards
-- `v2/derive.ts` — replay and snapshot derivation
-- `v2/storage.ts` — event append/load and snapshot write
-- `v2/preflight.ts` — runtime/preflight normalization
-- `v2/engine.ts` — orchestration API
-- `v2/migrate.ts` — one-way legacy state import (migration-only)
+- `src/types.ts` — durable types
+- `src/events.ts` — event constructors and type guards
+- `src/derive.ts` — replay and snapshot derivation
+- `src/storage.ts` — event append/load and snapshot write
+- `src/preflight.ts` — runtime/preflight normalization
+- `src/engine.ts` — orchestration API
+- `src/migrate.ts` — one-way legacy state import (migration-only)
 
 ## Commands
 

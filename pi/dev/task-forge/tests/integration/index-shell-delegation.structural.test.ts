@@ -15,19 +15,19 @@ describe("index.ts structural delegation", () => {
 
   it("imports V2 command services", () => {
     assert.ok(
-      source.includes('from "./v2/commands/status"') || source.includes("from './v2/commands/status'"),
+      source.includes('from "./src/commands/status"') || source.includes("from './src/commands/status'"),
       "index.ts should import status command service"
     );
     assert.ok(
-      source.includes('from "./v2/commands/execute"') || source.includes("from './v2/commands/execute'"),
+      source.includes('from "./src/commands/execute"') || source.includes("from './src/commands/execute'"),
       "index.ts should import execute command service"
     );
     assert.ok(
-      source.includes('from "./v2/commands/resume"') || source.includes("from './v2/commands/resume'"),
+      source.includes('from "./src/commands/resume"') || source.includes("from './src/commands/resume'"),
       "index.ts should import resume command service"
     );
     assert.ok(
-      source.includes('from "./v2/commands/blocker"') || source.includes("from './v2/commands/blocker'"),
+      source.includes('from "./src/commands/blocker"') || source.includes("from './src/commands/blocker'"),
       "index.ts should import blocker command service"
     );
   });
@@ -36,7 +36,7 @@ describe("index.ts structural delegation", () => {
     // After refactoring, transition logic should live in v2/transition-policy.ts only
     const handlerBody = extractHandlerBody(source, "execute");
     assert.ok(
-      !handlerBody.includes("canExecute") || handlerBody.includes("v2/commands/execute"),
+      !handlerBody.includes("canExecute") || handlerBody.includes("src/commands/execute"),
       "index.ts execute handler should not inline canExecute logic"
     );
   });
@@ -44,7 +44,7 @@ describe("index.ts structural delegation", () => {
   it("does not contain inline canResume logic", () => {
     const handlerBody = extractHandlerBody(source, "resume");
     assert.ok(
-      !handlerBody.includes("canResume") || handlerBody.includes("v2/commands/resume"),
+      !handlerBody.includes("canResume") || handlerBody.includes("src/commands/resume"),
       "index.ts resume handler should not inline canResume logic"
     );
   });

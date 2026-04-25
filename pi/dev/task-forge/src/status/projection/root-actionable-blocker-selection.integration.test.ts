@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import { projectRootActionableBlocker } from "./root-actionable-blocker-selection.ts";
-import type { ForgeTask, RunSnapshot } from "../../../v2/types.ts";
+import type { ForgeTask, RunSnapshot } from "../../types.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
