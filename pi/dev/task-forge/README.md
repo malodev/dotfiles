@@ -427,8 +427,8 @@ TaskForge writes artifacts into:
 
 ### Core files
 
-- `state.json` — current orchestration state
-- `state.log` — append-only event log
+- `events.jsonl` — **authoritative** append-only event log (V2 source of truth)
+- `state.json` — derived snapshot for UI/debugging (regenerated from events on every load)
 - `00-routing.json`
 - `01-requirements.md`
 - `02-plan.md`
@@ -456,15 +456,15 @@ These files are useful for debugging and resuming runs.
 
 ### Exiting pi during execution
 
-TaskForge now performs a resumable interruption step on shutdown.
+TaskForge performs a resumable interruption step on shutdown.
 
 If pi exits while TaskForge is actively executing or reviewing:
 - in-flight `running` tasks are converted back to `pending`
 - orchestration status is moved to `paused`
 - `nextAction` is set so `/forge execute` can resume safely
-- interruption is persisted into `state.json` and `state.log`
+- interruption is captured as V2 events in `events.jsonl`
 
-So exiting pi is no longer expected to leave TaskForge stuck in a fake `executing` state with orphaned running tasks.
+Restart replays `events.jsonl` to reconstruct state. Status after restart matches status before restart for the same event log.
 
 ---
 
@@ -481,36 +481,30 @@ Subtree search currently skips common heavy directories like:
 - `node_modules`
 - `.task-forge`
 
-Example (illustrative):
+Example:
 
 ```json
 {
   "modelTiers": {
     "reasoning": [
-      "openai-codex/gpt-5.4",
-      "openai-codex/gpt-5.1",
+      "openai-codex/gpt-5.5",
       "opencode-go/glm-5.1",
-      "anthropic/claude-opus-4-5"
+      "anthropic/claude-opus-4-7"
     ],
     "coding": [
       "openai-codex/gpt-5.3-codex",
-      "openai-codex/gpt-5.2-codex",
-      "openai-codex/gpt-5.4",
-      "opencode-go/glm-5.1",
-      "anthropic/claude-sonnet-4-5"
+      "opencode-go/kimi-k2.6",
+      "anthropic/claude-sonnet-4-6"
     ],
     "bulk": [
-      "openai-codex/gpt-5.4",
-      "openai-codex/gpt-5.1",
-      "opencode-go/glm-5",
-      "opencode-go/kimi-k2.5",
-      "anthropic/claude-sonnet-4-5"
+      "opencode-go/kimi-k2.6",
+      "openai-codex/gpt-5.3-codex",
+      "anthropic/claude-sonnet-4-6"
     ],
     "endurance": [
       "openai-codex/gpt-5.3-codex",
-      "openai-codex/gpt-5.2-codex",
       "opencode-go/glm-5.1",
-      "anthropic/claude-sonnet-4-5"
+      "anthropic/claude-sonnet-4-6"
     ]
   },
   "roleAssignment": {
@@ -536,7 +530,7 @@ Example (illustrative):
 }
 ```
 
-> Note: the authoritative runtime defaults for this workspace live in `agent/extensions/task-forge/task-forge.json` and may differ from the illustrative example above.
+> The authoritative runtime defaults for this workspace live in `agent/extensions/task-forge/task-forge.json`.
 
 ### Config fields
 
@@ -556,20 +550,26 @@ Example (illustrative):
 
 ---
 
-## V2 rewrite status
+## V2 runtime architecture
 
-A structural V2 rewrite is in progress under:
+TaskForge runs on a **V2-only event-sourced engine**.
 
-- `ARCHITECTURE-V2.md`
-- `v2/types.ts`
-- `v2/events.ts`
-- `v2/derive.ts`
-- `v2/storage.ts`
-- `v2/preflight.ts`
-- `v2/engine.ts`
-- `v2/migrate.ts`
+- `events.jsonl` is the authoritative source of truth.
+- `state.json` is derived/debug-only and regenerated on every load.
+- All command decisions use V2 snapshots derived from event replay.
+- Session memory is advisory only and never authoritative.
 
-The goal is to replace the current mutable orchestration loop with a durable event-sourced engine and derived snapshot state.
+Key modules:
+
+- `ARCHITECTURE-V2.md` — design principles and invariants
+- `EVENTS.md` — canonical event reference
+- `v2/types.ts` — durable types
+- `v2/events.ts` — event constructors and type guards
+- `v2/derive.ts` — replay and snapshot derivation
+- `v2/storage.ts` — event append/load and snapshot write
+- `v2/preflight.ts` — runtime/preflight normalization
+- `v2/engine.ts` — orchestration API
+- `v2/migrate.ts` — one-way legacy state import (migration-only)
 
 ## Commands
 
@@ -689,10 +689,10 @@ The reviewed design is:
 See:
 
 ```text
-agent/extensions/task-forge/ARCHITECTURE-REVIEW.md
+docs/history/ARCHITECTURE-REVIEW.md
 ```
 
-for the detailed review and recommended next implementation steps.
+for the historical architecture review.
 
 ## Current implementation notes
 

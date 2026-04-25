@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["node"]
+  },
+  "include": [
+    "v2/**/*.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "integration/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".task-forge"
+  ]
+}

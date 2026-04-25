@@ -51,7 +51,7 @@ Previously, status could misleadingly suggest resolving `T6` first even though `
 ## 2026-04-11
 
 ### Initial architecture and implementation pass
-- Created `PLAN.md` for the first TaskForge architecture draft
+- Created `PLAN.md` for the first TaskForge architecture draft (now in `docs/history/PLAN.md`)
 - Implemented initial multi-agent orchestration extension in `index.ts`
 - Added early role definitions:
   - strategist
@@ -59,7 +59,7 @@ Previously, status could misleadingly suggest resolving `T6` first even though `
   - coordinator
 
 ### Architecture revision to PLAN-1
-- Adopted the stronger `PLAN-1.md` architecture
+- Adopted the stronger `PLAN-1.md` architecture (now in `docs/history/PLAN-1.md`)
 - Reworked TaskForge around:
   - Strategist
   - Planner
@@ -97,7 +97,7 @@ Previously, status could misleadingly suggest resolving `T6` first even though `
 
 ### Documentation
 - Added `README.md`
-- Added `ARCHITECTURE-REVIEW.md`
+- Added `ARCHITECTURE-REVIEW.md` (now in `docs/history/ARCHITECTURE-REVIEW.md`)
 - Documented current architecture, roles, artifacts, and config behavior
 
 ### Test Designer architecture

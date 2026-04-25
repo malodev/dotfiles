@@ -16,7 +16,7 @@
 - [ ] Add stronger schema validation for generated test specs before persistence.
 
 ### 4) Documentation hygiene
-- [ ] Archive historical plans (`PLAN.md`, `PLAN-1.md`, etc.) under `docs/history/`.
+- [x] Archive historical plans (`PLAN.md`, `PLAN-1.md`, etc.) under `docs/history/`.
 - [ ] Keep top-level docs minimal: architecture, runbook, config, event contract.
 - [ ] Generate README config examples from actual config schema to avoid drift.
 

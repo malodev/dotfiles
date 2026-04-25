@@ -1,8 +1,38 @@
 # TaskForge V2-Only Migration Plan
 
-> Supersedes: `TASKFORGE-ENHANCEMENT-PLAN.md` for migration strategy.
+> Supersedes: `docs/history/TASKFORGE-ENHANCEMENT-PLAN.md` for migration strategy.
 >
 > Goal: remove the old V1 runtime path as quickly and safely as practical, making V2 the only authoritative runtime model.
+
+## Required context for implementers
+
+Before planning or implementing this migration, read these files:
+
+### Canonical architecture and operator docs
+- `ARCHITECTURE-V2.md`
+- `README.md`
+- `docs/operations/runbook.md`
+
+### Core V2 runtime files
+- `v2/events.ts`
+- `v2/derive.ts`
+- `v2/storage.ts`
+- `v2/engine.ts`
+- `v2/execution.ts`
+- `v2/validation.ts`
+- `v2/preflight.ts`
+
+### Current extension shell
+- `index.ts`
+
+### Runtime configuration
+- `task-forge.json`
+
+### Optional historical context
+- `docs/history/TASKFORGE-ENHANCEMENT-PLAN.md`
+- `TODO-now.md`
+- `TODO-later.md`
+- `milestones.md`
 
 ## Executive summary
 

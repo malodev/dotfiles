@@ -5,7 +5,7 @@ _Last updated: 2026-04-16 (session 2)_
 This is the **active working plan** for the TaskForge V2 rewrite.
 
 It complements:
-- `PLAN-1.md` — original target architecture and orchestration behavior
+- `docs/history/PLAN-1.md` — original target architecture and orchestration behavior
 - `ARCHITECTURE-V2.md` — durable/event-sourced model and design principles
 - `WORKLOG-V2.md` — durable memory of what has been done, decisions made, and problems resolved
 - `CONTINUE-V2-PROMPT.md` — clean-session handoff prompt for a new agent

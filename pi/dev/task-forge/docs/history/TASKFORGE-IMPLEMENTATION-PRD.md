@@ -1,6 +1,6 @@
 # TaskForge Implementation PRD (from milestones)
 
-> Superseded by: `TASKFORGE-ENHANCEMENT-PLAN.md`
+> Superseded by: `docs/history/TASKFORGE-ENHANCEMENT-PLAN.md`
 >
 > This file is kept as historical context for the earlier milestone wrapper PRD. Use the enhancement plan for future TaskForge improvement work.
 
@@ -65,7 +65,7 @@ Validation commands are part of the task contract. A command that only works fro
 TaskForge currently runs in a Node/pi environment. Test commands should use:
 
 ```bash
-npx tsc --noEmit <explicit-files-or--project>
+npx tsc -p tsconfig.json --noEmit
 node --test --experimental-strip-types <targeted-test-files>
 ```
 
@@ -139,7 +139,7 @@ Deno should not be used as the JavaScript/TypeScript test engine in TaskForge ru
 
 - Node-first validation/testing only:
   - `node --test --experimental-strip-types`
-  - `npx tsc --noEmit <explicit-files>` or `npx tsc -p <tsconfig> --noEmit`
+  - `npx tsc -p <tsconfig> --noEmit` (never bare `tsc --noEmit` without `-p`, even with explicit file args)
 - Do not reintroduce Deno test/check commands in TaskForge runtime/docs/tests.
 - Keep v2 event-sourced engine authoritative.
 - `state.json` is a derived snapshot/debug artifact, not the source of truth.

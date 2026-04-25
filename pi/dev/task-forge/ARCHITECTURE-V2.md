@@ -4,7 +4,9 @@
 > Historical refactor memory: `WORKLOG-V2.md`
 > Clean-session handoff prompt: `CONTINUE-V2-PROMPT.md`
 
-TaskForge V2 replaces the current mutable in-memory orchestration loop with a **file-first, event-sourced execution engine**.
+TaskForge runs on a **V2-only, file-first, event-sourced execution engine**.
+
+V1 mutable orchestration paths have been removed from the runtime. `events.jsonl` is the only authoritative source of truth. `state.json` is derived/debug-only.
 
 ## Continuity contract
 
@@ -371,28 +373,19 @@ task-forge/
 
 ---
 
-## Migration plan
+## Migration status
 
-### Phase 1
-Create V2 engine beside V1.
-- no command switch yet
-- build event model and derivation logic
-- add migration helpers from current `state.json`
+V2 is the **only active runtime**. V1 mutable orchestration loops and V1 command authority have been removed from runtime paths.
 
-### Phase 2
-Move `/forge status` to V2-derived snapshot.
-- read from `events.jsonl`/derived snapshot
-- no more stale session-first restore
+Migration phases:
 
-### Phase 3
-Move `/forge blocker` and `/forge execute` to V2 engine.
-- V1 planning artifacts can still be reused temporarily
+- **Phase 1** ✅ — V2 engine, event model, and derivation logic created.
+- **Phase 2** ✅ — `/forge status` derives from V2 snapshot only.
+- **Phase 3** ✅ — `/forge blocker` and `/forge execute` use V2 engine.
+- **Phase 4** ✅ — Task execution and supervision use V2.
+- **Phase 5** ✅ — V1 mutable orchestration loop deleted; V1 helpers quarantined to `docs/history/` or migration-only modules.
 
-### Phase 4
-Move task execution and supervision to V2.
-
-### Phase 5
-Delete V1 mutable orchestration loop.
+Legacy state import is one-way and explicit via `v2/migrate.ts`.
 
 ---
 
@@ -409,13 +402,13 @@ TaskForge V2 is successful when all of these are true:
 
 ---
 
-## Immediate implementation focus
+## Core V2 modules
 
-The first V2 code to land should be:
-1. durable types
-2. event definitions
-3. snapshot derivation
-4. storage layer
-5. preflight normalization primitives
+The V2 runtime is built on:
+1. durable types (`v2/types.ts`)
+2. event definitions (`v2/events.ts`)
+3. snapshot derivation (`v2/derive.ts`)
+4. storage layer (`v2/storage.ts`)
+5. preflight normalization primitives (`v2/preflight.ts`)
 
-That is enough to begin migrating command handlers and status rendering away from the brittle V1 loop.
+See `EVENTS.md` for the canonical event reference and `docs/operations/runbook.md` for operator guidance.

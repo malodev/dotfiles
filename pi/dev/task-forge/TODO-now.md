@@ -8,8 +8,10 @@
 - [ ] Add explicit event sequence for patch->resolve->requeue (`human_intervention_resolved`, `task_requeued`).
 
 ### 2) Validation command safety
-- [ ] Hard-fail on bare `npx tsc --noEmit` (no `-p`, no file args) during preflight.
-- [ ] Normalize command-mode validation at artifact write-time (planner/test-designer outputs).
+- [x] Hard-fail on bare `npx tsc --noEmit` (no `-p`, no file args) during preflight.  
+  *Done: `normalizeBareTypecheckThenNodeTestCommand` strips tsc from all `tsc && node --test` patterns lacking `-p`.*
+- [x] Normalize command-mode validation at artifact write-time (planner/test-designer outputs).  
+  *Done: agent prompts updated to generate `node --test` directly.*
 - [ ] Add optional command allowlist policy mode in config.
 
 ### 3) User-facing signal quality
