@@ -123,7 +123,7 @@ npm run drift-check
 
 This checks:
 - No active Deno references in runtime/docs/tests.
-- Event lists in `EVENTS.md` and `ARCHITECTURE-V2.md` match `v2/events.ts`.
+- Event lists in `EVENTS.md` and `ARCHITECTURE-V2.md` match `src/events.ts`.
 - Config example in `README.md` matches `task-forge.json`.
 
 ## See also
