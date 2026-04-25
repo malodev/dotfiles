@@ -1,7 +1,7 @@
 /**
  * TaskForge — hierarchical multi-agent orchestration for PRD-driven execution.
  *
- * Adopted from PLAN-1.md:
+ * Adopted from docs/history/PLAN-1.md:
  * - Strategist → Planner → Approval Gate → Execution → Integration Review
  * - Capability-tier model resolution with fallbacks
  * - Single-pass + iterative worker modes
@@ -12,6 +12,7 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
+import { Box, Text } from "@mariozechner/pi-tui";
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -20,6 +21,7 @@ import { migrateV1StateToEvents, migrateV1StateToSnapshot } from "./v2/migrate";
 import { TaskForgeV2Engine } from "./v2/engine";
 import { createTaskForgeBeginTaskExecutionHooks, createTaskForgeCompleteTaskExecutionHooks, createTaskForgeIntegrationReviewHooks, createTaskForgeRunnerAdvanceHooks, createTaskForgeTaskFailureHooks } from "./v2/adapters";
 import { executeApprovedPlanLoop, launchExecutionBatch } from "./v2/command-adapter";
+import { runPlanningFlow, continueComplexPlanning, classifyScope, analyzeRequirements, planDecomposition, designTests, runMicroPlan, type PlanningHooks } from "./v2/commands/plan.ts";
 import { runIntegrationReview } from "./v2/review";
 import { runTaskDiagnosticReview, needsDiagnosticReview } from "./v2/diagnostic-review";
 import { applyBlockerResolutionPatch, deriveBlockerResolutionPatch } from "./v2/blocker-resolution";
@@ -33,7 +35,21 @@ import { describeInterruptedPlanning, determineResumptionPhase } from "./v2/plan
 import { TaskForgeV2Runner } from "./v2/runner";
 import type { RunSnapshot as V2RunSnapshot, RunStatus as V2RunStatus } from "./v2/types";
 import { renderRootActionableBlockerStatus } from "./src/commands/status/render-root-blocker.ts";
-import { v1BlockerSortOrder } from "./v1-status-helpers.ts";
+
+
+// V2 command services — thin shell delegates to these for transition logic and event planning.
+import { execute as executeCommandService } from "./v2/commands/execute";
+import { status as statusCommandService } from "./v2/commands/status";
+import { resume as resumeCommandService } from "./v2/commands/resume";
+import { listBlockers as listBlockersCommandService, resolveBlocker as resolveBlockerCommandService, retryTask as retryTaskCommandService, patchValidation as patchValidationCommandService } from "./v2/commands/blocker";
+import { pause as pauseCommandService } from "./v2/commands/pause";
+import { abort as abortCommandService } from "./v2/commands/abort";
+import { cost as costCommandService } from "./v2/commands/cost";
+import { models as modelsCommandService } from "./v2/commands/models";
+import { config as configCommandService } from "./v2/commands/config";
+import { help as helpCommandService } from "./v2/commands/help";
+import type { ForgeEvent } from "./v2/events";
+import type { CommandResult } from "./v2/commands/contracts";
 
 type ModelTier = "reasoning" | "coding" | "bulk" | "endurance";
 type Role =
@@ -156,41 +172,7 @@ interface TestSpecEntry {
   ambiguities?: string[];
 }
 
-interface ForgeState {
-  orchestrationId: string;
-  status: ForgeStatus;
-  currentPhase: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  phaseLabel: string;
-  orchestrationMode?: "micro" | "standard" | "complex";
-  nextAction?: "continuePlanning" | "executePlan";
-  routingRationale?: string;
-  prdFile?: string;
-  resolvedModels: Partial<Record<Role, string>>;
-  requirementsFile?: string;
-  planFile?: string;
-  tasksFile?: string;
-  tasksMarkdownFile?: string;
-  costFile?: string;
-  testSpecFile?: string;
-  testSpecMarkdownFile?: string;
-  reviewFile?: string;
-  cost: CostEstimate;
-  blockers: Blocker[];
-  tasks: ForgeTask[];
-  testSpecs?: TestSpecEntry[];
-  activeAgent?: {
-    role: Role;
-    model: string;
-    startedAt: string;
-    attempt?: number;
-    totalCandidates?: number;
-  };
-  timestamps: {
-    started: string;
-    lastUpdated: string;
-    completed?: string;
-  };
-}
+// ForgeState deleted — state is now dynamically typed, synced from V2 snapshot via loadAndSyncState()
 
 interface TaskForgeConfig {
   modelTiers: Record<ModelTier, string[]>;
@@ -350,43 +332,7 @@ function statusIcon(status: ForgeStatus | V2RunStatus | "needs_human_interventio
   }
 }
 
-function statusLabel(state: ForgeState | null) {
-  if (!state) return "forge:idle";
-
-  const total = state.tasks.length;
-  const done = state.tasks.filter((t) => t.status === "completed").length;
-  const running = state.tasks.filter((t) => t.status === "running").length;
-  const blocked = state.tasks.filter((t) => t.status === "blocked").length;
-  const failed = state.tasks.filter((t) => t.status === "failed").length;
-
-  const parts: string[] = [];
-  if (total > 0) parts.push(`${done}/${total}`);
-  if (running > 0) parts.push(`r${running}`);
-  if (blocked > 0) parts.push(`b${blocked}`);
-  if (failed > 0) parts.push(`f${failed}`);
-
-  if (state.status === "executing") {
-    const iterativeRunning = state.tasks.filter(
-      (t) => t.status === "running" && t.taskMode === "iterative" && t.tddPhase && t.tddPhase !== "complete",
-    );
-    const red = iterativeRunning.filter((t) => t.tddPhase === "red").length;
-    const green = iterativeRunning.filter((t) => t.tddPhase === "green").length;
-    const refactor = iterativeRunning.filter((t) => t.tddPhase === "refactor").length;
-    if (red > 0) parts.push(`red${red}`);
-    if (green > 0) parts.push(`green${green}`);
-    if (refactor > 0) parts.push(`ref${refactor}`);
-  }
-
-  if (state.status === "awaiting_approval") {
-    if (state.nextAction === "continuePlanning") parts.push("next:plan");
-    if (state.nextAction === "executePlan") parts.push("next:exec");
-  }
-
-  const suffix = parts.length > 0 ? ` [${parts.join("|")}]` : "";
-  return `forge:${statusIcon(state.status)}${state.status}${suffix}`;
-}
-
-function statusLabelFromV2(snapshot: V2RunSnapshot | null) {
+function renderStatusFromSnapshot(snapshot: V2RunSnapshot | null) {
   if (!snapshot) return "forge:idle";
 
   const taskState = Object.values(snapshot.taskState);
@@ -473,7 +419,7 @@ function planningPhaseChecklist(snapshot: V2RunSnapshot) {
   };
 }
 
-function statusSummaryFromV2(snapshot: V2RunSnapshot | null, localState?: ForgeState | null) {
+function statusSummaryFromV2(snapshot: V2RunSnapshot | null) {
   if (!snapshot) return "[task-forge] No active orchestration";
 
   const taskState = Object.values(snapshot.taskState);
@@ -489,8 +435,6 @@ function statusSummaryFromV2(snapshot: V2RunSnapshot | null, localState?: ForgeS
   const planningProgress = ["planning", "awaiting_approval"].includes(snapshot.status)
     ? planningPhaseChecklist(snapshot)
     : null;
-
-  const activeAgent = localState?.orchestrationId === snapshot.orchestrationId ? localState.activeAgent : undefined;
 
   // Build interruption section when planning was interrupted (FR-19, FR-20, FR-21)
   const interruptionSection: string[] = [];
@@ -513,8 +457,6 @@ function statusSummaryFromV2(snapshot: V2RunSnapshot | null, localState?: ForgeS
     planningProgress?.summary ?? "",
     planningProgress ? ["planning phases:", ...planningProgress.checklist].join("\n") : "",
     ...interruptionSection,
-    activeAgent ? `active agent: ${activeAgent.role} (${activeAgent.model})${activeAgent.totalCandidates && activeAgent.attempt ? ` [candidate ${activeAgent.attempt}/${activeAgent.totalCandidates}]` : ""}` : "",
-    activeAgent ? `active since: ${activeAgent.startedAt}` : "",
     snapshot.nextAction ? `next action: ${snapshot.nextAction}` : "",
     `prd: ${snapshot.prdFile ?? "n/a"}`,
     `tasks: ${counts.completed}/${snapshot.tasks.length || taskState.length} completed, ${counts.running} running, ${counts.ready} ready, ${counts.pending} pending, ${counts.failed} failed, ${counts.blocked} blocked`,
@@ -564,94 +506,6 @@ async function loadAuthoritativeSnapshot(cwd: string, outputDir: string): Promis
   } catch {
     return null;
   }
-}
-
-function mapV2StatusToV1(status: V2RunStatus): ForgeStatus {
-  return status === "needs_human_intervention"
-    ? "paused"
-    : status === "idle"
-      ? "idle"
-      : status === "planning"
-        ? "planning"
-        : status === "awaiting_approval"
-          ? "awaiting_approval"
-          : status === "paused"
-            ? "paused"
-            : status === "executing"
-              ? "executing"
-              : status === "reviewing"
-                ? "reviewing"
-                : status === "completed"
-                  ? "completed"
-                  : status === "aborted"
-                    ? "aborted"
-                    : "failed";
-}
-
-function createV1StateFromV2(snapshot: V2RunSnapshot): ForgeState {
-  const blockers = snapshot.blockers.filter((b) => !b.resolvedAt);
-  const tasks = snapshot.tasks.map((task) => {
-    const runtime = snapshot.taskState[task.id];
-    return {
-      ...task,
-      status: (runtime?.status ?? "pending") as TaskStatus,
-      retries: runtime?.retries ?? 0,
-      resolvedModel: runtime?.resolvedModel,
-      result: runtime?.result,
-      gateReview: runtime?.gateReview,
-      blocker: runtime?.blocker,
-      error: runtime?.error,
-      validationOutput: runtime?.validationOutput,
-      validationFramework: runtime?.validationFramework,
-      lastCoverage: runtime?.lastCoverage,
-      startedAt: runtime?.startedAt,
-      completedAt: runtime?.completedAt,
-      resolutionInstruction: runtime?.resolutionInstruction,
-      diagnostic: runtime?.diagnostic,
-      diagnosticCount: runtime?.diagnosticCount,
-      failureSignature: runtime?.failureSignature,
-      stallWarnedAt: runtime?.stallWarnedAt,
-      tddPhase: runtime?.tddPhase,
-      redEstablishedAt: runtime?.redEstablishedAt,
-      greenAchievedAt: runtime?.greenAchievedAt,
-      refactorValidatedAt: runtime?.refactorValidatedAt,
-      iterationCount: runtime?.iterationCount,
-    } as ForgeTask;
-  });
-
-  if (snapshot.pendingHumanIntervention && !blockers.some((b) => b.taskId === snapshot.pendingHumanIntervention?.taskId)) {
-    blockers.push({
-      taskId: snapshot.pendingHumanIntervention.taskId,
-      reason: snapshot.pendingHumanIntervention.reason,
-      suggestion: snapshot.pendingHumanIntervention.suggestion,
-      blockedTasks: [snapshot.pendingHumanIntervention.taskId],
-    });
-  }
-
-  return {
-    orchestrationId: snapshot.orchestrationId,
-    status: mapV2StatusToV1(snapshot.status),
-    currentPhase: snapshot.currentPhase as ForgeState["currentPhase"],
-    phaseLabel: snapshot.phaseLabel,
-    orchestrationMode: snapshot.orchestrationMode,
-    nextAction: snapshot.nextAction as ForgeState["nextAction"] | undefined,
-    routingRationale: snapshot.routingRationale,
-    prdFile: snapshot.prdFile,
-    resolvedModels: snapshot.resolvedModels,
-    requirementsFile: snapshot.requirementsFile,
-    planFile: snapshot.planFile,
-    tasksFile: snapshot.tasksFile,
-    tasksMarkdownFile: snapshot.tasksMarkdownFile,
-    costFile: snapshot.costFile,
-    testSpecFile: snapshot.testSpecFile,
-    testSpecMarkdownFile: snapshot.testSpecMarkdownFile,
-    reviewFile: snapshot.reviewFile,
-    cost: snapshot.cost,
-    blockers,
-    tasks,
-    testSpecs: snapshot.testSpecs,
-    timestamps: snapshot.timestamps,
-  };
 }
 
 function modelRefParts(ref: string) {
@@ -790,20 +644,117 @@ async function atomicWrite(path: string, content: string) {
 }
 
 export default function (pi: ExtensionAPI) {
+  // ── Message renderers ──────────────────────────────────────────────────
+
+  pi.registerMessageRenderer("task-forge-human-help", (message, _options, theme) => {
+    const level = (message.details as any)?.level ?? "warning";
+    const color = level === "error" ? "error" : level === "warning" ? "warning" : "accent";
+    const icon = level === "error" ? "⛔" : level === "warning" ? "⚠️" : "ℹ️";
+    const lines = String(message.content).split("\n");
+    const rendered = [
+      theme.fg(color, `${icon} ${lines[0]?.replace(/^\[task-forge\]\s*/, "") ?? "Human intervention required"}`),
+      ...lines.slice(1).map((line: string) => {
+        if (line.startsWith("  Acceptance:")) return theme.fg("accent", line);
+        return theme.fg("normal", `  ${line}`);
+      }),
+    ].join("\n");
+    return new Text(rendered, 0, 0);
+  });
+
+  pi.registerMessageRenderer("task-forge-approval-ready", (message, _options, theme) => {
+    const lines = String(message.content).split("\n");
+    const rendered = [
+      theme.fg("success", `✅ ${lines[0]?.replace(/^\[task-forge\]\s*/, "") ?? "Approval ready"}`),
+      ...lines.slice(1).map((line: string) => theme.fg("normal", `  ${line}`)),
+    ].join("\n");
+    return new Text(rendered, 0, 0);
+  });
+
+  pi.registerMessageRenderer("task-forge-status", (message, _options, theme) => {
+    const lines = String(message.content).split("\n");
+    const rendered = lines.map((line: string) => {
+      if (line.startsWith("[task-forge]")) return theme.fg("accent", line);
+      if (line.startsWith("  ")) return theme.fg("normal", line);
+      return line;
+    }).join("\n");
+    return new Text(rendered, 0, 0);
+  });
+
+  pi.registerMessageRenderer("task-forge-help", (message, _options, theme) => {
+    const lines = String(message.content).split("\n");
+    const rendered = lines.map((line: string) => {
+      if (line.startsWith("  /")) return theme.fg("accent", line);
+      return theme.fg("normal", line);
+    }).join("\n");
+    return new Text(rendered, 0, 0);
+  });
+
+  pi.registerMessageRenderer("task-forge-cost", (message, _options, theme) => {
+    return new Text(theme.fg("normal", String(message.content)), 0, 0);
+  });
+
+  pi.registerMessageRenderer("task-forge-models", (message, _options, theme) => {
+    const lines = String(message.content).split("\n");
+    const rendered = lines.map((line: string) => {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx > 0) {
+        return theme.fg("accent", line.slice(0, colonIdx + 1)) + theme.fg("normal", line.slice(colonIdx + 1));
+      }
+      return theme.fg("normal", line);
+    }).join("\n");
+    return new Text(rendered, 0, 0);
+  });
+
+  pi.registerMessageRenderer("task-forge-config", (message, _options, theme) => {
+    return new Text(theme.fg("normal", String(message.content)), 0, 0);
+  });
+
+  // ── State & config ────────────────────────────────────────────────────
   let config: TaskForgeConfig = { ...DEFAULT_CONFIG };
-  let state: ForgeState | null = null;
+  // State is synced from V2 snapshot via loadAndSyncState().
+  // All reads go through V2; writes should emit V2 events.
+  let state: any = null;
   let runAbortController: AbortController | null = null;
+  let activeAgent: { role: string; model: string; startedAt: string; attempt?: number; totalCandidates?: number } | undefined;
+  let resolvedModels: Record<string, string> = {};
+
+  // ── V2 Sync ─────────────────────────────────────────────────────
+  async function loadAndSyncState(ctx: any) {
+    const snapshot = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    if (!snapshot) { state = null; return; }
+    state = {
+      orchestrationId: snapshot.orchestrationId,
+      status: snapshot.status === "needs_human_intervention" ? "paused" : snapshot.status as any,
+      currentPhase: snapshot.currentPhase,
+      phaseLabel: snapshot.phaseLabel,
+      orchestrationMode: snapshot.orchestrationMode,
+      nextAction: snapshot.nextAction as any,
+      prdFile: snapshot.prdFile,
+      resolvedModels: resolvedModels ?? snapshot.resolvedModels ?? {},
+      activeAgent,
+      requirementsFile: snapshot.requirementsFile,
+      planFile: snapshot.planFile,
+      tasksFile: snapshot.tasksFile,
+      tasksMarkdownFile: snapshot.tasksMarkdownFile,
+      costFile: snapshot.costFile,
+      testSpecFile: snapshot.testSpecFile,
+      testSpecMarkdownFile: snapshot.testSpecMarkdownFile,
+      reviewFile: snapshot.reviewFile,
+      routingRationale: snapshot.routingRationale,
+      cost: snapshot.cost,
+      tasks: snapshot.tasks.map(t => ({
+        ...t,
+        status: snapshot.taskState[t.id]?.status ?? (t as any).status ?? "pending",
+      } as any)),
+      testSpecs: snapshot.testSpecs ?? [],
+      blockers: snapshot.blockers.filter(b => !(b as any).resolvedAt),
+      timestamps: snapshot.timestamps || { started: "", lastUpdated: "" },
+    };
+  }
+
   let executionPromise: Promise<void> | null = null;
   let planningPromise: Promise<void> | null = null;
   const agentCache = new Map<Role, AgentDefinition>();
-
-  function applyAuthoritativeSnapshotToV1(snapshot: V2RunSnapshot) {
-    const previousActiveAgent = state?.orchestrationId === snapshot.orchestrationId ? state.activeAgent : undefined;
-    state = createV1StateFromV2(snapshot);
-    if (previousActiveAgent && state?.orchestrationId === snapshot.orchestrationId) {
-      state.activeAgent = previousActiveAgent;
-    }
-  }
 
   async function withV2Engine<T>(ctx: any, fn: (engine: TaskForgeV2Engine) => Promise<T>) {
     try {
@@ -818,10 +769,9 @@ export default function (pi: ExtensionAPI) {
   async function reconcileFromAuthoritative(ctx: any) {
     const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
     if (authoritative) {
-      applyAuthoritativeSnapshotToV1(authoritative);
-      ctx.ui.setStatus("task-forge", statusLabelFromV2(authoritative));
+      ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(authoritative));
     } else {
-      ctx.ui.setStatus("task-forge", statusLabel(state));
+      ctx.ui.setStatus("task-forge", "forge:idle");
     }
     return authoritative;
   }
@@ -833,41 +783,25 @@ export default function (pi: ExtensionAPI) {
     return await sweepOverdueSupervisors(ctx, authoritative);
   }
 
-  function effectiveCommandStatus(authoritative: V2RunSnapshot | null) {
-    return authoritative?.status ?? state?.status ?? "idle";
+  /** Append command-result events and re-derive the snapshot (delegate→append→derive). */
+  async function applyCommandEvents(ctx: any, result: CommandResult<any>): Promise<V2RunSnapshot | null> {
+    if (!result.events.length) return result.snapshot ?? null;
+    const layout = createLayout(ctx.cwd, config.outputDir);
+    for (const event of result.events) {
+      await appendV2Event(layout, event);
+    }
+    return await deriveV2Snapshot(layout);
   }
 
   function isTerminalCommandStatus(status: V2RunStatus | ForgeStatus | "needs_human_intervention") {
     return ["idle", "completed", "aborted", "failed"].includes(status);
   }
 
-  function taskListFromAuthoritative(snapshot: V2RunSnapshot | null) {
-    if (!snapshot) return state?.tasks ?? [];
-    if (state?.orchestrationId === snapshot.orchestrationId) return state.tasks;
-    return createV1StateFromV2(snapshot).tasks;
-  }
-
-  function executionFactsFromAuthoritative(snapshot: V2RunSnapshot | null) {
-    const tasks = taskListFromAuthoritative(snapshot);
-    const taskMap = new Map(tasks.map((task) => [task.id, task]));
-    const facts = executionFactsV2(snapshot);
-    return {
-      tasks,
-      ready: facts.readyTaskIds.map((taskId) => taskMap.get(taskId)).filter(Boolean) as ForgeTask[],
-      running: facts.runningTaskIds.map((taskId) => taskMap.get(taskId)).filter(Boolean) as ForgeTask[],
-      pending: facts.pendingTaskIds.map((taskId) => taskMap.get(taskId)).filter(Boolean) as ForgeTask[],
-      blocked: facts.blockedTaskIds.map((taskId) => taskMap.get(taskId)).filter(Boolean) as ForgeTask[],
-      failed: facts.failedTaskIds.map((taskId) => taskMap.get(taskId)).filter(Boolean) as ForgeTask[],
-      unfinished: facts.unfinishedTaskIds.map((taskId) => taskMap.get(taskId)).filter(Boolean) as ForgeTask[],
-    };
-  }
-
   async function syncExecutionSnapshot(ctx: any) {
     const authoritative = await sweepOverdueSupervisors(ctx, await reconcileFromAuthoritative(ctx));
     return {
       authoritative,
-      effectiveStatus: effectiveCommandStatus(authoritative),
-      ...executionFactsFromAuthoritative(authoritative),
+      effectiveStatus: authoritative?.status ?? "idle",
     };
   }
 
@@ -967,19 +901,20 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // ── V2 persistence (state.json is derived debug artifact only) ──
+
   async function persistState(ctx: any, event: string, details?: Record<string, unknown>) {
-    if (!state) return;
-    state.timestamps.lastUpdated = nowIso();
-    pi.appendEntry(STATE_ENTRY_TYPE, state);
+    const snapshot = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    if (!snapshot) return;
+    pi.appendEntry(STATE_ENTRY_TYPE, snapshot);
     await ensureDir(outputPath(ctx.cwd));
-    await atomicWrite(outputPath(ctx.cwd, "state.json"), JSON.stringify(state, null, 2));
+    await atomicWrite(outputPath(ctx.cwd, "state.json"), JSON.stringify(snapshot, null, 2));
     await appendFile(
       outputPath(ctx.cwd, "state.log"),
-      `${JSON.stringify({ time: nowIso(), event, details: details ?? {}, status: state.status })}\n`,
+      `${JSON.stringify({ time: nowIso(), event, details: details ?? {}, status: snapshot.status })}\n`,
       "utf-8"
     );
-    const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
-    ctx.ui.setStatus("task-forge", authoritative ? statusLabelFromV2(authoritative) : statusLabel(state));
+    ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(snapshot));
   }
 
   function normalizeFailureSignature(text: string | undefined) {
@@ -992,6 +927,32 @@ export default function (pi: ExtensionAPI) {
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 500);
+  }
+
+  // ── V2 Planning Hooks ────────────────────────────────────────────
+
+  function createPlanningHooks(ctx: any): PlanningHooks {
+    return {
+      cwd: ctx.cwd,
+      config,
+      outputDir: config.outputDir,
+      ensureRunAbortController,
+      genId,
+      nowIso,
+      spawnAgent: async (ctx2, role, prompt, options) => await spawnAgent(ctx2 ?? ctx, role, prompt, options),
+      saveArtifact: async (ctx2, path, content) => await saveArtifact(ctx2 ?? ctx, path, content),
+      readFile: async (path, encoding) => await readFile(path, encoding || "utf-8"),
+      readArtifact: async (ctx2, name) => await readArtifactMaybe(ctx2 ?? ctx, name),
+      gatherCodebaseSummary: async (ctx2) => await gatherCodebaseSummary(ctx2 ?? ctx),
+      notify: (msg, level) => ctx.ui.notify(msg, level),
+      loadSnapshot: async () => await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir),
+      withEngine: async (fn) => { await withV2Engine(ctx, fn as any); },
+      ensureDir: async (path) => await ensureDir(path),
+      outputPath: (...parts) => outputPath(ctx.cwd, ...parts),
+      extractJson,
+      existsSync,
+      resolve: (p1: string, p2?: string) => p2 ? resolve(p1, p2) : resolve(ctx.cwd, p1),
+    };
   }
 
   function classifyEnvironmentFailure(task: ForgeTask) {
@@ -1068,12 +1029,13 @@ export default function (pi: ExtensionAPI) {
     await withV2Engine(ctx, (engine) => engine.registerTasks(state!.tasks as any));
   }
 
-  function sendTaskForgeMessage(customType: string, content: string, _ctx?: any, _level: "info" | "warning" | "success" | "error" = "info") {
+  function sendTaskForgeMessage(customType: string, content: string, _ctx?: any, level: "info" | "warning" | "success" | "error" = "info") {
     pi.sendMessage(
       {
         customType,
         content,
         display: true,
+        details: { level },
       },
       { triggerTurn: false },
     );
@@ -1091,7 +1053,7 @@ export default function (pi: ExtensionAPI) {
         cmd ? `command: ${cmd}` : "",
         exit ? `exit: ${exit}` : "",
         "tsc printed CLI help (likely no tsconfig found at validation root).",
-        "hint: use `npx tsc -p <path-to-tsconfig> --noEmit` before node --test.",
+        "hint: run `npx tsc -p <path-to-tsconfig> --noEmit` separately, or use `node --test` directly.",
       ].filter(Boolean);
       return lines.join("\n");
     }
@@ -1103,12 +1065,17 @@ export default function (pi: ExtensionAPI) {
 
   async function emitHumanInterventionMessage(ctx: any, task: ForgeTask, blocker: Blocker, heading = "Human intervention required") {
     const evidence = summarizeEvidence(task.error);
+    const hasAcceptance = (task as any).acceptanceSignal || task.validation?.mode === "command";
+    const acceptanceLine = hasAcceptance
+      ? `Acceptance command: ${(task as any).acceptanceSignal ?? (task.validation as any)?.command ?? ""}`
+      : "";
     const content = [
       `[task-forge] ${heading}`,
       `task: ${task.id} — ${task.title}`,
       `reason: ${blocker.reason}`,
       `suggestion: ${blocker.suggestion}`,
       evidence ? `evidence: ${evidence}` : "",
+      acceptanceLine,
       `next: /forge blocker ${task.id} --resolve "..." then /forge execute`,
     ].filter(Boolean).join("\n");
 
@@ -1201,6 +1168,8 @@ export default function (pi: ExtensionAPI) {
     await emitHumanInterventionMessage(ctx, effectiveTask, blocker);
   }
 
+    // @deprecated V1 fallback in interrupted-execution detection — FROZEN. Do not add new behavior.
+    // Deletion target: TF-01 (V2 command service extraction). Use describeInterruptedExecutionV2() only.
   function describeInterruptedExecution(authoritative: V2RunSnapshot | null): { label: string; nextAction: "executePlan"; requeuedTaskIds: string[] } | null {
     const described = describeInterruptedExecutionV2(authoritative);
     if (described) return described;
@@ -1256,7 +1225,7 @@ export default function (pi: ExtensionAPI) {
     const candidates = await getModelCandidatesForRole(ctx, role);
     const resolved = candidates[0];
     if (resolved) {
-      state?.resolvedModels && (state.resolvedModels[role] = resolved);
+      resolvedModels[role] = resolved;
       return resolved;
     }
     throw new Error(`No configured models available for role ${role}`);
@@ -1350,7 +1319,7 @@ export default function (pi: ExtensionAPI) {
     let lastError = "";
     for (const [index, model] of candidates.entries()) {
       if (state) {
-        state.activeAgent = {
+        activeAgent = {
           role: modelRole,
           model,
           startedAt: nowIso(),
@@ -1404,10 +1373,10 @@ export default function (pi: ExtensionAPI) {
       const stdout = sanitizeAgentCommandOutput(result.stdout);
       if (result.code === 0 && stdout) {
         if (state) {
-          state.activeAgent = undefined;
+          activeAgent = undefined;
           await persistState(ctx, "agent_complete", { role: modelRole, model, attempt: index + 1, totalCandidates: candidates.length, durationMs: execDurationMs, outputLength: stdout.length, outputPreview: stdout.slice(0, 200) });
         }
-        state?.resolvedModels && (state.resolvedModels[modelRole] = model);
+        resolvedModels[modelRole] = model;
         return stdout;
       }
 
@@ -1431,7 +1400,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     if (state) {
-      state.activeAgent = undefined;
+      activeAgent = undefined;
       await persistState(ctx, "agent_failed", { role: modelRole, error: lastError });
     }
     throw new Error(`${role} failed: ${lastError}`);
@@ -1451,395 +1420,6 @@ export default function (pi: ExtensionAPI) {
 
   const coerceTask = coercePlannerTask;
   const coerceTestSpec = coerceTestDesignerSpec;
-
-  async function initState(ctx: any, prdFile: string) {
-    config = await loadConfig(ctx.cwd);
-    const prdPath = resolve(ctx.cwd, prdFile);
-    if (!existsSync(prdPath)) throw new Error(`PRD file not found: ${prdFile}`);
-
-    ensureRunAbortController();
-    state = {
-      orchestrationId: genId(),
-      status: "planning",
-      currentPhase: 0,
-      phaseLabel: "Scope Classification",
-      prdFile,
-      resolvedModels: {},
-      cost: {},
-      blockers: [],
-      tasks: [],
-      timestamps: {
-        started: nowIso(),
-        lastUpdated: nowIso(),
-      },
-    };
-
-    await ensureDir(outputPath(ctx.cwd));
-    await ensureDir(outputPath(ctx.cwd, "tasks"));
-    await ensureDir(outputPath(ctx.cwd, "tmp"));
-    await persistState(ctx, "init", { prdFile });
-    await withV2Engine(ctx, async (engine) => {
-      await engine.createRun(state!.orchestrationId, prdFile);
-      await engine.enterPhase(0, "Scope Classification");
-    });
-  }
-
-  async function phaseClassifyScope(ctx: any) {
-    if (!state?.prdFile) throw new Error("No PRD selected");
-
-    state.status = "planning";
-    state.currentPhase = 0;
-    state.phaseLabel = "Scope Classification";
-    await persistState(ctx, "phase_start", { phase: 0 });
-    await withV2Engine(ctx, (engine) => engine.enterPhase(0, "Scope Classification"));
-
-    const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
-    const tree = await gatherCodebaseSummary(ctx);
-
-    const prompt = [
-      "# Goal",
-      "Classify this work as micro, standard, or complex.",
-      "",
-      "# Return format",
-      '{ "mode": "micro|standard|complex", "estimatedTasks": number, "rationale": string, "signals": string[] }',
-      "",
-      "# Existing codebase file tree",
-      tree || "(none)",
-      "",
-      "# PRD",
-      prdContent,
-    ].join("\n");
-
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("scopeClassifier", 0, "Scope Classification"));
-
-    const raw = await spawnAgent(ctx, "scopeClassifier", prompt, {
-      promptAppendix: "Return one JSON object in a ```json fenced block only.",
-      timeout: 120,
-    });
-    const parsed = extractJson(raw) ?? {};
-    const mode = parsed.mode === "micro" || parsed.mode === "complex" ? parsed.mode : "standard";
-    state.orchestrationMode = mode;
-    state.routingRationale = typeof parsed.rationale === "string" ? parsed.rationale : undefined;
-    await saveArtifact(ctx, "00-routing.json", JSON.stringify(parsed, null, 2));
-    await persistState(ctx, "phase_complete", { phase: 0, mode });
-    await withV2Engine(ctx, (engine) => engine.markRouting(mode, state?.routingRationale));
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseCompleted("scopeClassifier", 0));
-    ctx.ui.notify(`[task-forge] Routing mode: ${mode}${state.routingRationale ? ` — ${state.routingRationale}` : ""}`, "info");
-  }
-
-  async function phaseAnalyze(ctx: any) {
-    if (!state?.prdFile) throw new Error("No PRD selected");
-
-    state.status = "analyzing";
-    state.currentPhase = 1;
-    state.phaseLabel = "PRD Analysis";
-    await persistState(ctx, "phase_start", { phase: 1 });
-    await withV2Engine(ctx, (engine) => engine.enterPhase(1, "PRD Analysis"));
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("strategist", 1, "PRD Analysis"));
-
-    const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
-    const tree = await gatherCodebaseSummary(ctx);
-
-    const prompt = [
-      "# Goal",
-      "Produce 01-requirements.md.",
-      "",
-      "# Required sections",
-      "- Executive summary",
-      "- Core objectives",
-      "- User stories",
-      "- Functional requirements (must/should/could)",
-      "- Non-functional requirements",
-      "- UI / UX Constraints and Design System Requirements",
-      "- Constraints and assumptions",
-      "- Success metrics",
-      "- Risks and dependencies",
-      "- Ambiguities and open questions",
-      "",
-      "# Special instruction",
-      "If the PRD contains a UI kit, design system, component catalog, style guide, interaction rules, layout rules, visual tokens, or accessibility section, preserve it as a first-class requirements section. Do not collapse it into a generic note.",
-      "",
-      "# Existing codebase file tree",
-      tree || "(none)",
-      "",
-      "# PRD",
-      prdContent,
-    ].join("\n");
-
-    const requirements = await spawnAgent(ctx, "strategist", prompt, {
-      promptAppendix: "Return Markdown only.",
-      timeout: 900,
-    });
-    await saveArtifact(ctx, "01-requirements.md", requirements);
-    state.requirementsFile = "01-requirements.md";
-    await persistState(ctx, "phase_complete", { phase: 1 });
-    await withV2Engine(ctx, (engine) => engine.markRequirementsWritten("01-requirements.md"));
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseCompleted("strategist", 1));
-    ctx.ui.notify("[task-forge] Phase 1 complete: requirements written", "success");
-  }
-
-  async function phasePlanMicro(ctx: any) {
-    if (!state?.prdFile) throw new Error("Missing PRD for micro planning");
-
-    state.status = "planning";
-    state.currentPhase = 2;
-    state.phaseLabel = "Micro Planning";
-    await persistState(ctx, "phase_start", { phase: 2, mode: "micro" });
-    await withV2Engine(ctx, (engine) => engine.enterPhase(2, "Micro Planning"));
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("planner", 2, "Micro Planning"));
-
-    const prdContent = await readFile(resolve(ctx.cwd, state.prdFile), "utf-8");
-    const tree = await gatherCodebaseSummary(ctx);
-
-    const prompt = [
-      "# Goal",
-      "Handle this as MICRO mode: merge strategist and planner behavior into one compact planning pass.",
-      "Produce at most 3 tasks unless the PRD absolutely requires more.",
-      "Skip heavyweight orchestration assumptions.",
-      "",
-      "# Output schema",
-      "Return a single JSON object with keys:",
-      "- planMarkdown: string",
-      "- tasksMarkdown: string",
-      "- costEstimate: { totalInputTokens, totalOutputTokens, iterativeBudgetTokens, estimatedUsd }",
-      "- tasks: ForgeTask[] using planner schema",
-      "",
-      "# Existing codebase file tree",
-      tree || "(none)",
-      "",
-      "# PRD",
-      prdContent,
-    ].join("\n");
-
-    const raw = await spawnAgent(ctx, "planner", prompt, {
-      promptAppendix: "Treat this as micro mode. Inline requirement analysis and planning. Return one JSON object in a ```json fenced block only.",
-      timeout: 900,
-    });
-    const parsed = extractJson(raw);
-    if (!parsed || !Array.isArray(parsed.tasks)) {
-      await saveArtifact(ctx, "02-plan.raw.txt", raw);
-      const preview = raw.slice(0, 500).replace(/\n/g, "\\n");
-      await persistState(ctx, "planner_json_parse_failed", { mode: "micro", rawLength: raw.length, hasJson: !!extractJson(raw), hasTasksArray: parsed ? Array.isArray(parsed.tasks) : false, preview });
-      throw new Error(`Planner did not return valid task JSON for micro mode. Raw output preview: ${preview}`);
-    }
-
-    state.tasks = parsed.tasks.map(coerceTask);
-    state.cost = parsed.costEstimate ?? {};
-    const planMarkdown = typeof parsed.planMarkdown === "string" ? parsed.planMarkdown : "# Micro Plan\n\nNo plan markdown returned.";
-    const tasksMarkdown = typeof parsed.tasksMarkdown === "string" ? parsed.tasksMarkdown : tasksToMarkdown(state.tasks);
-
-    await saveArtifact(ctx, "02-plan.md", planMarkdown);
-    await saveArtifact(ctx, "03-tasks.json", JSON.stringify({ tasks: state.tasks, costEstimate: state.cost }, null, 2));
-    await saveArtifact(ctx, "03-tasks.md", tasksMarkdown);
-    await saveArtifact(ctx, "03-cost-estimate.md", formatCost(state.cost));
-
-    state.planFile = "02-plan.md";
-    state.tasksFile = "03-tasks.json";
-    state.tasksMarkdownFile = "03-tasks.md";
-    state.costFile = "03-cost-estimate.md";
-    state.status = "awaiting_approval";
-    state.currentPhase = 4;
-    state.phaseLabel = "Approval Gate";
-    state.nextAction = "executePlan";
-    await persistState(ctx, "phase_complete", { phase: 2, mode: "micro", awaitingApproval: true });
-    await withV2Engine(ctx, async (engine) => {
-      await engine.markPlanWritten("02-plan.md", "03-tasks.json", "03-tasks.md", "03-cost-estimate.md");
-      await engine.registerTasks(state!.tasks as any);
-      await engine.markPlanningPhaseCompleted("planner", 2);
-      await engine.requireApproval("executePlan", "Approval Gate");
-    });
-    sendTaskForgeMessage("task-forge-approval-ready", "[task-forge] Micro plan ready. Review artifacts, then run /forge execute", ctx, "warning");
-  }
-
-  async function phasePlan(ctx: any) {
-    if (!state?.requirementsFile) throw new Error("Missing requirements artifact");
-
-    state.status = "planning";
-    state.currentPhase = 2;
-    state.phaseLabel = "Planning & Decomposition";
-    await persistState(ctx, "phase_start", { phase: 2 });
-    await withV2Engine(ctx, (engine) => engine.enterPhase(2, "Planning & Decomposition"));
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("planner", 2, "Planning & Decomposition"));
-
-    const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
-    const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
-    const tree = await gatherCodebaseSummary(ctx);
-
-    const prompt = [
-      "# Goal",
-      "Produce architecture + tasks for implementation.",
-      "",
-      "# Output schema",
-      "Return a single JSON object with keys:",
-      "- planMarkdown: string",
-      "- tasksMarkdown: string",
-      "- costEstimate: { totalInputTokens, totalOutputTokens, iterativeBudgetTokens, estimatedUsd }",
-      "- tasks: ForgeTask[] using planner schema",
-      "",
-      "# Task rules",
-      "- Use task_mode: single-pass or iterative",
-      "- iterative only when compile/test/fix loops or measurable targets justify it",
-      "- include context_manifest, output_manifest, dependencies, acceptance_criteria, escalation_triggers",
-      "- every task must include validation with explicit mode",
-      "- do not omit validation.mode in any emitted task",
-      "- command validation uses validation={ mode, command, coverageThreshold? }",
-      "- command validation.command must be a runnable shell command only, not prose",
-      "- manual review uses validation={ mode, notes } and must not place guidance in test_command or acceptance_signal",
-      "- do not emit deprecated legacy validation fields such as test_command, acceptance_signal, or coverage_threshold in new task JSON",
-      "- documentation/config/manual-review tasks should usually use validation.mode=manual with reviewer notes",
-      "- implementation tasks should use validation.mode=command with a real executable command",
-      "- keep tasks small enough for context budgets",
-      "- use S/M/L complexity",
-      "",
-      "# Existing codebase file tree",
-      tree || "(none)",
-      "",
-      "# Requirements",
-      requirements,
-      "",
-      "# Original PRD",
-      originalPrd,
-    ].join("\n");
-
-    const raw = await spawnAgent(ctx, "planner", prompt, {
-      promptAppendix: "Return one JSON object in a ```json fenced block only.",
-      timeout: 1200,
-    });
-    const parsed = extractJson(raw);
-    if (!parsed || !Array.isArray(parsed.tasks)) {
-      await saveArtifact(ctx, "02-plan.raw.txt", raw);
-      const preview = raw.slice(0, 500).replace(/\n/g, "\\n");
-      await persistState(ctx, "planner_json_parse_failed", { mode: "standard", rawLength: raw.length, hasJson: !!extractJson(raw), hasTasksArray: parsed ? Array.isArray(parsed.tasks) : false, preview });
-      throw new Error(`Planner did not return valid task JSON. Raw output preview: ${preview}`);
-    }
-
-    state.tasks = parsed.tasks.map(coerceTask);
-    state.cost = parsed.costEstimate ?? {};
-
-    const planMarkdown = typeof parsed.planMarkdown === "string" ? parsed.planMarkdown : "# Plan\n\nNo plan markdown returned.";
-    const tasksMarkdown = typeof parsed.tasksMarkdown === "string" ? parsed.tasksMarkdown : tasksToMarkdown(state.tasks);
-
-    await saveArtifact(ctx, "02-plan.md", planMarkdown);
-    await saveArtifact(ctx, "03-tasks.json", JSON.stringify({ tasks: state.tasks, costEstimate: state.cost }, null, 2));
-    await saveArtifact(ctx, "03-tasks.md", tasksMarkdown);
-    await saveArtifact(ctx, "03-cost-estimate.md", formatCost(state.cost));
-
-    state.planFile = "02-plan.md";
-    state.tasksFile = "03-tasks.json";
-    state.tasksMarkdownFile = "03-tasks.md";
-    state.costFile = "03-cost-estimate.md";
-    await withV2Engine(ctx, async (engine) => {
-      await engine.markPlanWritten("02-plan.md", "03-tasks.json", "03-tasks.md", "03-cost-estimate.md");
-      await engine.registerTasks(state!.tasks as any);
-      await engine.markPlanningPhaseCompleted("planner", 2);
-    });
-
-    if (state.cost.estimatedUsd !== undefined && state.cost.estimatedUsd > config.costLimitUsd) {
-      ctx.ui.notify(
-        `[task-forge] Warning: estimated cost $${state.cost.estimatedUsd.toFixed(2)} exceeds configured limit $${config.costLimitUsd.toFixed(2)}`,
-        "warning",
-      );
-    }
-
-    await phaseDesignTests(ctx);
-  }
-
-  async function phaseDesignTests(ctx: any) {
-    if (!state?.requirementsFile || !state?.planFile || !state?.tasksFile) {
-      throw new Error("Missing planning artifacts for test design");
-    }
-
-    state.status = "planning";
-    state.currentPhase = 3;
-    state.phaseLabel = "Test Design";
-    await persistState(ctx, "phase_start", { phase: 3 });
-    await withV2Engine(ctx, (engine) => engine.enterPhase(3, "Test Design"));
-    await withV2Engine(ctx, (engine) => engine.markPlanningPhaseStarted("testDesigner", 3, "Test Design"));
-
-    const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
-    const originalPrd = state.prdFile ? await readFile(resolve(ctx.cwd, state.prdFile), "utf-8") : "";
-    const plan = await readArtifactMaybe(ctx, state.planFile);
-    const tasksJson = await readArtifactMaybe(ctx, state.tasksFile);
-    const tree = await gatherCodebaseSummary(ctx);
-
-    const prompt = [
-      "# Goal",
-      "Design grounded pre-implementation tests without inventing internal APIs.",
-      "",
-      "# Required output",
-      "Return one JSON object with:",
-      "- testSpecs: array of per-task grounded test contracts",
-      "- markdownSummary: string",
-      "",
-      "Each testSpecs entry should use:",
-      '{ "taskId": string, "testFiles": [{"path": string, "type": string, "targets": string[], "fixtures_required": string[], "derived_from": string[] }], "validation": { "mode": "command|manual", "command": string?, "notes": string?, "coverageThreshold": number? }, "ambiguities": string[] }',
-      "",
-      "Only design tests grounded in explicit planner commitments, acceptance criteria, or existing codebase/test interfaces.",
-      "Every emitted test spec entry must include validation.mode explicitly.",
-      "Put manual reviewer guidance in validation.notes, never in acceptance_signal or test_command.",
-      "Do not emit deprecated legacy validation fields such as acceptance_signal, test_command, or coverage_threshold in new test-spec JSON.",
-      "Documentation/config/manual-review tasks should use validation.mode=manual with reviewer notes when shell validation is not appropriate.",
-      "Implementation tasks should use validation.mode=command with a real executable command.",
-      "Command-mode validation.command must stay executable; do not mix prose into command-shaped fields.",
-      "",
-      "# Existing codebase file tree",
-      tree || "(none)",
-      "",
-      "# Requirements",
-      requirements,
-      "",
-      "# Original PRD",
-      originalPrd,
-      "",
-      "# Plan",
-      plan,
-      "",
-      "# Tasks JSON",
-      tasksJson,
-    ].join("\n");
-
-    const raw = await spawnAgent(ctx, "testDesigner", prompt, {
-      promptAppendix: "Return one JSON object in a ```json fenced block only.",
-      timeout: 1200,
-    });
-
-    const parsed = extractJson(raw);
-    if (!parsed || !Array.isArray(parsed.testSpecs)) {
-      throw new Error("Test Designer did not return valid test spec JSON");
-    }
-
-    state.testSpecs = parsed.testSpecs.map((spec: any) => coerceTestSpec(spec));
-
-    for (const spec of state.testSpecs) {
-      const task = state.tasks.find((t) => t.id === spec.taskId);
-      if (!task) continue;
-      task.validation = spec.validation;
-      task.acceptanceSignal = spec.acceptance_signal;
-      task.coverageThreshold = spec.coverage_threshold;
-      task.testSpecRefs = (spec.testFiles ?? []).map((f) => f.path);
-    }
-
-    await saveArtifact(ctx, "03-test-spec.json", JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
-    if (typeof parsed.markdownSummary === "string") {
-      await saveArtifact(ctx, "03-test-spec.md", parsed.markdownSummary);
-      state.testSpecMarkdownFile = "03-test-spec.md";
-    }
-    await saveArtifact(ctx, "03-tasks.json", JSON.stringify({ tasks: state.tasks, costEstimate: state.cost }, null, 2));
-
-    state.testSpecFile = "03-test-spec.json";
-    state.status = "awaiting_approval";
-    state.currentPhase = 4;
-    state.phaseLabel = "Approval Gate";
-    state.nextAction = "executePlan";
-    await persistState(ctx, "phase_complete", { phase: 3, awaitingApproval: true });
-    await withV2Engine(ctx, async (engine) => {
-      await engine.markTestSpecWritten("03-test-spec.json", state!.testSpecs ?? [], state!.testSpecMarkdownFile);
-      await engine.registerTasks(state!.tasks as any);
-      await engine.requireApproval("executePlan", "Approval Gate");
-      await engine.markPlanningPhaseCompleted("testDesigner", 3);
-    });
-    sendTaskForgeMessage("task-forge-approval-ready", "[task-forge] Plan and grounded test spec ready. Review artifacts, then run /forge execute", ctx, "warning");
-  }
 
   async function buildTaskContext(ctx: any, task: ForgeTask) {
     const sections: string[] = [];
@@ -2079,10 +1659,13 @@ export default function (pi: ExtensionAPI) {
     return failedDependencies(task).length > 0;
   }
 
+  // FROZEN — deferred to execution supervisor V2 extraction
   async function executeApprovedPlan(ctx: any) {
+    await loadAndSyncState(ctx);
     if (!state) throw new Error("No plan to execute");
 
-    await executeApprovedPlanLoop(state, {
+    const execState = { tasks: state.tasks, status: state.status, currentPhase: state.currentPhase, phaseLabel: state.phaseLabel };
+    await executeApprovedPlanLoop(execState, {
       persistState: async (event, details) => {
         await persistState(ctx, event, details);
       },
@@ -2098,7 +1681,7 @@ export default function (pi: ExtensionAPI) {
         await withV2Runner(ctx, (runner) => runner.abortExecution("Execution aborted"));
       },
       advanceExecution: async () => {
-        const step = await withV2Runner(ctx, (runner) => runner.advanceExecution(state!.tasks as any, config.maxWorkers));
+        const step = await withV2Runner(ctx, (runner) => runner.advanceExecution(execState.tasks as any, config.maxWorkers));
         if (!step) {
           throw new Error("Failed to run V2 execution advance step");
         }
@@ -2145,11 +1728,11 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
+  // FROZEN — deferred to execution supervisor V2 extraction
   async function phaseIntegrationReview(ctx: any) {
+    await loadAndSyncState(ctx);
     if (!state) throw new Error("No orchestration state");
-
-    const authoritative = await reconcileFromAuthoritative(ctx);
-    const reviewTasks = authoritative ? createV1StateFromV2(authoritative).tasks : state.tasks;
+    const reviewTasks = state.tasks;
     const requirements = await readArtifactMaybe(ctx, state.requirementsFile);
     const plan = await readArtifactMaybe(ctx, state.planFile);
 
@@ -2188,9 +1771,6 @@ export default function (pi: ExtensionAPI) {
     );
   }
 
-  async function continueComplexPlanningAfterCheckpoint(ctx: any) {
-    await phasePlan(ctx);
-  }
 
   function startExecutionInBackground(ctx: any, reason: string) {
     if (executionPromise) return executionPromise;
@@ -2199,11 +1779,6 @@ export default function (pi: ExtensionAPI) {
       try {
         ensureRunAbortController();
         await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
-        const authoritative = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
-        if (authoritative) {
-          applyAuthoritativeSnapshotToV1(authoritative);
-        }
-
         await executeApprovedPlan(ctx);
       } catch (error: any) {
         if (state) {
@@ -2221,83 +1796,444 @@ export default function (pi: ExtensionAPI) {
     return executionPromise;
   }
 
-  async function runPlanningFlow(ctx: any, prdFile: string, executeImmediately: boolean) {
-    await initState(ctx, prdFile);
-    await phaseClassifyScope(ctx);
+  // startPlanningInBackground V1 deleted — superseded by startPlanningInBackgroundV2
 
-    if (state?.orchestrationMode === "micro") {
-      await phasePlanMicro(ctx);
-      if (executeImmediately || config.autoExecute) {
-        startExecutionInBackground(ctx, executeImmediately ? "plan --execute" : "auto-execute");
+
+  // ── V2 shell command handlers ───────────────────────────────────
+
+  async function handlePlanningResumptionV2(ctx: any, snapshot: V2RunSnapshot | null) {
+    const hooks = createPlanningHooks(ctx);
+    if (!snapshot) return ctx.ui.notify("[task-forge] No plan available", "warning");
+
+    const isInterruptedPlanning = snapshot.planningRuntime?.interrupted === true;
+    if (isInterruptedPlanning) {
+      const layout = createLayout(ctx.cwd, config.outputDir);
+      const resumptionPhase = await determineResumptionPhase(snapshot, layout);
+      if (resumptionPhase === null) {
+        ctx.ui.notify("[task-forge] ⚠ restart required — planning artifacts are missing or corrupt. Rerun /forge <prd> to restart planning.", "error");
+        return;
+      }
+      await withV2Engine(ctx, async (engine) => {
+        await engine.markRunResumed(`Planning resumed from phase ${resumptionPhase} after interruption`);
+        await engine.markApprovalGranted();
+      });
+      // Resume via plan.ts phase functions
+      snapshot = await hooks.loadSnapshot() ?? snapshot;
+      switch (resumptionPhase) {
+        case 1: snapshot = await analyzeRequirements(ctx, hooks, snapshot); break;
+        case 2: case 0: snapshot = await planDecomposition(ctx, hooks, snapshot); break;
+        case 3: snapshot = await designTests(ctx, hooks, snapshot); break;
+        case 4: break;
+        default: snapshot = await planDecomposition(ctx, hooks, snapshot);
       }
       return;
     }
 
-    await phaseAnalyze(ctx);
-
-    if (state?.orchestrationMode === "complex") {
-      state.status = "awaiting_approval";
-      state.currentPhase = 1;
-      state.phaseLabel = "Complex Checkpoint: Requirements Review";
-      state.nextAction = "continuePlanning";
-      await persistState(ctx, "complex_checkpoint", { checkpoint: "requirements_review" });
-      await withV2Engine(ctx, (engine) => engine.requireApproval("continuePlanning", "Complex Checkpoint: Requirements Review"));
-      ctx.ui.notify("[task-forge] Complex mode: review 01-requirements.md, then run /forge execute to continue planning", "info");
-      return;
-    }
-
-    await phasePlan(ctx);
-
-    if (executeImmediately || config.autoExecute) {
-      startExecutionInBackground(ctx, executeImmediately ? "plan --execute" : "auto-execute");
+    await withV2Engine(ctx, async (engine) => {
+      if (snapshot.status === "paused") {
+        await engine.markRunResumed("Planning resumed after checkpoint approval");
+      }
+      await engine.markApprovalGranted();
+    });
+    snapshot = await hooks.loadSnapshot() ?? snapshot;
+    const result = await continueComplexPlanning(ctx, hooks, snapshot);
+    if (result.status === "awaiting_approval") {
+      ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(result.snapshot));
+      sendTaskForgeMessage("task-forge-approval-ready", "[task-forge] Plan ready. Review artifacts, then run /forge execute", ctx, "warning");
+    } else if (result.status === "completed") {
+      startExecutionInBackground(ctx, "execute");
     }
   }
 
-  function startPlanningInBackground(ctx: any, prdFile: string, executeImmediately: boolean) {
-    if (planningPromise) return planningPromise;
 
-    planningPromise = (async () => {
-      try {
-        ensureRunAbortController();
-        await runPlanningFlow(ctx, prdFile, executeImmediately);
-      } catch (error: any) {
-        if (state) {
-          await withV2Engine(ctx, (engine) => engine.markRunFailed(String(error?.message ?? error)));
-          await reconcileFromAuthoritative(ctx);
-          await persistState(ctx, "plan_flow_failed", { error: String(error?.message ?? error) });
+  async function handleExecuteCommand(ctx: any, snapshot: V2RunSnapshot | null, raw: string) {
+    if (snapshot?.nextAction === "continuePlanning") {
+      return await handlePlanningResumptionV2(ctx, snapshot);
+    }
+
+    let currentSnapshot = snapshot;
+    if (currentSnapshot?.status === "paused") {
+      const resumeResult = resumeCommandService(currentSnapshot, { reason: "Resumed by /forge execute" });
+      if (resumeResult.ok) {
+        currentSnapshot = await applyCommandEvents(ctx, resumeResult);
+      }
+    }
+
+    const executeResult = executeCommandService(currentSnapshot, { grantApproval: true });
+    if (!executeResult.ok) {
+      ctx.ui.notify(`[task-forge] ${executeResult.message}`, "warning");
+      return;
+    }
+
+    await applyCommandEvents(ctx, executeResult);
+    startExecutionInBackground(ctx, "execute command");
+  }
+
+  async function handleBlockerCommand(ctx: any, snapshot: V2RunSnapshot | null, raw: string, parts: string[]) {
+    await loadAndSyncState(ctx);
+    if (!state && !snapshot) {
+      ctx.ui.notify("[task-forge] No active orchestration", "warning");
+      return;
+    }
+
+    if (!parts[1] || parts[1].startsWith("--")) {
+      const result = listBlockersCommandService(snapshot);
+      if (!result.ok || !result.data) {
+        ctx.ui.notify(result.message ?? "[task-forge] No active orchestration", "warning");
+        return;
+      }
+
+      const allBlockers = result.data.blockers.filter((b) => !b.resolvedAt);
+      const blockedOrFailed = (snapshot?.tasks ?? []).filter((t) => {
+        const st = snapshot?.taskState[t.id];
+        return st?.status === "blocked" || st?.status === "failed";
+      });
+
+      if (allBlockers.length === 0 && blockedOrFailed.length === 0) {
+        ctx.ui.notify("[task-forge] No active blockers. All tasks are progressing.", "success");
+        return;
+      }
+
+      const lines: string[] = ["[task-forge] Active blockers", ""];
+
+      for (const b of allBlockers) {
+        const task = snapshot?.tasks.find((t) => t.id === b.taskId);
+        const runtime = snapshot?.taskState[b.taskId];
+        const status = runtime?.status ?? "unknown";
+        const icon = status === "failed" ? "✖" : status === "blocked" ? "⊘" : "⚠";
+        lines.push(`  ${icon} ${b.taskId}  ${b.category}  ${b.reason}`);
+        if (b.suggestion) lines.push(`    suggestion: ${b.suggestion}`);
+        if (task) lines.push(`    task: ${task.title}`);
+      }
+
+      const blockerTaskIds = new Set(allBlockers.map((b) => b.taskId));
+      for (const t of blockedOrFailed) {
+        if (blockerTaskIds.has(t.id)) continue;
+        const runtime = snapshot?.taskState[t.id];
+        const icon = runtime?.status === "failed" ? "✖" : "⊘";
+        lines.push(`  ${icon} ${t.id}  ${runtime?.status}  ${t.title}`);
+        if (runtime?.error) lines.push(`    error: ${runtime.error.substring(0, 120)}`);
+      }
+
+      lines.push("");
+      lines.push("Resolve with:    /forge blocker <id> --resolve \"...\"");
+      lines.push("Retry failed:     /forge blocker <id> --retry");
+      lines.push("Force unblock:    /forge blocker <id> --force-unblock");
+      lines.push("Fix validation:   /forge blocker <id> --patch-validation \"command\"");
+      lines.push("View diagnostic:  /forge blocker <id> --diagnostic");
+      lines.push("Task details:     /forge blocker <id>");
+
+      ctx.ui.notify(lines.join("\n"), "warning");
+      return;
+    }
+
+    const taskId = parts[1];
+    const task = state?.tasks.find((t) => t.id === taskId);
+    const authoritativeTaskExists = snapshot?.tasks.some((t) => t.id === taskId) || snapshot?.taskState[taskId];
+    if (!authoritativeTaskExists && state && !task) {
+      ctx.ui.notify(`[task-forge] Unknown task: ${taskId}`, "warning");
+      return;
+    }
+
+    await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+    const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
+    const v2Snapshot = await v2Engine.snapshot();
+    const effectiveSnapshot = v2Snapshot ?? snapshot;
+    const v2Task = effectiveSnapshot?.tasks.find((t) => t.id === taskId);
+    const v2Runtime = effectiveSnapshot?.taskState[taskId];
+    const v2Blocker = effectiveSnapshot?.blockers.find((b) => b.taskId === taskId && !b.resolvedAt);
+    const needsHumanResolution = effectiveSnapshot?.pendingHumanIntervention?.taskId === taskId;
+
+    if (raw.includes("--diagnostic")) {
+      const diagPath = outputPath(ctx.cwd, "tasks", `${taskId}.diagnostic.json`);
+      let diagnostic: any = null;
+      if (existsSync(diagPath)) {
+        try { diagnostic = JSON.parse(await readFile(diagPath, "utf-8")); } catch {}
+      }
+
+      let lastFailEvent: any = null;
+      const logPath = outputPath(ctx.cwd, "state.log");
+      if (existsSync(logPath)) {
+        try {
+          const logContent = await readFile(logPath, "utf-8");
+          for (const line of logContent.trim().split("\n").reverse()) {
+            try {
+              const entry = JSON.parse(line);
+              if (entry.event === "task_failed" && entry.details?.taskId === taskId) {
+                lastFailEvent = entry;
+                break;
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+
+      const lines: string[] = [`[task-forge] Diagnostic for ${taskId}`, ""];
+      if (v2Runtime) {
+        lines.push(`  status: ${v2Runtime.status}`);
+        if (v2Runtime.error) lines.push(`  error: ${v2Runtime.error.substring(0, 200)}`);
+        if (v2Runtime.blocker) lines.push(`  blocker (${v2Runtime.blocker.category}): ${v2Runtime.blocker.reason}`);
+        if (v2Runtime.diagnosticCount) lines.push(`  diagnostics run: ${v2Runtime.diagnosticCount}`);
+        lines.push("");
+      }
+
+      if (diagnostic) {
+        lines.push("  Diagnostic classification:");
+        lines.push(`    category: ${diagnostic.classification ?? "unknown"}`);
+        lines.push(`    notes: ${(diagnostic.notes ?? "(none)").substring(0, 300)}`);
+        if (diagnostic.blocker) {
+          lines.push(`    blocker reason: ${diagnostic.blocker.reason ?? "(none)"}`);
+          lines.push(`    blocker suggestion: ${diagnostic.blocker.suggestion ?? "(none)"}`);
         }
-        ctx.ui.notify(`[task-forge] ${String(error?.message ?? error)}`, "error");
-      } finally {
-        planningPromise = null;
+      } else {
+        lines.push("  No diagnostic JSON found.");
       }
-    })();
 
-    ctx.ui.notify(`[task-forge] Planning started (${prdFile})`, "info");
-    return planningPromise;
-  }
+      if (lastFailEvent) {
+        lines.push("");
+        lines.push(`  Last failure (${lastFailEvent.time}):`);
+        lines.push(`    error: ${(lastFailEvent.details?.error ?? "").substring(0, 200)}`);
+      }
 
+      ctx.ui.notify(lines.join("\n"), "warning");
+      return;
+    }
 
-  async function statusSummary(ctx?: any) {
-    const authoritative = ctx ? await loadCommandSnapshot(ctx) : null;
-    if (authoritative) return statusSummaryFromV2(authoritative, state);
-    if (!state) return "[task-forge] No active orchestration";
-    const counts = {
-      ready: state.tasks.filter((t) => t.status === "ready").length,
-      running: state.tasks.filter((t) => t.status === "running").length,
-      completed: state.tasks.filter((t) => t.status === "completed").length,
-      pending: state.tasks.filter((t) => t.status === "pending").length,
-      failed: state.tasks.filter((t) => t.status === "failed").length,
-      blocked: state.tasks.filter((t) => t.status === "blocked").length,
-    };
-    return [
-      `[task-forge] ${statusIcon(state.status)} ${state.status}`,
-      `mode: ${state.orchestrationMode ?? "n/a"}`,
-      `phase: ${state.phaseLabel}`,
-      state.nextAction ? `next action: ${state.nextAction}` : "",
-      `prd: ${state.prdFile ?? "n/a"}`,
-      `tasks: ${counts.completed}/${state.tasks.length} completed, ${counts.running} running, ${counts.ready} ready, ${counts.pending} pending, ${counts.failed} failed, ${counts.blocked} blocked`,
-      state.blockers.length > 0 ? `blockers: ${v1BlockerSortOrder(state.blockers).map((b) => `${b.taskId}`).join(", ")}` : "blockers: none",
-    ].filter(Boolean).join("\n");
+    if (raw.includes("--retry")) {
+      const retryResult = retryTaskCommandService(effectiveSnapshot, { taskId });
+      if (retryResult.ok && retryResult.events.length > 0) {
+        await applyCommandEvents(ctx, retryResult);
+      }
+      if (v2Task && needsHumanResolution) {
+        await v2Engine.resolveHumanIntervention(taskId, "Manual retry via /forge blocker --retry");
+        await reconcileFromAuthoritative(ctx);
+      }
+      if (task && (task.status === "failed" || task.status === "blocked")) {
+        task.status = "pending";
+        task.blocker = undefined;
+        task.error = undefined;
+        state!.blockers = state!.blockers
+          .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: "manual retry", resolvedAt: nowIso() } : b))
+          .filter((b) => b.taskId !== taskId);
+      }
+      if (state) {
+        if (state.status === "needs_human_intervention" || state.status === "paused") state.status = "awaiting_approval";
+        await persistState(ctx, "blocker_retry", { taskId, action: "retry" });
+      }
+      ctx.ui.notify(`[task-forge] ${taskId} requeued. Run /forge execute to continue.`, "success");
+      return;
+    }
+
+    if (raw.includes("--force-unblock")) {
+      let cascadeCount = 0;
+
+      if (v2Task && v2Runtime && v2Runtime.status === "blocked") {
+        await v2Engine.requeueTask(taskId, "Force unblock via /forge blocker --force-unblock");
+        cascadeCount++;
+      }
+      if (task && task.status === "blocked") {
+        task.status = "pending";
+        task.blocker = undefined;
+        task.error = undefined;
+      }
+
+      if (effectiveSnapshot) {
+        const { readyTaskIds, requeueTaskIds } = computeSchedulingActions(effectiveSnapshot);
+        for (const requeueId of requeueTaskIds) {
+          if (requeueId === taskId) continue;
+          const requeueRuntime = effectiveSnapshot.taskState[requeueId];
+          if (requeueRuntime?.status === "blocked") {
+            await v2Engine.requeueTask(requeueId, `Cascade unblock from ${taskId} force-unblock`);
+            cascadeCount++;
+            const requeueTask = state?.tasks.find((t) => t.id === requeueId);
+            if (requeueTask) {
+              requeueTask.status = "pending";
+              requeueTask.blocker = undefined;
+              requeueTask.error = undefined;
+            }
+          }
+        }
+        for (const readyId of readyTaskIds) {
+          const readyRuntime = effectiveSnapshot.taskState[readyId];
+          if (readyRuntime?.status !== "ready" && readyRuntime?.status !== "pending") continue;
+          const readyTask = state?.tasks.find((t) => t.id === readyId);
+          if (readyTask && readyTask.status !== "ready") {
+            readyTask.status = "ready";
+          }
+        }
+      }
+
+      if (state) {
+        state.blockers = state.blockers.filter(
+          (b) => !(b.taskId === taskId && b.category === "dependency") && !b.reason?.startsWith(`Blocked by failed dependency: ${taskId}`)
+        );
+      }
+
+      await reconcileFromAuthoritative(ctx);
+      if (state) {
+        if (state.status === "needs_human_intervention" || state.status === "paused") state.status = "awaiting_approval";
+        await persistState(ctx, "blocker_force_unblock", { taskId, action: "force-unblock", cascaded: cascadeCount });
+      }
+      ctx.ui.notify(`[task-forge] ${taskId} force-unblocked (${cascadeCount} task${cascadeCount === 1 ? "" : "s"} cascaded). Run /forge execute to continue.`, "success");
+      return;
+    }
+
+    if (raw.includes("--patch-validation")) {
+      const patchIndex = raw.indexOf("--patch-validation");
+      const newCommand = raw.slice(patchIndex + "--patch-validation".length).trim().replace(/^['"]|['"]$/g, "");
+      if (!newCommand) {
+        ctx.ui.notify("Usage: /forge blocker <task-id> --patch-validation \"command\"", "warning");
+        return;
+      }
+
+      const patchResult = patchValidationCommandService(effectiveSnapshot, { taskId, command: newCommand });
+      if (patchResult.ok && patchResult.events.length > 0) {
+        await applyCommandEvents(ctx, patchResult);
+      }
+
+      let patched = 0;
+      if (task) {
+        if (task.validation?.mode === "command") {
+          task.validation.command = newCommand;
+          patched++;
+        }
+        if (task.acceptanceSignal) {
+          task.acceptanceSignal = newCommand;
+        }
+        await persistTaskDefinitions(ctx);
+      }
+
+      if (state?.testSpecs) {
+        const spec = (state.testSpecs as TestSpecEntry[]).find((s) => s.taskId === taskId);
+        if (spec && spec.validation?.mode === "command") {
+          spec.validation.command = newCommand;
+          patched++;
+        }
+        if (state.testSpecFile) {
+          await saveArtifact(ctx, state.testSpecFile, JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
+        }
+      }
+
+      const snapshotPath = outputPath(ctx.cwd, "state.json");
+      if (existsSync(snapshotPath)) {
+        try {
+          const snapshotData = JSON.parse(await readFile(snapshotPath, "utf-8"));
+          const v2TaskDef = snapshotData.tasks?.find((t: any) => t.id === taskId);
+          if (v2TaskDef?.validation?.mode === "command") {
+            v2TaskDef.validation.command = newCommand;
+            patched++;
+          }
+          if (v2TaskDef?.acceptanceSignal) {
+            v2TaskDef.acceptanceSignal = newCommand;
+          }
+          const v2Spec = snapshotData.testSpecs?.find((s: any) => s.taskId === taskId);
+          if (v2Spec?.validation?.mode === "command") {
+            v2Spec.validation.command = newCommand;
+            patched++;
+          }
+          await atomicWrite(snapshotPath, JSON.stringify(snapshotData, null, 2));
+        } catch {}
+      }
+
+      if (v2Task && needsHumanResolution) {
+        await v2Engine.resolveHumanIntervention(taskId, `Validation command patched via /forge blocker --patch-validation: ${newCommand}`);
+      }
+
+      await reconcileFromAuthoritative(ctx);
+      if (state) {
+        await persistState(ctx, "blocker_patch_validation", { taskId, newCommand, patched, humanResolved: needsHumanResolution });
+      }
+      ctx.ui.notify(`[task-forge] Validation patched for ${taskId} (${patched} field${patched === 1 ? "" : "s"} updated). Run /forge execute or /forge blocker ${taskId} --retry.`, "success");
+      return;
+    }
+
+    const flagIndex = raw.indexOf("--resolve");
+    const resolution = flagIndex >= 0 ? raw.slice(flagIndex + "--resolve".length).trim().replace(/^['"]|['"]$/g, "") : "";
+    if (!resolution) {
+      const lines: string[] = [`[task-forge] ${taskId} — ${v2Task?.title ?? task?.title ?? "Unknown task"}`, ""];
+      if (v2Runtime) {
+        lines.push(`  status: ${v2Runtime.status}`);
+        if (v2Runtime.error) lines.push(`  error: ${v2Runtime.error.substring(0, 200)}`);
+        if (v2Runtime.retries) lines.push(`  retries: ${v2Runtime.retries}`);
+        if (v2Runtime.blocker) {
+          lines.push(`  blocker (${v2Runtime.blocker.category}): ${v2Runtime.blocker.reason}`);
+          if (v2Runtime.blocker.suggestion) lines.push(`  suggestion: ${v2Runtime.blocker.suggestion}`);
+        }
+      } else if (task) {
+        lines.push(`  status: ${task.status}`);
+        if (task.error) lines.push(`  error: ${task.error?.substring(0, 200)}`);
+      }
+
+      if (v2Blocker) {
+        lines.push("");
+        lines.push(`  blocker: ${v2Blocker.reason}`);
+        lines.push(`  suggestion: ${v2Blocker.suggestion}`);
+        if (v2Blocker.remediation) lines.push(`  remediation: ${v2Blocker.remediation.mode} (${v2Blocker.remediation.category})`);
+      }
+
+      if (v2Task) {
+        lines.push("");
+        lines.push(`  dependencies: ${v2Task.dependencies.length > 0 ? v2Task.dependencies.join(", ") : "none"}`);
+        lines.push(`  validation: ${v2Task.validation?.mode ?? "unknown"}${v2Task.validation?.mode === "command" ? ` — ${v2Task.validation.command?.substring(0, 80)}` : ""}`);
+        lines.push(`  output: ${v2Task.outputManifest?.join(", ") ?? "(none)"}`);
+
+        const downstream = (effectiveSnapshot?.tasks ?? []).filter((t) => t.dependencies.includes(taskId)).map((t) => t.id);
+        if (downstream.length > 0) lines.push(`  downstream: ${downstream.join(", ")}`);
+      }
+
+      lines.push("");
+      lines.push("Actions:");
+      lines.push(`  /forge blocker ${taskId} --resolve "description of fix"`);
+      if (v2Runtime?.status === "failed" || v2Runtime?.status === "blocked" || task?.status === "failed" || task?.status === "blocked") {
+        lines.push(`  /forge blocker ${taskId} --retry`);
+        lines.push(`  /forge blocker ${taskId} --force-unblock`);
+      }
+      if (v2Task?.validation?.mode === "command") {
+        lines.push(`  /forge blocker ${taskId} --patch-validation "new command"`);
+      }
+      lines.push(`  /forge blocker ${taskId} --diagnostic`);
+
+      ctx.ui.notify(lines.join("\n"), "warning");
+      return;
+    }
+
+    const resolveResult = resolveBlockerCommandService(effectiveSnapshot, { taskId, resolution });
+    if (resolveResult.ok && resolveResult.events.length > 0) {
+      await applyCommandEvents(ctx, resolveResult);
+    }
+
+    const v2TaskExists = v2Snapshot?.tasks.some((t) => t.id === taskId) || v2Snapshot?.taskState[taskId];
+    const contractPatch = deriveBlockerResolutionPatch(resolution);
+    if (state && task && contractPatch) {
+      const patched = applyBlockerResolutionPatch(taskId, task, state.testSpecs as TestSpecEntry[] | undefined, contractPatch);
+      state.testSpecs = patched.testSpecs;
+      if (state.testSpecFile) {
+        await saveArtifact(ctx, state.testSpecFile, JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
+      }
+      await persistTaskDefinitions(ctx);
+      if (state.testSpecs && state.testSpecFile) {
+        await withV2Engine(ctx, (engine) => engine.markTestSpecWritten(state.testSpecFile!, state.testSpecs!, state.testSpecMarkdownFile));
+      }
+    }
+
+    if (v2TaskExists) {
+      await v2Engine.resolveHumanIntervention(taskId, resolution);
+    } else if (task) {
+      task.resolutionInstruction = resolution;
+      task.blocker = undefined;
+      task.error = undefined;
+      if (task.status === "blocked" || task.status === "failed") task.status = "pending";
+      state!.blockers = state!.blockers
+        .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: resolution, resolvedAt: nowIso() } : b))
+        .filter((b) => b.taskId !== taskId);
+      state!.status = "awaiting_approval";
+    }
+
+    await reconcileFromAuthoritative(ctx);
+    if (state) {
+      await persistState(ctx, "blocker_resolved", { taskId, resolution, contractPatched: Boolean(contractPatch) });
+    }
+    ctx.ui.notify(`[task-forge] Blocker resolved for ${taskId}. Run /forge execute to continue.`, "success");
   }
 
   pi.registerCommand("forge", {
@@ -2316,610 +2252,99 @@ export default function (pi: ExtensionAPI) {
       const sub = parts[0];
 
       if (!sub || sub === "status") {
-        sendTaskForgeMessage("task-forge-status", await statusSummary(ctx), ctx, "info");
+        const snapshot = await loadCommandSnapshot(ctx);
+        const result = statusCommandService(snapshot);
+        const content = result.ok && result.data
+          ? statusSummaryFromV2(snapshot)
+          : result.message ?? "[task-forge] No active orchestration";
+        sendTaskForgeMessage("task-forge-status", content, ctx, "info");
         return;
       }
 
       if (sub === "help") {
-        const content = [
-          "[task-forge] Commands:",
-          "  /forge <prd-file>             analyze + plan + decompose, stop at approval gate",
-          "  /forge <prd-file> --execute   full run without stopping at approval gate",
-          "  /forge execute                execute current approved plan",
-          "  /forge status                 show status",
-          "  /forge blocker <id> --resolve \"...\"  resolve blocker and requeue task",
-          "  /forge pause                  pause execution",
-          "  /forge resume                 resume execution",
-          "  /forge abort                  abort orchestration",
-          "  /forge cost                   show current estimate",
-          "  /forge models                 show resolved models per role",
-          "  /forge config                 show effective config",
-        ].join("\n");
-        sendTaskForgeMessage("task-forge-help", content, ctx, "info");
+        const result = helpCommandService();
+        sendTaskForgeMessage("task-forge-help", result.data?.commands?.join("\n") ?? "", ctx, "info");
         return;
       }
 
       if (sub === "config") {
-        sendTaskForgeMessage("task-forge-config", JSON.stringify(config, null, 2), ctx, "info");
+        const result = configCommandService(config);
+        sendTaskForgeMessage("task-forge-config", JSON.stringify(result.data?.config ?? config, null, 2), ctx, "info");
         return;
       }
 
       if (sub === "cost") {
-        sendTaskForgeMessage("task-forge-cost", state ? formatCost(state.cost) : "[task-forge] No active orchestration", ctx, "info");
+        const snapshot = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        const result = costCommandService(snapshot);
+        const content = result.ok && result.data
+          ? formatCost(result.data.cost)
+          : result.message ?? "[task-forge] No active orchestration";
+        sendTaskForgeMessage("task-forge-cost", content, ctx, "info");
         return;
       }
 
       if (sub === "models") {
-        const roles: Role[] = ["scopeClassifier", "strategist", "planner", "testDesigner", "worker", "workerIterative", "gateReviewer", "diagnosticReviewer", "integrationReviewer"];
-        const lines: string[] = [];
-        for (const role of roles) {
-          const model = await resolveModelForRole(ctx, role);
-          lines.push(`${role}: ${model}`);
-        }
+        const snapshot = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        const result = modelsCommandService(snapshot);
+        const lines = Object.entries(result.data?.resolvedModels ?? {}).map(([role, model]) => `${role}: ${model}`);
         sendTaskForgeMessage("task-forge-models", lines.join("\n"), ctx, "info");
         return;
       }
 
       if (sub === "pause") {
-        const authoritative = await loadCommandSnapshot(ctx);
-        const effectiveStatus = effectiveCommandStatus(authoritative);
-        if (!["executing", "reviewing"].includes(effectiveStatus)) {
-          ctx.ui.notify("[task-forge] Nothing is executing", "warning");
-          return;
+        await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+        const snapshot = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        const label = snapshot?.currentPhase >= 6 ? "Integration Review (paused)" : "Execution (paused)";
+        const result = pauseCommandService(snapshot, { label, reason: "Paused by user command" });
+        if (result.ok) {
+          const newSnapshot = await applyCommandEvents(ctx, result);
+          ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(newSnapshot));
+          ctx.ui.notify(result.message ?? "[task-forge] Paused", "info");
+        } else {
+          ctx.ui.notify(result.message ?? "[task-forge] Nothing is executing", "warning");
         }
-        const pauseLabel = state?.currentPhase >= 6 ? "Integration Review (paused)" : "Execution (paused)";
-        await withV2Engine(ctx, (engine) => engine.markRunPaused(pauseLabel, "executePlan", "Paused by user command"));
-        await reconcileFromAuthoritative(ctx);
-        if (state) {
-          await persistState(ctx, "paused");
-        }
-        ctx.ui.notify("[task-forge] Paused", "info");
         return;
       }
 
       if (sub === "resume") {
-        const authoritative = await loadCommandSnapshot(ctx);
-        const effectiveStatus = effectiveCommandStatus(authoritative);
-        if (!state) {
-          ctx.ui.notify("[task-forge] No active orchestration", "warning");
+        const snapshot = await loadCommandSnapshot(ctx);
+        const result = resumeCommandService(snapshot, { reason: "Resumed by user command" });
+        if (!result.ok) {
+          ctx.ui.notify(result.message ?? "[task-forge] Not resumable", "warning");
           return;
         }
-        if (!["awaiting_approval", "paused"].includes(effectiveStatus) || state.nextAction !== "executePlan") {
-          ctx.ui.notify("[task-forge] Not resumable", "warning");
-          return;
-        }
-        if (authoritative?.pendingHumanIntervention) {
-          ctx.ui.notify(`[task-forge] Resolve blocker ${authoritative.pendingHumanIntervention.taskId} before resuming`, "warning");
-          return;
-        }
-        await withV2Engine(ctx, async (engine) => {
-          if (effectiveStatus === "paused") {
-            await engine.markRunResumed("Resumed by user command");
-          }
-          await engine.markApprovalGranted();
-        });
-        state.status = "executing";
-        state.nextAction = undefined;
-        await persistState(ctx, "resumed");
+        await applyCommandEvents(ctx, result);
         startExecutionInBackground(ctx, "resume");
         return;
       }
 
       if (sub === "abort") {
-        await loadCommandSnapshot(ctx);
-        runAbortController?.abort();
-        if (state) {
-          state.status = "aborted";
-          await persistState(ctx, "abort_command");
+        await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+        const snapshot = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        const result = abortCommandService(snapshot, { reason: "Aborted by user command" });
+        if (result.ok) {
+          const newSnapshot = await applyCommandEvents(ctx, result);
+          ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(newSnapshot));
         }
-        await withV2Runner(ctx, (runner) => runner.abortExecution("Aborted by user command"));
-        await reconcileFromAuthoritative(ctx);
-        ctx.ui.notify("[task-forge] Aborted", "warning");
+        runAbortController?.abort();
+        ctx.ui.notify(result.message ?? "[task-forge] Aborted", "warning");
         return;
       }
 
       if (sub === "execute") {
-        const authoritative = await loadCommandSnapshot(ctx);
-
-        if (!state) {
-          ctx.ui.notify("[task-forge] No plan available", "warning");
-          return;
-        }
-
-        const effectiveStatus = effectiveCommandStatus(authoritative);
-
-        if (!["awaiting_approval", "paused"].includes(effectiveStatus)) {
-          ctx.ui.notify(`[task-forge] Cannot execute from status ${effectiveStatus}`, "warning");
-          return;
-        }
-        if (authoritative?.pendingHumanIntervention && !state.blockers.some((b) => b.taskId === authoritative.pendingHumanIntervention?.taskId)) {
-          state.blockers = [
-            ...state.blockers,
-            {
-              taskId: authoritative.pendingHumanIntervention.taskId,
-              reason: authoritative.pendingHumanIntervention.reason,
-              suggestion: authoritative.pendingHumanIntervention.suggestion,
-              blockedTasks: [authoritative.pendingHumanIntervention.taskId],
-            },
-          ];
-        }
-        if (authoritative?.pendingHumanIntervention) {
-          ctx.ui.notify(`[task-forge] Resolve blocker ${authoritative.pendingHumanIntervention.taskId} before executing`, "warning");
-          return;
-        }
-        if (executionPromise) {
-          ctx.ui.notify("[task-forge] Execution already running", "info");
-          return;
-        }
-
-        if (state.nextAction === "continuePlanning") {
-          // Check if this is interrupted planning resumption (vs complex-mode checkpoint)
-          const isInterruptedPlanning = authoritative?.planningRuntime?.interrupted === true;
-
-          if (isInterruptedPlanning) {
-            // Interrupted planning: determine correct phase to resume from based on artifact state
-            const layout = createLayout(ctx.cwd, config.outputDir);
-            const resumptionPhase = await determineResumptionPhase(authoritative, layout);
-
-            if (resumptionPhase === null) {
-              // Restart required - artifacts missing or corrupt
-              ctx.ui.notify(
-                "[task-forge] ⚠ restart required — planning artifacts are missing or corrupt. Rerun /forge <prd> to restart planning.",
-                "error"
-              );
-              return;
-            }
-
-            // Resume from the determined phase
-            state.status = "planning";
-            await persistState(ctx, "continue_planning_command_interrupted");
-            await withV2Engine(ctx, async (engine) => {
-              await engine.markRunResumed(`Planning resumed from phase ${resumptionPhase} after interruption`);
-              await engine.markApprovalGranted();
-            });
-
-            // Resume from the correct phase based on artifact state
-            switch (resumptionPhase) {
-              case 1:
-                state.currentPhase = 1;
-                state.phaseLabel = "PRD Analysis";
-                await phaseAnalyze(ctx);
-                break;
-              case 2:
-                state.currentPhase = 2;
-                state.phaseLabel = "Planning & Decomposition";
-                await phasePlan(ctx);
-                break;
-              case 3:
-                state.currentPhase = 3;
-                state.phaseLabel = "Test Design";
-                await phaseDesignTests(ctx);
-                break;
-              case 4:
-                state.currentPhase = 4;
-                state.phaseLabel = "Approval Gate";
-                // Phase 4 is the approval gate - just persist and continue
-                await persistState(ctx, "planning_phase_4_ready");
-                break;
-              default:
-                // Should not happen, but fallback to phasePlan
-                state.currentPhase = 2;
-                state.phaseLabel = "Planning & Decomposition";
-                await phasePlan(ctx);
-            }
-            return;
-          }
-
-          // Complex-mode checkpoint: continue from phase 2 (Planning & Decomposition)
-          state.status = "planning";
-          state.phaseLabel = "Planning & Decomposition";
-          await persistState(ctx, "continue_planning_command");
-          await withV2Engine(ctx, async (engine) => {
-            if (effectiveStatus === "paused") {
-              await engine.markRunResumed("Planning resumed after checkpoint approval");
-            }
-            await engine.markApprovalGranted();
-          });
-          await continueComplexPlanningAfterCheckpoint(ctx);
-          return;
-        }
-
-        if (state.nextAction !== "executePlan") {
-          ctx.ui.notify("[task-forge] No executable approval is pending", "warning");
-          return;
-        }
-
-        await withV2Engine(ctx, async (engine) => {
-          if (effectiveStatus === "paused") {
-            await engine.markRunResumed("Execution resumed by /forge execute");
-          }
-          await engine.markApprovalGranted();
-        });
-
-        state.status = "executing";
-        state.nextAction = undefined;
-        await persistState(ctx, "execute_command");
-        startExecutionInBackground(ctx, "execute command");
+        const snapshot = await loadCommandSnapshot(ctx);
+        await handleExecuteCommand(ctx, snapshot, raw);
         return;
       }
 
       if (sub === "blocker") {
-        const authoritative = await loadCommandSnapshot(ctx);
-        if (!state && !authoritative) {
-          ctx.ui.notify("[task-forge] No active orchestration", "warning");
-          return;
-        }
-
-        // --- /forge blocker (no args) — list all active blockers ---
-        if (!parts[1] || parts[1].startsWith("--")) {
-          await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
-          const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
-          const v2Snapshot = await v2Engine.snapshot();
-          const effectiveSnapshot = v2Snapshot ?? authoritative;
-
-          if (!effectiveSnapshot) {
-            ctx.ui.notify("[task-forge] No active orchestration", "warning");
-            return;
-          }
-
-          const allBlockers = effectiveSnapshot.blockers.filter((b) => !b.resolvedAt);
-          const blockedOrFailed = effectiveSnapshot.tasks.filter((t) => {
-            const st = effectiveSnapshot.taskState[t.id];
-            return st?.status === "blocked" || st?.status === "failed";
-          });
-
-          if (allBlockers.length === 0 && blockedOrFailed.length === 0) {
-            ctx.ui.notify("[task-forge] No active blockers. All tasks are progressing.", "success");
-            return;
-          }
-
-          const lines: string[] = ["[task-forge] Active blockers", ""];
-
-          for (const b of allBlockers) {
-            const task = effectiveSnapshot.tasks.find((t) => t.id === b.taskId);
-            const runtime = effectiveSnapshot.taskState[b.taskId];
-            const status = runtime?.status ?? "unknown";
-            const icon = status === "failed" ? "✖" : status === "blocked" ? "⊘" : "⚠";
-            lines.push(`  ${icon} ${b.taskId}  ${b.category}  ${b.reason}`);
-            if (b.suggestion) lines.push(`    suggestion: ${b.suggestion}`);
-            if (task) lines.push(`    task: ${task.title}`);
-          }
-
-          const blockerTaskIds = new Set(allBlockers.map((b) => b.taskId));
-          for (const t of blockedOrFailed) {
-            if (blockerTaskIds.has(t.id)) continue;
-            const runtime = effectiveSnapshot.taskState[t.id];
-            const icon = runtime?.status === "failed" ? "✖" : "⊘";
-            lines.push(`  ${icon} ${t.id}  ${runtime?.status}  ${t.title}`);
-            if (runtime?.error) lines.push(`    error: ${runtime.error.substring(0, 120)}`);
-          }
-
-          lines.push("");
-          lines.push("Resolve with:    /forge blocker <id> --resolve \"...\"");
-          lines.push("Retry failed:     /forge blocker <id> --retry");
-          lines.push("Force unblock:    /forge blocker <id> --force-unblock");
-          lines.push("Fix validation:   /forge blocker <id> --patch-validation \"command\"");
-          lines.push("View diagnostic:  /forge blocker <id> --diagnostic");
-          lines.push("Task details:     /forge blocker <id>");
-
-          ctx.ui.notify(lines.join("\n"), "warning");
-          return;
-        }
-
-        // --- /forge blocker <task-id> [flags] ---
-        const taskId = parts[1];
-        const task = state?.tasks.find((t) => t.id === taskId);
-        const authoritativeTaskExists = authoritative?.tasks.some((t) => t.id === taskId) || authoritative?.taskState[taskId];
-        if (!authoritativeTaskExists && state && !task) {
-          ctx.ui.notify(`[task-forge] Unknown task: ${taskId}`, "warning");
-          return;
-        }
-
-        await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
-        const v2Engine = new TaskForgeV2Engine(ctx.cwd, config.outputDir);
-        const v2Snapshot = await v2Engine.snapshot();
-        const effectiveSnapshot = v2Snapshot ?? authoritative;
-        const v2Task = effectiveSnapshot?.tasks.find((t) => t.id === taskId);
-        const v2Runtime = effectiveSnapshot?.taskState[taskId];
-        const v2Blocker = effectiveSnapshot?.blockers.find((b) => b.taskId === taskId && !b.resolvedAt);
-        const needsHumanResolution = effectiveSnapshot?.pendingHumanIntervention?.taskId === taskId;
-
-        // --- /forge blocker <id> --diagnostic ---
-        if (raw.includes("--diagnostic")) {
-          const diagPath = outputPath(ctx.cwd, "tasks", `${taskId}.diagnostic.json`);
-          let diagnostic: any = null;
-          if (existsSync(diagPath)) {
-            try { diagnostic = JSON.parse(await readFile(diagPath, "utf-8")); } catch {}
-          }
-
-          let lastFailEvent: any = null;
-          const logPath = outputPath(ctx.cwd, "state.log");
-          if (existsSync(logPath)) {
-            try {
-              const logContent = await readFile(logPath, "utf-8");
-              for (const line of logContent.trim().split("\n").reverse()) {
-                try {
-                  const entry = JSON.parse(line);
-                  if (entry.event === "task_failed" && entry.details?.taskId === taskId) {
-                    lastFailEvent = entry;
-                    break;
-                  }
-                } catch {}
-              }
-            } catch {}
-          }
-
-          const lines: string[] = [`[task-forge] Diagnostic for ${taskId}`, ""];
-          if (v2Runtime) {
-            lines.push(`  status: ${v2Runtime.status}`);
-            if (v2Runtime.error) lines.push(`  error: ${v2Runtime.error.substring(0, 200)}`);
-            if (v2Runtime.blocker) lines.push(`  blocker (${v2Runtime.blocker.category}): ${v2Runtime.blocker.reason}`);
-            if (v2Runtime.diagnosticCount) lines.push(`  diagnostics run: ${v2Runtime.diagnosticCount}`);
-            lines.push("");
-          }
-
-          if (diagnostic) {
-            lines.push("  Diagnostic classification:");
-            lines.push(`    category: ${diagnostic.classification ?? "unknown"}`);
-            lines.push(`    notes: ${(diagnostic.notes ?? "(none)").substring(0, 300)}`);
-            if (diagnostic.blocker) {
-              lines.push(`    blocker reason: ${diagnostic.blocker.reason ?? "(none)"}`);
-              lines.push(`    blocker suggestion: ${diagnostic.blocker.suggestion ?? "(none)"}`);
-            }
-          } else {
-            lines.push("  No diagnostic JSON found.");
-          }
-
-          if (lastFailEvent) {
-            lines.push("");
-            lines.push(`  Last failure (${lastFailEvent.time}):`);
-            lines.push(`    error: ${(lastFailEvent.details?.error ?? "").substring(0, 200)}`);
-          }
-
-          ctx.ui.notify(lines.join("\n"), "warning");
-          return;
-        }
-
-        // --- /forge blocker <id> --retry ---
-        if (raw.includes("--retry")) {
-          if (v2Task && needsHumanResolution) {
-            await v2Engine.resolveHumanIntervention(taskId, "Manual retry via /forge blocker --retry");
-            await reconcileFromAuthoritative(ctx);
-          } else if (v2Task && v2Runtime && (v2Runtime.status === "failed" || v2Runtime.status === "blocked" || v2Runtime.status === "pending")) {
-            await v2Engine.requeueTask(taskId, "Manual retry via /forge blocker --retry");
-            await reconcileFromAuthoritative(ctx);
-          }
-          if (task && (task.status === "failed" || task.status === "blocked")) {
-            task.status = "pending";
-            task.blocker = undefined;
-            task.error = undefined;
-            state!.blockers = state!.blockers
-              .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: "manual retry", resolvedAt: nowIso() } : b))
-              .filter((b) => b.taskId !== taskId);
-          }
-          if (state) {
-            if (state.status === "needs_human_intervention" || state.status === "paused") state.status = "awaiting_approval";
-            await persistState(ctx, "blocker_retry", { taskId, action: "retry" });
-          }
-          ctx.ui.notify(`[task-forge] ${taskId} requeued. Run /forge execute to continue.`, "success");
-          return;
-        }
-
-        // --- /forge blocker <id> --force-unblock ---
-        if (raw.includes("--force-unblock")) {
-          let cascadeCount = 0;
-
-          // Clear the primary task's blocker
-          if (v2Task && v2Runtime && v2Runtime.status === "blocked") {
-            await v2Engine.requeueTask(taskId, "Force unblock via /forge blocker --force-unblock");
-            cascadeCount++;
-          }
-          if (task && task.status === "blocked") {
-            task.status = "pending";
-            task.blocker = undefined;
-            task.error = undefined;
-          }
-
-          // Cascade: clear dependency blockers on all downstream tasks
-          if (effectiveSnapshot) {
-            const { readyTaskIds, requeueTaskIds } = computeSchedulingActions(effectiveSnapshot);
-            // Requeue all tasks that the cascade would unblock
-            for (const requeueId of requeueTaskIds) {
-              if (requeueId === taskId) continue; // Already handled above
-              const requeueRuntime = effectiveSnapshot.taskState[requeueId];
-              if (requeueRuntime?.status === "blocked") {
-                await v2Engine.requeueTask(requeueId, `Cascade unblock from ${taskId} force-unblock`);
-                cascadeCount++;
-                const requeueTask = state?.tasks.find((t) => t.id === requeueId);
-                if (requeueTask) {
-                  requeueTask.status = "pending";
-                  requeueTask.blocker = undefined;
-                  requeueTask.error = undefined;
-                }
-              }
-            }
-            for (const readyId of readyTaskIds) {
-              const readyRuntime = effectiveSnapshot.taskState[readyId];
-              if (readyRuntime?.status !== "ready" && readyRuntime?.status !== "pending") continue;
-              const readyTask = state?.tasks.find((t) => t.id === readyId);
-              if (readyTask && readyTask.status !== "ready") {
-                readyTask.status = "ready";
-              }
-            }
-          }
-
-          // Remove dependency blockers referencing this task in v1 state
-          if (state) {
-            state.blockers = state.blockers.filter(
-              (b) => !(b.taskId === taskId && b.category === "dependency") && !b.reason?.startsWith(`Blocked by failed dependency: ${taskId}`)
-            );
-          }
-
-          await reconcileFromAuthoritative(ctx);
-          if (state) {
-            if (state.status === "needs_human_intervention" || state.status === "paused") state.status = "awaiting_approval";
-            await persistState(ctx, "blocker_force_unblock", { taskId, action: "force-unblock", cascaded: cascadeCount });
-          }
-          ctx.ui.notify(`[task-forge] ${taskId} force-unblocked (${cascadeCount} task${cascadeCount === 1 ? "" : "s"} cascaded). Run /forge execute to continue.`, "success");
-          return;
-        }
-
-        // --- /forge blocker <id> --patch-validation <command> ---
-        if (raw.includes("--patch-validation")) {
-          const patchIndex = raw.indexOf("--patch-validation");
-          const newCommand = raw.slice(patchIndex + "--patch-validation".length).trim().replace(/^['"]|['"]$/g, "");
-          if (!newCommand) {
-            ctx.ui.notify("Usage: /forge blocker <task-id> --patch-validation \"command\"", "warning");
-            return;
-          }
-
-          let patched = 0;
-          if (task) {
-            if (task.validation?.mode === "command") {
-              task.validation.command = newCommand;
-              patched++;
-            }
-            if (task.acceptanceSignal) {
-              task.acceptanceSignal = newCommand;
-            }
-            await persistTaskDefinitions(ctx);
-          }
-
-          if (state?.testSpecs) {
-            const spec = (state.testSpecs as TestSpecEntry[]).find((s) => s.taskId === taskId);
-            if (spec && spec.validation?.mode === "command") {
-              spec.validation.command = newCommand;
-              patched++;
-            }
-            if (state.testSpecFile) {
-              await saveArtifact(ctx, state.testSpecFile, JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
-            }
-          }
-
-          // Also update task in v2 snapshot file
-          const snapshotPath = outputPath(ctx.cwd, "state.json");
-          if (existsSync(snapshotPath)) {
-            try {
-              const snapshotData = JSON.parse(await readFile(snapshotPath, "utf-8"));
-              const v2TaskDef = snapshotData.tasks?.find((t: any) => t.id === taskId);
-              if (v2TaskDef?.validation?.mode === "command") {
-                v2TaskDef.validation.command = newCommand;
-                patched++;
-              }
-              if (v2TaskDef?.acceptanceSignal) {
-                v2TaskDef.acceptanceSignal = newCommand;
-              }
-              const v2Spec = snapshotData.testSpecs?.find((s: any) => s.taskId === taskId);
-              if (v2Spec?.validation?.mode === "command") {
-                v2Spec.validation.command = newCommand;
-                patched++;
-              }
-              await atomicWrite(snapshotPath, JSON.stringify(snapshotData, null, 2));
-            } catch {}
-          }
-
-          if (v2Task && needsHumanResolution) {
-            await v2Engine.resolveHumanIntervention(taskId, `Validation command patched via /forge blocker --patch-validation: ${newCommand}`);
-          }
-
-          await reconcileFromAuthoritative(ctx);
-          if (state) {
-            await persistState(ctx, "blocker_patch_validation", { taskId, newCommand, patched, humanResolved: needsHumanResolution });
-          }
-          ctx.ui.notify(`[task-forge] Validation patched for ${taskId} (${patched} field${patched === 1 ? "" : "s"} updated). Run /forge execute or /forge blocker ${taskId} --retry.`, "success");
-          return;
-        }
-
-        // --- /forge blocker <id> --resolve <instruction> (existing) ---
-        const flagIndex = raw.indexOf("--resolve");
-        const resolution = flagIndex >= 0 ? raw.slice(flagIndex + "--resolve".length).trim().replace(/^['"]|['"]$/g, "") : "";
-        if (!resolution) {
-          // --- /forge blocker <id> (no flag) — show details ---
-          const lines: string[] = [`[task-forge] ${taskId} — ${v2Task?.title ?? task?.title ?? "Unknown task"}`, ""];
-          if (v2Runtime) {
-            lines.push(`  status: ${v2Runtime.status}`);
-            if (v2Runtime.error) lines.push(`  error: ${v2Runtime.error.substring(0, 200)}`);
-            if (v2Runtime.retries) lines.push(`  retries: ${v2Runtime.retries}`);
-            if (v2Runtime.blocker) {
-              lines.push(`  blocker (${v2Runtime.blocker.category}): ${v2Runtime.blocker.reason}`);
-              if (v2Runtime.blocker.suggestion) lines.push(`  suggestion: ${v2Runtime.blocker.suggestion}`);
-            }
-          } else if (task) {
-            lines.push(`  status: ${task.status}`);
-            if (task.error) lines.push(`  error: ${task.error?.substring(0, 200)}`);
-          }
-
-          if (v2Blocker) {
-            lines.push("");
-            lines.push(`  blocker: ${v2Blocker.reason}`);
-            lines.push(`  suggestion: ${v2Blocker.suggestion}`);
-            if (v2Blocker.remediation) lines.push(`  remediation: ${v2Blocker.remediation.mode} (${v2Blocker.remediation.category})`);
-          }
-
-          if (v2Task) {
-            lines.push("");
-            lines.push(`  dependencies: ${v2Task.dependencies.length > 0 ? v2Task.dependencies.join(", ") : "none"}`);
-            lines.push(`  validation: ${v2Task.validation?.mode ?? "unknown"}${v2Task.validation?.mode === "command" ? ` — ${v2Task.validation.command?.substring(0, 80)}` : ""}`);
-            lines.push(`  output: ${v2Task.outputManifest?.join(", ") ?? "(none)"}`);
-
-            const downstream = (effectiveSnapshot?.tasks ?? []).filter((t) => t.dependencies.includes(taskId)).map((t) => t.id);
-            if (downstream.length > 0) lines.push(`  downstream: ${downstream.join(", ")}`);
-          }
-
-          lines.push("");
-          lines.push("Actions:");
-          lines.push(`  /forge blocker ${taskId} --resolve "description of fix"`);
-          if (v2Runtime?.status === "failed" || v2Runtime?.status === "blocked" || task?.status === "failed" || task?.status === "blocked") {
-            lines.push(`  /forge blocker ${taskId} --retry`);
-            lines.push(`  /forge blocker ${taskId} --force-unblock`);
-          }
-          if (v2Task?.validation?.mode === "command") {
-            lines.push(`  /forge blocker ${taskId} --patch-validation "new command"`);
-          }
-          lines.push(`  /forge blocker ${taskId} --diagnostic`);
-
-          ctx.ui.notify(lines.join("\n"), "warning");
-          return;
-        }
-
-        // Resolve blocker with instruction (existing logic)
-        const v2TaskExists = v2Snapshot?.tasks.some((t) => t.id === taskId) || v2Snapshot?.taskState[taskId];
-        const contractPatch = deriveBlockerResolutionPatch(resolution);
-        if (state && task && contractPatch) {
-          const patched = applyBlockerResolutionPatch(taskId, task, state.testSpecs as TestSpecEntry[] | undefined, contractPatch);
-          state.testSpecs = patched.testSpecs;
-          if (state.testSpecFile) {
-            await saveArtifact(ctx, state.testSpecFile, JSON.stringify({ testSpecs: state.testSpecs }, null, 2));
-          }
-          await persistTaskDefinitions(ctx);
-          if (state.testSpecs && state.testSpecFile) {
-            await withV2Engine(ctx, (engine) => engine.markTestSpecWritten(state.testSpecFile!, state.testSpecs!, state.testSpecMarkdownFile));
-          }
-        }
-
-        if (v2TaskExists) {
-          await v2Engine.resolveHumanIntervention(taskId, resolution);
-        } else if (task) {
-          task.resolutionInstruction = resolution;
-          task.blocker = undefined;
-          task.error = undefined;
-          if (task.status === "blocked" || task.status === "failed") task.status = "pending";
-          state!.blockers = state!.blockers
-            .map((b) => (b.taskId === taskId ? { ...b, resolvedBy: resolution, resolvedAt: nowIso() } : b))
-            .filter((b) => b.taskId !== taskId);
-          state!.status = "awaiting_approval";
-        }
-
-        await reconcileFromAuthoritative(ctx);
-        if (state) {
-          await persistState(ctx, "blocker_resolved", { taskId, resolution, contractPatched: Boolean(contractPatch) });
-        }
-        ctx.ui.notify(`[task-forge] Blocker resolved for ${taskId}. Run /forge execute to continue.`, "success");
+        const snapshot = await loadCommandSnapshot(ctx);
+        await handleBlockerCommand(ctx, snapshot, raw, parts);
         return;
       }
 
-      const authoritative = await loadCommandSnapshot(ctx);
-      const activeStatus = effectiveCommandStatus(authoritative);
+      const snapshot = await loadCommandSnapshot(ctx);
+      const activeStatus = snapshot?.status ?? "idle";
       if (!isTerminalCommandStatus(activeStatus)) {
         ctx.ui.notify(`[task-forge] Active orchestration already exists (${activeStatus}). Finish or abort it before starting a new run.`, "warning");
         return;
@@ -2927,7 +2352,8 @@ export default function (pi: ExtensionAPI) {
 
       const executeImmediately = raw.endsWith("--execute");
       const prdFile = executeImmediately ? raw.replace(/\s+--execute\s*$/, "") : raw;
-      startPlanningInBackground(ctx, prdFile, executeImmediately);
+      const hooks = createPlanningHooks(ctx);
+      startPlanningInBackgroundV2(ctx, hooks, prdFile, executeImmediately);
       return;
     },
   });
@@ -2937,28 +2363,6 @@ export default function (pi: ExtensionAPI) {
 
     await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
     const authoritative = await sweepOverdueSupervisors(ctx, await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir));
-
-    if (authoritative) {
-      applyAuthoritativeSnapshotToV1(authoritative);
-    } else {
-      let restored: ForgeState | null = null;
-      for (const entry of ctx.sessionManager.getEntries()) {
-        if (entry.type === "custom" && (entry as any).customType === STATE_ENTRY_TYPE) {
-          restored = (entry as any).data as ForgeState;
-        }
-      }
-
-      if (!restored) {
-        const file = outputPath(ctx.cwd, "state.json");
-        if (existsSync(file)) {
-          try {
-            restored = JSON.parse(await readFile(file, "utf-8")) as ForgeState;
-          } catch {}
-        }
-      }
-
-      state = restored;
-    }
 
     const recoveredExecution = describeInterruptedExecution(authoritative);
     if (recoveredExecution) {
@@ -2998,7 +2402,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     const refreshed = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
-    ctx.ui.setStatus("task-forge", refreshed ? statusLabelFromV2(refreshed) : statusLabel(state));
+    ctx.ui.setStatus("task-forge", refreshed ? renderStatusFromSnapshot(refreshed) : "forge:idle");
   });
 
   pi.on("session_shutdown", async (_event: any, ctx: any) => {
@@ -3022,7 +2426,7 @@ export default function (pi: ExtensionAPI) {
 
     // Best-effort planning interruption detection (hard kills bypass this)
     const planningRoles: Role[] = ["scopeClassifier", "strategist", "planner", "testDesigner"];
-    const activePlanningRole = state?.activeAgent?.role;
+    const activePlanningRole = activeAgent?.role;
     if (activePlanningRole && planningRoles.includes(activePlanningRole)) {
       await withV2Engine(ctx, async (engine) => {
         await engine.markPlanningPhaseInterrupted(activePlanningRole, state!.currentPhase);
