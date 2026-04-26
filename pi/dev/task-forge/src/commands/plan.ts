@@ -72,7 +72,7 @@ export async function runPlanningFlow(
   if (!snapshot) return { snapshot: null, status: "failed", error: "Requirements analysis failed" };
 
   // Complex mode checkpoint
-  if (snapshot.orchestrationMode === "complex") {
+  if (snapshot.orchestrationMode === "complex" && !executeImmediately) {
     await hooks.withEngine(async (engine) => {
       await engine.requireApproval("continuePlanning", "Complex Checkpoint: Requirements Review");
     });
