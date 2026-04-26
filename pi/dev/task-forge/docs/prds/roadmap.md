@@ -2,11 +2,12 @@
 
 ## Executive summary
 
-Three remaining friction points from the V2-only migration:
+Four remaining friction points:
 
 1. Blocker resolution is manual even when it's deterministic — patching validation or retrying a task should auto-clear human intervention.
 2. The core lifecycle (fail → patch → retry → resume → execute) has no end-to-end test, causing regressions during development and forge runs.
 3. `validation.mode=manual` tasks can claim success without producing their declared output files — the `outputManifest` is advisory, never enforced.
+4. Re-running `/forge <prd>` is destructive — it silently overwrites artifacts, appends to the same event log, and has no awareness of code already written by a previous run.
 
 ## Core objectives
 
@@ -41,6 +42,13 @@ When a human-intervention-blocked task is patched (validation command fixed) and
 - **Must:** If any file is missing, block the task with reason "Task did not produce required output: <file>" — do not proceed to gate review.
 - **Must:** The check must run before gate review so the failure is attributed to the worker, not the reviewer.
 - **Should:** Include the missing file paths in the blocker evidence so the user can see exactly what's missing.
+
+### FR-5: Run isolation (idempotency guard)
+
+- **Must:** Re-running `/forge <prd>` after a completed/aborted run must not silently overwrite the previous `.task-forge/` artifacts.
+- **Must:** Before starting a new run, detect existing terminal run artifacts and either: (a) rotate `.task-forge/` to `.task-forge.<timestamp>/`, or (b) prompt for confirmation before overwriting.
+- **Should:** Track which run produced which artifacts so `events.jsonl` doesn't accumulate events from multiple runs in a single file.
+- **Could:** Incremental mode — when a PRD is re-run on a codebase that already has partial implementation, the planner should detect completed work and only generate/decompose remaining tasks.
 
 ## Non-functional requirements
 
