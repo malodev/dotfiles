@@ -1439,14 +1439,24 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
   }
 
   async function runValidation(ctx: any, task: ForgeTask): Promise<{ passed: boolean; output: string; coverage?: number }> {
-    return await runTaskValidation(task, {
+    const result = await runTaskValidation(task, {
       exec: async (command) => await pi.exec(
         "bash",
         ["-lc", command],
         { cwd: ctx.cwd, signal: runAbortController?.signal, timeout: seconds(900) } as any,
       ),
     });
-  }
+
+    // FR-4: Enforce outputManifest — verify files exist before gate review
+    const missingFiles = (task.outputManifest ?? []).filter(f => !existsSync(resolve(ctx.cwd, f)));
+    if (missingFiles.length > 0) {
+      return {
+        passed: false,
+        output: `Task did not produce required output: ${missingFiles.join(", ")}`,
+      };
+    }
+
+    return result;
 
   async function diagnoseTaskFailure(ctx: any, task: ForgeTask) {
     return await runTaskDiagnosticReview({
@@ -1794,6 +1804,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
       }
     })();
     ctx.ui.notify(`[task-forge] Planning started (${prdFile})`, "info");
+    ctx.ui.setStatus("task-forge", "forge:📋planning");
     return planningPromise;
   }
 
@@ -2005,7 +2016,8 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
         await applyCommandEvents(ctx, retryResult);
       }
       if (v2Task && needsHumanResolution) {
-        await v2Engine.resolveHumanIntervention(taskId, "Manual retry via /forge blocker --retry");
+        await v2Engine.resolveHumanIntervention(taskId, "Auto-resolved: task retried via /forge blocker --retry");
+        await v2Engine.requeueTask(taskId, "Auto-clear after retry");
         await reconcileFromAuthoritative(ctx);
       }
       if (task && (task.status === "failed" || task.status === "blocked")) {
@@ -2089,6 +2101,12 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
       const patchResult = patchValidationCommandService(effectiveSnapshot, { taskId, command: newCommand });
       if (patchResult.ok && patchResult.events.length > 0) {
         await applyCommandEvents(ctx, patchResult);
+      }
+
+      // FR-1: Auto-clear human intervention on patch/retry
+      if (needsHumanResolution) {
+        await v2Engine.resolveHumanIntervention(taskId, `Auto-resolved: validation command patched via /forge blocker --patch-validation`);
+        await v2Engine.requeueTask(taskId, `Auto-clear after patch validation`);
       }
 
       let patched = 0;
@@ -2350,6 +2368,11 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
       if (!isTerminalCommandStatus(activeStatus)) {
         ctx.ui.notify(`[task-forge] Active orchestration already exists (${activeStatus}). Finish or abort it before starting a new run.`, "warning");
         return;
+      }
+
+      // FR-5: Run isolation — warn if previous run artifacts exist
+      if (existsSync(resolve(ctx.cwd, config.outputDir, "events.jsonl"))) {
+        ctx.ui.notify("[task-forge] ⚠ Previous run artifacts found in .task-forge/. Starting a new run will overwrite them. Use /forge abort first to clean up.", "warning");
       }
 
       const executeImmediately = raw.endsWith("--execute");
