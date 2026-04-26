@@ -44,7 +44,6 @@ export function execute(snapshot: RunSnapshot | null, input: ExecuteInput = {}):
     events.push({
       type: "approval_granted",
       at: nowIso(),
-      nextAction: "executePlan",
     });
     events.push({
       type: "phase_entered",
