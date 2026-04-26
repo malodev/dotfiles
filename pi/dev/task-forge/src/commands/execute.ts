@@ -46,6 +46,12 @@ export function execute(snapshot: RunSnapshot | null, input: ExecuteInput = {}):
       at: nowIso(),
       nextAction: "executePlan",
     });
+    events.push({
+      type: "phase_entered",
+      at: nowIso(),
+      phase: 5,
+      label: "Execution",
+    });
   }
 
   const tasksToLaunch = Object.values(snapshot.taskState)

@@ -42,6 +42,12 @@ export function resume(snapshot: RunSnapshot | null, input: ResumeInput = {}): C
       at: nowIso(),
       reason: input.reason,
     },
+    {
+      type: "phase_entered",
+      at: nowIso(),
+      phase: 5,
+      label: "Execution",
+    },
   ];
 
   return {

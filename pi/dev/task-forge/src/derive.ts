@@ -109,6 +109,9 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
       return snapshot;
     case "approval_granted":
       snapshot.nextAction = event.nextAction;
+      if (snapshot.currentPhase >= 5) {
+        snapshot.status = "executing";
+      }
       return snapshot;
     case "run_paused":
       snapshot.status = "paused";
@@ -116,8 +119,10 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
       snapshot.nextAction = event.nextAction;
       return snapshot;
     case "run_resumed":
-      snapshot.status = "planning";
       snapshot.nextAction = undefined;
+      if (snapshot.currentPhase >= 5) {
+        snapshot.status = "executing";
+      }
       return snapshot;
     case "requirements_written":
       snapshot.requirementsFile = event.file;

@@ -51,8 +51,9 @@ describe("execute command service", () => {
     });
     const result = execute(snapshot, { grantApproval: true });
     assert.strictEqual(result.ok, true);
-    assert.strictEqual(result.events.length, 1);
+    assert.strictEqual(result.events.length, 2);
     assert.strictEqual(result.events[0].type, "approval_granted");
+    assert.strictEqual(result.events[1].type, "phase_entered");
   });
 
   it("lists ready tasks to launch", () => {

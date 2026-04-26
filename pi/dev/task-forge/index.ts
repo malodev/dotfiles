@@ -1836,7 +1836,8 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     }
 
     await applyCommandEvents(ctx, executeResult);
-    ctx.ui.setStatus("task-forge", renderStatusFromSnapshot({ ...currentSnapshot, status: "executing", currentPhase: 5, phaseLabel: "Execution" } as V2RunSnapshot));
+    const updated = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(updated));
     startExecutionInBackground(ctx, "execute command");
   }
 
@@ -2285,7 +2286,8 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
           return;
         }
         await applyCommandEvents(ctx, result);
-        ctx.ui.setStatus("task-forge", renderStatusFromSnapshot({ ...snapshot, status: "executing", currentPhase: 5, phaseLabel: "Execution" } as V2RunSnapshot));
+        const updated = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(updated));
         startExecutionInBackground(ctx, "resume");
         return;
       }
