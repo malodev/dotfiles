@@ -1837,6 +1837,8 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     }
 
     await applyCommandEvents(ctx, executeResult);
+    const updated = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+    ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(updated));
     startExecutionInBackground(ctx, "execute command");
   }
 
@@ -2285,6 +2287,8 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
           return;
         }
         await applyCommandEvents(ctx, result);
+        const updated = await loadAuthoritativeSnapshot(ctx.cwd, config.outputDir);
+        ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(updated));
         startExecutionInBackground(ctx, "resume");
         return;
       }
