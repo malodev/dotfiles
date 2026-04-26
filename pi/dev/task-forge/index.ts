@@ -1457,6 +1457,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     }
 
     return result;
+  }
 
   async function diagnoseTaskFailure(ctx: any, task: ForgeTask) {
     return await runTaskDiagnosticReview({
