@@ -113,43 +113,138 @@ Examples:
 
 ---
 
-## V2 state model
+## V2 State Machine
 
-### Run status
+TaskForge's run-level state is derived from events by `deriveStatus()` in `src/derive.ts`.
+Every state transition is deterministic — replaying the same event log always produces the same status.
 
-```ts
-type RunStatus =
-  | "idle"
-  | "planning"
-  | "awaiting_approval"
-  | "executing"
-  | "needs_human_intervention"
-  | "reviewing"
-  | "completed"
-  | "aborted"
-  | "failed";
+### States
+
+```
+                    ┌──────────────┐
+                    │     idle     │ (no run exists)
+                    └──────┬───────┘
+                           │ run_created
+                           ▼
+                    ┌──────────────┐
+              ┌────│   planning   │◄────────────── run_resumed
+              │    └──────┬───────┘
+              │           │ approval_required
+              │           ▼
+              │    ┌──────────────────┐
+              │    │ awaiting_approval│◄── run_paused
+              │    └────────┬─────────┘
+              │           │ approval_granted
+              │           ▼
+              │    ┌──────────────┐     human_intervention_requested
+              │    │  executing   │──────────────────────┐
+              │    └──┬───┬───┬──┘                      │
+              │       │   │   │    run_paused           ▼
+              │       │   │   └──────────────┐  ┌───────────────────────┐
+              │       │   │                  │  │needs_human_intervention│
+              │       │   │   all tasks done│  └───────────┬───────────┘
+              │       │   │   (phase >= 5)  │              │ intervention_resolved
+              │       │   │        │        │              │ + task_requeued
+              │       │   │        ▼        ▼              │
+              │       │   │  ┌──────────┐ ┌──────────┐    │
+              │       │   │  │ reviewing│ │  paused   │◄───┘
+              │       │   │  └────┬─────┘ └────┬─────┘
+              │       │   │       │            │ run_resumed
+              │       │   │       ▼            │
+              │       │   │  ┌───────────┐     │
+              │       │   │  │ completed │     │
+              │       │   │  └───────────┘     │
+              │       │   │                    │
+              │       │   │  run_failed        │
+              │       │   └──────────┐         │
+              │       │              ▼         │
+              │       │        ┌──────────┐    │
+              │       │        │  failed  │    │
+              │       │        └──────────┘    │
+              │       │                        │
+              │       │  run_aborted           │
+              │       └──────────┐             │
+              │                  ▼             │
+              │            ┌──────────┐        │
+              └────────────│ aborted  │◄───────┘
+                           └──────────┘
 ```
 
-### Task status
+### State definitions
+
+| State | Meaning | Entry events |
+|-------|---------|-------------|
+| `idle` | No run | (initial) |
+| `planning` | Active planning phase 0–3 | `run_created`, `run_resumed` |
+| `awaiting_approval` | Planning complete, waiting for user | `approval_required` with `nextAction` set |
+| `executing` | Tasks running (phase ≥ 5) | `task_started`, ready/pending tasks in phase ≥ 5 |
+| `reviewing` | Integration review (phase 6) | All tasks done, phase ≥ 5, no `reviewFile` |
+| `completed` | Run finished | `integration_review_completed`, or `reviewFile` set |
+| `paused` | User/system paused | `run_paused` |
+| `aborted` | User aborted | `run_aborted` |
+| `failed` | Terminal failure | `run_failed`, or any task `failed` with no intervention path |
+| `needs_human_intervention` | Human help required | `human_intervention_requested`, or unresolved blockers |
+
+### deriveStatus() resolution order
 
 ```ts
-type TaskStatus =
-  | "pending"
-  | "ready"
-  | "running"
-  | "completed"
-  | "blocked"
-  | "failed"
-  | "skipped";
+// src/derive.ts — exact priority, first match wins
+1. if snapshot.status === "aborted"           → aborted
+2. if snapshot.status === "completed"         → completed
+3. if snapshot.status === "paused"            → paused
+4. if snapshot.pendingHumanIntervention       → needs_human_intervention
+5. if any task is running                     → executing
+6. if snapshot.reviewFile exists              → completed
+7. if snapshot.nextAction is set              → awaiting_approval
+8. if all tasks done && phase >= 5            → reviewing
+9. if unresolved blockers > 0                 → needs_human_intervention
+10. if ready/pending tasks && phase >= 5      → executing
+11. if snapshot.status === "failed"           → failed
+12. if any task failed                        → failed
+13. default                                   → planning
 ```
 
-### Key distinction
+### Key invariants
 
-- `blocked` = task cannot proceed until something external is resolved
-- `failed` = task reached a terminal unrecoverable state under current policy
-- `needs_human_intervention` = run-level state saying the engine intentionally stopped and is waiting for the user
+- **`failed` never has `nextAction`** — deriveStatus ignores `nextAction` when status is `failed`
+- **`awaiting_approval` never has running tasks** — `hasRunning` check (step 5) takes priority
+- **`needs_human_intervention` is sticky** — persists until `human_intervention_resolved` or task requeue
+- **`paused` preserves `nextAction`** — so resume knows whether to continue planning or execution
+- **`status` field on snapshot is advisory only** — deriveStatus recomputes it on every load
 
----
+### Task state transitions
+
+```
+pending ──▶ ready ──▶ running ──▶ completed
+   │         │          │
+   │         │          ├──▶ blocked ──▶ (resolved) ──▶ pending (requeued)
+   │         │          │
+   │         │          └──▶ failed
+   │         │
+   └─────────┴── (dependency blocked → stays pending)
+```
+
+| Transition | Event |
+|-----------|-------|
+| pending → ready | `task_ready` |
+| ready → running | `task_started` |
+| running → completed | `task_completed` |
+| running → blocked | `task_blocked` |
+| running → failed | `task_failed` |
+| blocked → pending | `task_requeued` (+ `human_intervention_resolved` for intervention cases) |
+
+### Restart determinism
+
+After pi restart:
+1. Load `events.jsonl`
+2. Replay all events into a fresh `RunSnapshot`
+3. `deriveStatus()` produces the same status as before restart
+4. No in-memory state needed — `taskState`, `supervisors`, `blockers` are all derived from events
+
+Interrupted planning and execution are explicitly represented:
+- `planning_phase_interrupted` → `snapshot.planningRuntime.interrupted = true`
+- `run_paused` with `nextAction` → resumable execution
+- `task_started` without matching `task_completed` → task was `running` at shutdown, requeued on restart
 
 ## Event log
 
@@ -233,25 +328,6 @@ On every load:
 This means if pi exits mid-run, restart does **not** reuse stale in-memory state.
 
 ---
-
-## Status derivation rules
-
-Pseudo-order:
-
-1. if run aborted event exists after latest execution start → `aborted`
-2. else if integration review completed successfully → `completed`
-3. else if unresolved human intervention exists → `needs_human_intervention`
-4. else if current phase requires approval and approval not granted → `awaiting_approval`
-5. else if any task is running → `executing`
-6. else if all non-skipped tasks completed and integration review pending → `reviewing`
-7. else if there are ready/pending tasks and execution authorized → `executing`
-8. else if any terminal unrecoverable task failure exists with no intervention path → `failed`
-9. else → `planning`
-
-This prevents contradictory combinations like:
-- `failed` with `nextAction=executePlan`
-- `failed` with only blocked tasks
-- `awaiting_approval` while tasks are still running
 
 ---
 
