@@ -900,7 +900,6 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
       `${JSON.stringify({ time: nowIso(), event, details: details ?? {}, status: snapshot.status })}\n`,
       "utf-8"
     );
-    ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(snapshot));
   }
 
   function normalizeFailureSignature(text: string | undefined) {
