@@ -1766,8 +1766,36 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     return executionPromise;
   }
 
-  // startPlanningInBackground V1 deleted — superseded by startPlanningInBackgroundV2
+  // ── V2 Planning orchestrator ────────────────────────────────────
 
+  function startPlanningInBackgroundV2(ctx: any, hooks: PlanningHooks, prdFile: string, executeImmediately: boolean) {
+    if (planningPromise) return planningPromise;
+    planningPromise = (async () => {
+      try {
+        ensureRunAbortController();
+        await ensureV2BootstrappedFromCurrentState(ctx.cwd, config.outputDir);
+        const result = await runPlanningFlow(ctx, hooks, prdFile, executeImmediately);
+        if (result.status === "awaiting_approval") {
+          const snapshot = await hooks.loadSnapshot();
+          ctx.ui.setStatus("task-forge", renderStatusFromSnapshot(snapshot));
+          if (result.mode === "complex") {
+            ctx.ui.notify("[task-forge] Complex mode: review 01-requirements.md, then run /forge execute to continue planning", "info");
+          } else {
+            sendTaskForgeMessage("task-forge-approval-ready", "[task-forge] Plan ready. Review artifacts, then run /forge execute", ctx, "warning");
+          }
+        } else if (result.status === "completed") {
+          startExecutionInBackground(ctx, "auto-execute");
+        }
+      } catch (error: any) {
+        await withV2Engine(ctx, (engine) => engine.markRunFailed(String(error?.message ?? error)));
+        ctx.ui.notify(`[task-forge] ${String(error?.message ?? error)}`, "error");
+      } finally {
+        planningPromise = null;
+      }
+    })();
+    ctx.ui.notify(`[task-forge] Planning started (${prdFile})`, "info");
+    return planningPromise;
+  }
 
   // ── V2 shell command handlers ───────────────────────────────────
 
