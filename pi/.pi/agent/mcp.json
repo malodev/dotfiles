@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "stitch": {
+      "url": "https://stitch.googleapis.com/mcp",
+      "auth": false,
+      "headers": {
+        "X-Goog-Api-Key": "${STITCH_API_KEY}"
+      },
+      "lifecycle": "lazy"
+    },
+    "gam-workspace": {
+      "command": "node",
+      "args": ["/Users/mauro/.local/src/mcp-gam/dist/index.js"],
+      "env": {
+        "GAM_PATH": "/Users/mauro/bin/gam7/gam"
+      }
+    }
+  }
+}
