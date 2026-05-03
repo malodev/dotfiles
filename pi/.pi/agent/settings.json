@@ -1,9 +1,9 @@
 {
-  "defaultModel": "qwen/qwen3.6-plus",
-  "defaultProvider": "openrouter",
-  "defaultThinkingLevel": "medium",
+  "defaultModel": "deepseek-v4-flash",
+  "defaultProvider": "opencode-go",
+  "defaultThinkingLevel": "high",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.65.2",
+  "lastChangelogVersion": "0.72.1",
   "modelProfiles": [
     {
       "model": "anthropic/claude-opus-4-6",
@@ -59,7 +59,9 @@
     "npm:@marckrenn/pi-sub-bar",
     {
       "source": "npm:@ollama/pi-web-search",
-      "extensions": ["+index.ts"]
+      "extensions": [
+        "+index.ts"
+      ]
     },
     "npm:@ifi/oh-pi",
     "npm:@ifi/oh-pi-extensions",
@@ -74,18 +76,11 @@
     "npm:pi-powerline-footer"
   ],
   "theme": "nord",
-  "enabledModels": [
-    "opencode-go/glm-5",
-    "opencode-go/kimi-k2.5",
-    "anthropic/claude-opus-4-6",
-    "anthropic/claude-sonnet-4-6",
-    "github-copilot/claude-opus-4.6",
-    "github-copilot/claude-sonnet-4.6",
-    "openai-codex/gpt-5.4",
-    "openai-codex/gpt-5.3-codex",
-    "openrouter/x-ai/grok-4.1-fast",
-    "openrouter/moonshotai/kimi-k2.5",
-    "openrouter/deepseek/deepseek-v3.2",
-    "openrouter/qwen/qwen3.6-plus"
-  ]
+  "tools": {
+    "write": {
+      "include": [
+        "+/Users/mauro/.pi/**/*"
+      ]
+    }
+  }
 }
