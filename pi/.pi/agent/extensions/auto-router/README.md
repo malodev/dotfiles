@@ -293,14 +293,15 @@ You usually only need two actions:
 Use `/route now` to see the current profile, route, tier, escalation state, and config path.
 
 ## Profiles
-
 A profile is a named provider strategy. It defines reusable model pools (`modelTiers`) and maps routes to tiers (`routeAssignment`).
 
 ```json
 "online": {
   "modelTiers": {
-    "fast": ["opencode-go/minimax-m2.7", "openai-codex/gpt-5.4-mini"],
-    "coding": ["opencode-go/kimi-k2.6", "openai-codex/gpt-5.3-codex"]
+    "fast": ["opencode-go/minimax-m2.5", "openai-codex/gpt-5.4-mini"],
+    "coding": ["opencode-go/kimi-k2.6", "openai-codex/gpt-5.3-codex"],
+    "reasoning": ["opencode-go/deepseek-v4-pro", "openai-codex/gpt-5.5"],
+    "endurance": ["opencode-go/deepseek-v4-pro", "openai-codex/gpt-5.5"]
   },
   "routeAssignment": {
     "coding": "coding",
@@ -309,12 +310,29 @@ A profile is a named provider strategy. It defines reusable model pools (`modelT
 }
 ```
 
+Current `online` rationale:
+
+- `fast` prefers `MiniMax M2.5` for maximum first-pass quota headroom.
+- `coding` currently keeps `Kimi K2.6` because of the active temporary 3x quota promotion.
+- `reasoning` and `endurance` prefer `DeepSeek V4 Pro` for stronger high-effort reasoning.
+
 Each tier candidate list is limited to at most two entries:
 
 1. Primary model
 2. Optional failover model
 
 The first available candidate wins.
+
+## Current Profiles
+
+| Profile | Intent |
+|---|---|
+| `online` | Default. opencode-go primary, OpenAI Codex failover. `MiniMax M2.5` for `fast`, promoted `Kimi K2.6` for `coding`, `DeepSeek V4 Pro` for `reasoning` and `endurance`. |
+| `offline` | Local Ollama models only. Does not use cloud-tagged Ollama models. |
+| `copilot` | GitHub Copilot provider profile. |
+| `gpt` | OpenAI-Codex-first profile. GPT-5.5 reserved for endurance. |
+| `claude` | Anthropic-first profile. Opus 4.7 for reasoning/endurance. |
+| `openrouter-auto` | Wildcard profile where every route uses `openrouter/auto`. |
 
 ### Candidate Syntax
 
@@ -328,7 +346,8 @@ Examples:
 
 ```json
 "ollama/qwen3-coder"
-"opencode-go/minimax-m2.7"
+"opencode-go/minimax-m2.5"
+"opencode-go/deepseek-v4-pro"
 "openai-codex/gpt-5.4-mini"
 "openrouter/anthropic/claude-sonnet-4.5"
 ```
