@@ -87,10 +87,11 @@ export function classifyRuntimeFailure(text: string | undefined): PreflightCheck
 }
 
 function taskLooksLikeManualValidationCandidate(task: Pick<ForgeTask, "title" | "description" | "outputManifest">) {
-  const haystack = `${task.title}\n${task.description}\n${task.outputManifest.join("\n")}`.toLowerCase();
+  const manifest = Array.isArray(task.outputManifest) ? task.outputManifest : [];
+  const haystack = `${task.title}\n${task.description}\n${manifest.join("\n")}`.toLowerCase();
   const mentionsDocs = /\breadme\b|\bdocs?\b|documentation|troubleshooting|guide|note/.test(haystack);
-  const manifestLooksTextual = task.outputManifest.length > 0
-    && task.outputManifest.every((file: string) => /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(file));
+  const manifestLooksTextual = manifest.length > 0
+    && manifest.every((file: string) => /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(file));
   return mentionsDocs || manifestLooksTextual;
 }
 

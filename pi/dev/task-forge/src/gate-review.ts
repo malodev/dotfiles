@@ -52,7 +52,9 @@ export function buildGateReviewPrompt(task: GateReviewTaskLike) {
     ...task.acceptanceCriteria.map((value) => `- ${value}`),
     "",
     "## Output Manifest",
-    ...(task.outputManifest.length ? task.outputManifest.map((value) => `- ${value}`) : ["- none specified"]),
+    ...(Array.isArray(task.outputManifest) && task.outputManifest.length
+      ? task.outputManifest.map((value: string) => `- ${value}`)
+      : ["- none specified"]),
     "",
     "## Acceptance Signal",
     task.acceptanceSignal || task.testCommand || task.validation?.command || "none",

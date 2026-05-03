@@ -120,6 +120,7 @@ export function applyEvent(snapshot: RunSnapshot, event: ForgeEvent): RunSnapsho
       return snapshot;
     case "run_resumed":
       snapshot.nextAction = undefined;
+      snapshot.pendingHumanIntervention = undefined;
       if (snapshot.currentPhase >= 5) {
         snapshot.status = "executing";
       }

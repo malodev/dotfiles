@@ -531,6 +531,23 @@ export async function runMicroPlan(
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+/**
+ * Normalize output_manifest from planner agent.
+ * Planner may emit either a flat string[] or a structured object
+ * { artifacts: string[], codebase_files: string[] }.
+ * Always coerce to flat string[] for the runtime.
+ */
+function normalizeOutputManifest(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((e): e is string => typeof e === "string");
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    const artifacts: unknown[] = Array.isArray(obj.artifacts) ? obj.artifacts : [];
+    const files: unknown[] = Array.isArray(obj.codebase_files) ? obj.codebase_files : [];
+    return [...artifacts, ...files].filter((e): e is string => typeof e === "string");
+  }
+  return [];
+}
+
 function coerceTask(raw: any, index?: number): ForgeTask {
   const taskMode: "single-pass" | "iterative" = raw.task_mode === "iterative" ? "iterative" : "single-pass";
   const complexity: "S" | "M" | "L" = raw.complexity === "L" || raw.complexity === "S" ? raw.complexity : "M";
@@ -548,7 +565,7 @@ function coerceTask(raw: any, index?: number): ForgeTask {
       codebaseFiles: raw.context_manifest?.codebase_files ?? [],
       dependencyOutputs: raw.context_manifest?.dependency_outputs ?? [],
     },
-    outputManifest: raw.output_manifest ?? [],
+    outputManifest: normalizeOutputManifest(raw.output_manifest),
     dependencies: raw.dependencies ?? [],
     acceptanceCriteria: raw.acceptance_criteria ?? [],
     escalationTriggers: raw.escalation_triggers ?? [],

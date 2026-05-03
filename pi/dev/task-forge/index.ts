@@ -219,6 +219,18 @@ const DEFAULT_CONFIG: TaskForgeConfig = {
 const STATE_ENTRY_TYPE = "task-forge-state";
 const TASK_STALL_WARNING_MS = seconds(20 * 60);
 
+/** Normalize output_manifest from planner: flat array or {artifacts, codebase_files} object. */
+function normalizeOutputManifest(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((e): e is string => typeof e === "string");
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    const artifacts: unknown[] = Array.isArray(obj.artifacts) ? obj.artifacts : [];
+    const files: unknown[] = Array.isArray(obj.codebase_files) ? obj.codebase_files : [];
+    return [...artifacts, ...files].filter((e): e is string => typeof e === "string");
+  }
+  return [];
+}
+
 export function coercePlannerTask(raw: any, index: number): ForgeTask {
   const taskMode: TaskMode = raw.task_mode === "iterative" ? "iterative" : "single-pass";
   const complexity = raw.complexity === "L" || raw.complexity === "S" ? raw.complexity : "M";
@@ -242,7 +254,7 @@ export function coercePlannerTask(raw: any, index: number): ForgeTask {
       codebaseFiles: raw.context_manifest?.codebase_files ?? [],
       dependencyOutputs: raw.context_manifest?.dependency_outputs ?? [],
     },
-    outputManifest: raw.output_manifest ?? [],
+    outputManifest: normalizeOutputManifest(raw.output_manifest),
     dependencies: raw.dependencies ?? [],
     acceptanceCriteria: raw.acceptance_criteria ?? [],
     escalationTriggers: raw.escalation_triggers ?? [],
@@ -597,7 +609,7 @@ function tasksToMarkdown(tasks: ForgeTask[]): string {
       `- Mode: ${task.taskMode}`,
       `- Complexity: ${task.complexity}`,
       `- Dependencies: ${task.dependencies.length > 0 ? task.dependencies.join(", ") : "None"}`,
-      `- Output: ${task.outputManifest.length > 0 ? task.outputManifest.join(", ") : "None specified"}`,
+      `- Output: ${Array.isArray(task.outputManifest) && task.outputManifest.length > 0 ? task.outputManifest.join(", ") : "None specified"}`,
       "",
       task.description,
       "",
@@ -1448,7 +1460,8 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     });
 
     // FR-4: Enforce outputManifest — verify files exist before gate review
-    const missingFiles = (task.outputManifest ?? []).filter(f => !existsSync(resolve(ctx.cwd, f)));
+    const manifest = Array.isArray(task.outputManifest) ? task.outputManifest : [];
+    const missingFiles = manifest.filter((f: string) => !existsSync(resolve(ctx.cwd, f)));
     if (missingFiles.length > 0) {
       return {
         passed: false,
@@ -2194,7 +2207,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
         lines.push("");
         lines.push(`  dependencies: ${v2Task.dependencies.length > 0 ? v2Task.dependencies.join(", ") : "none"}`);
         lines.push(`  validation: ${v2Task.validation?.mode ?? "unknown"}${v2Task.validation?.mode === "command" ? ` — ${v2Task.validation.command?.substring(0, 80)}` : ""}`);
-        lines.push(`  output: ${v2Task.outputManifest?.join(", ") ?? "(none)"}`);
+        lines.push(`  output: ${Array.isArray(v2Task.outputManifest) ? v2Task.outputManifest.join(", ") : "(none)"}`);
 
         const downstream = (effectiveSnapshot?.tasks ?? []).filter((t) => t.dependencies.includes(taskId)).map((t) => t.id);
         if (downstream.length > 0) lines.push(`  downstream: ${downstream.join(", ")}`);
@@ -2237,6 +2250,10 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
 
     if (v2TaskExists) {
       await v2Engine.resolveHumanIntervention(taskId, resolution);
+      // --resolve = manual override → complete task so it doesn't re-block
+      await withV2Engine(ctx, async (engine) => {
+        await (engine as any).append({ type: "task_completed", at: nowIso(), taskId, result: resolution });
+      });
     } else if (task) {
       task.resolutionInstruction = resolution;
       task.blocker = undefined;
