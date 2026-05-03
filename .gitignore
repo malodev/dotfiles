@@ -15,4 +15,6 @@ sketchybar/.config/sketchybar-ai-old
 sketchybar/.config/sketchybar-old
 sketchybar/.config/sketchybar-new
 __pycache__
+node_modules
 git/.local/bin/
+package-lock.json

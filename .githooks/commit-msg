@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Conventional commit validation via commitlint
+# Falls back gracefully if commitlint is not available.
+
+set -euo pipefail
+
+COMMIT_MSG_FILE="$1"
+
+# --- Determine how to invoke commitlint ---
+# Prefer local node_modules, then npx auto-install, then global
+COMMITLINT=""
+if [ -x "$(git rev-parse --show-toplevel 2>/dev/null)/node_modules/.bin/commitlint" ]; then
+  COMMITLINT="$(git rev-parse --show-toplevel)/node_modules/.bin/commitlint"
+elif command -v npx &>/dev/null; then
+  COMMITLINT="npx --yes @commitlint/cli"
+elif command -v commitlint &>/dev/null; then
+  COMMITLINT="commitlint"
+else
+  echo "⚠️  commitlint not found — skipping commit message validation."
+  echo "   Install with: npm install -g @commitlint/cli @commitlint/config-conventional"
+  exit 0
+fi
+
+# --- Determine config file ---
+CONFIG_ARG=""
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+if [ -f "$REPO_ROOT/commitlint.config.js" ]; then
+  CONFIG_ARG="--config $REPO_ROOT/commitlint.config.js"
+elif [ -f "$REPO_ROOT/.commitlintrc.yaml" ]; then
+  CONFIG_ARG="--config $REPO_ROOT/.commitlintrc.yaml"
+elif [ -f "$REPO_ROOT/.commitlintrc.json" ]; then
+  CONFIG_ARG="--config $REPO_ROOT/.commitlintrc.json"
+fi
+
+# --- Run commitlint ---
+$COMMITLINT --edit "$COMMIT_MSG_FILE" $CONFIG_ARG

@@ -4,3 +4,8 @@ LICENSE
 \.DS_Store
 \.nvim
 \.gitignore
+\.githooks
+package\.json
+package-lock\.json
+commitlint\.config\.js
+node_modules
