@@ -1,56 +1,9 @@
 {
   "defaultModel": "deepseek-v4-flash",
   "defaultProvider": "opencode-go",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "off",
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.72.1",
-  "modelProfiles": [
-    {
-      "model": "anthropic/claude-opus-4-6",
-      "thinking": "high",
-      "label": "Anthropic: Opus 4.6"
-    },
-    {
-      "model": "github-copilot/claude-opus-4.6",
-      "thinking": "high",
-      "label": "Github: Opus 4.6"
-    },
-    {
-      "model": "openrouter/anthropic/claude-opus-4.6",
-      "thinking": "high",
-      "label": "OpenRouter: Opus 4.6"
-    },
-    {
-      "model": "anthropic/claude-sonnet-4-6",
-      "thinking": "high",
-      "label": "Anthropic: Sonnet 4.6"
-    },
-    {
-      "model": "github-copilot/claude-sonnet-4.6",
-      "thinking": "high",
-      "label": "Github: Sonnet 4.6"
-    },
-    {
-      "model": "openrouter/anthropic/claude-sonnet-4.6",
-      "thinking": "high",
-      "label": "OpenRouter: Sonnet 4.6"
-    },
-    {
-      "model": "opencode-go/kimi-k2.5",
-      "thinking": "high",
-      "label": "Go Kimi 2.5"
-    },
-    {
-      "model": "openrouter/qwen/qwen3.6-plus:free",
-      "thinking": "high",
-      "label": "OR: Qwen 3.6"
-    }
-  ],
-  "ollama": {
-    "apiKey": "0c4f3d2b11b344e9a45123cf7bd7b4bd.R4oEJv4QwXLKbjimvaM9GVqI",
-    "baseUrl": "http://localhost:11435",
-    "defaultModel": "gemma4:31b-it-q4_K_M"
-  },
   "packages": [
     "npm:pi-markdown-preview",
     "npm:pi-connect",
@@ -75,6 +28,10 @@
     "npm:@ifi/pi-web-remote",
     "npm:pi-powerline-footer"
   ],
+  "powerlineShortcuts": {
+    "jumpPreviousUserMessage": "ctrl+shift+9",
+    "jumpNextUserMessage": "ctrl+shift+0"
+  },
   "theme": "nord",
   "tools": {
     "write": {
