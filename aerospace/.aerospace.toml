@@ -35,7 +35,7 @@ automatically-unhide-macos-hidden-apps = false
 # even when they are invisible.
 # This config version is only available since 'config-version = 2'
 # Fallback value (if you omit the key): persistent-workspaces = []
-persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "A", "S", "D"]
+persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "A", "S", "D"]
 
 # [[on-window-detected]]
 # if.app-id = 'com.apple.systempreferences'
@@ -84,7 +84,7 @@ inner.vertical =   40
 outer.left =       40
 outer.bottom =     40
 outer.top =        40
-outer.right =      80
+outer.right =      40
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
@@ -154,7 +154,7 @@ alt-6 = 'workspace 6'
 alt-7 = 'workspace 7'
 alt-8 = 'workspace 8'
 alt-9 = 'workspace 9'
-alt-0 = 'workspace 0' # In your config, you can drop workspace bindings that you don't need
+alt-0 = 'workspace 10' # In your config, you can drop workspace bindings that you don't need
 alt-a = 'workspace A'
 alt-s = 'workspace S'
 # alt-c = 'workspace C'
@@ -188,7 +188,7 @@ alt-shift-6 = 'move-node-to-workspace 6'
 alt-shift-7 = 'move-node-to-workspace 7'
 alt-shift-8 = 'move-node-to-workspace 8'
 alt-shift-9 = 'move-node-to-workspace 9'
-alt-shift-0 = 'move-node-to-workspace 0'
+alt-shift-0 = 'move-node-to-workspace 10'
 alt-shift-a = 'move-node-to-workspace A'
 alt-shift-s = 'move-node-to-workspace S'
 # alt-shift-c = 'move-node-to-workspace C'
