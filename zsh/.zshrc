@@ -288,3 +288,5 @@ echo "🛠️zshrc loaded."
 
 # bun completions
 [ -s "/Users/mauro/.bun/_bun" ] && source "/Users/mauro/.bun/_bun"
+
+alias gam="/Users/mauro/bin/gam7/gam"
