@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/scripts/install/manifest.sh"
 declare -A DEFAULT_GROUPS
 declare -A SELECTED_GROUPS
 declare -A SELECTED_PACKAGES
+declare -A STOW_SKIP_PACKAGES
 PACKAGE_ONLY_MODE=0
 
 init_default_groups() {

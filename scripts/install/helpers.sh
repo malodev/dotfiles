@@ -139,8 +139,38 @@ group_details() {
 #=============================================================================
 # STOW / USER-LOCAL HELPERS
 #=============================================================================
+stow_conflicts_are_identical_files() {
+    local output="$1"
+    local conflict_line
+    local rel_path
+    local source_path
+    local target_path
+    local saw_conflict=0
+
+    while IFS= read -r conflict_line; do
+        [[ "$conflict_line" == *"cannot stow "*" over existing target "* ]] || continue
+        saw_conflict=1
+
+        rel_path="${conflict_line#* over existing target }"
+        rel_path="${rel_path%% since *}"
+        rel_path="${rel_path#./}"
+        source_path="$SCRIPT_DIR/$pkg/$rel_path"
+        target_path="$HOME/$rel_path"
+
+        if [[ ! -f "$source_path" || ! -f "$target_path" ]]; then
+            return 1
+        fi
+        if ! cmp -s "$source_path" "$target_path"; then
+            return 1
+        fi
+    done <<< "$output"
+
+    [[ $saw_conflict -eq 1 ]]
+}
+
 stow_package_preflight() {
     local pkg="$1"
+    local output
 
     log_dry_run "  stow preflight -d $SCRIPT_DIR -t $HOME $pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
@@ -148,14 +178,29 @@ stow_package_preflight() {
     fi
 
     log_info "Checking stow conflicts for $pkg..."
-    if ! stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
-        log_error "Stow conflict detected for $pkg. Resolve existing files or run stow manually after backing them up."
-        return 1
+    output=$(stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "$pkg" 2>&1) && {
+        printf '%s\n' "$output" | tee -a "$LOG_FILE"
+        return 0
+    }
+
+    printf '%s\n' "$output" | tee -a "$LOG_FILE"
+    if stow_conflicts_are_identical_files "$output"; then
+        log_warn "Stow conflicts for $pkg are identical existing files; skipping this package instead of aborting."
+        STOW_SKIP_PACKAGES[$pkg]=1
+        return 0
     fi
+
+    log_error "Stow conflict detected for $pkg. Resolve existing files or run stow manually after backing them up."
+    return 1
 }
 
 stow_package() {
     local pkg="$1"
+
+    if [[ -v "STOW_SKIP_PACKAGES[$pkg]" ]]; then
+        log_warn "Skipping $pkg stow because identical files already exist at target paths"
+        return 0
+    fi
 
     log_dry_run "  stow -d $SCRIPT_DIR -t $HOME $pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
