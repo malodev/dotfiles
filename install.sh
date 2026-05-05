@@ -105,6 +105,7 @@ main() {
     run_interactive_group_selection
     show_selected_groups_summary
     show_pre_install_status_if_needed
+    run_stow_preflight_for_selection
     setup_package_manager_for_mode
     run_install_steps
     show_final_summary

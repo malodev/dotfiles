@@ -138,10 +138,10 @@ group_details() {
 #=============================================================================
 # STOW / USER-LOCAL HELPERS
 #=============================================================================
-stow_package() {
+stow_package_preflight() {
     local pkg="$1"
 
-    log_dry_run "  stow -d $SCRIPT_DIR -t $HOME $pkg"
+    log_dry_run "  stow preflight -d $SCRIPT_DIR -t $HOME $pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
         return 0
     fi
@@ -150,6 +150,15 @@ stow_package() {
     if ! stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
         log_error "Stow conflict detected for $pkg. Resolve existing files or run stow manually after backing them up."
         return 1
+    fi
+}
+
+stow_package() {
+    local pkg="$1"
+
+    log_dry_run "  stow -d $SCRIPT_DIR -t $HOME $pkg"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return 0
     fi
 
     log_info "Stowing $pkg..."

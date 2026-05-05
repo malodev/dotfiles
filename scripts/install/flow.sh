@@ -61,6 +61,91 @@ show_pre_install_status_if_needed() {
     fi
 }
 
+selected_stow_packages() {
+    local group
+    local pkg
+
+    for group in "${INSTALL_ORDER[@]}"; do
+        if [[ "$(get_group_selection "$group")" != "1" ]]; then
+            continue
+        fi
+
+        for pkg in ${INSTALL_GROUPS[$group]}; do
+            if [[ "$group" == "editor" && "$pkg" =~ ^nvim- ]]; then
+                continue
+            fi
+            if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
+                continue
+            fi
+            if [[ "$group" == "shell" ]] && is_shell_config_package "$pkg"; then
+                if [[ -n "${MANUAL_SHELL_PACKAGES:-}" ]]; then
+                    local should_include_shell=0
+                    local manual_shell
+                    for manual_shell in $MANUAL_SHELL_PACKAGES; do
+                        if [[ "$pkg" == "$manual_shell" ]]; then
+                            should_include_shell=1
+                            break
+                        fi
+                    done
+                    [[ $should_include_shell -eq 0 ]] && continue
+                elif [[ "$pkg" != "${SHELL##*/}" ]]; then
+                    continue
+                fi
+            fi
+            echo "$pkg"
+        done
+    done
+
+    if [[ "$(get_group_selection "editor")" == "1" ]]; then
+        for pkg in ${INSTALL_GROUPS[editor]}; do
+            if [[ "$pkg" =~ ^nvim- ]]; then
+                if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
+                    continue
+                fi
+                echo "$pkg"
+            fi
+        done
+    fi
+
+    if has_selected_packages && [[ "$PACKAGE_ONLY_MODE" != "1" ]]; then
+        for pkg in "${!SELECTED_PACKAGES[@]}"; do
+            if package_in_selected_group "$pkg"; then
+                continue
+            fi
+            echo "$pkg"
+        done
+    fi
+}
+
+run_stow_preflight_for_selection() {
+    local pkg
+    local failed=0
+    local seen=" "
+
+    show_banner "Checking Stow Conflicts"
+
+    while IFS= read -r pkg; do
+        [[ -n "$pkg" ]] || continue
+        if [[ "$seen" == *" $pkg "* ]]; then
+            continue
+        fi
+        seen+="$pkg "
+
+        if [[ -d "$SCRIPT_DIR/$pkg" ]]; then
+            if ! stow_package_preflight "$pkg"; then
+                failed=1
+            fi
+        else
+            log_warn "Package directory not found: $pkg"
+        fi
+    done < <(selected_stow_packages)
+
+    if [[ $failed -ne 0 ]]; then
+        log_error "Stow preflight failed. No system packages were installed by this run."
+        exit 1
+    fi
+}
+
 setup_package_manager_for_mode() {
     if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "1" ]]; then
         if ! command_exists brew; then

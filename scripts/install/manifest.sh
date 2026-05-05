@@ -44,6 +44,17 @@ SHELL_CONFIG_PACKAGES=("bash" "zsh" "nushell" "fish")
 # Some package names do not match their executable names. This map is used when
 # deciding whether a package already appears to be installed.
 declare -A COMMAND_CHECK_OVERRIDES=(
+    ["ripgrep"]="rg"
+    ["bottom"]="btm"
+    ["fd-find"]="fd"
+    ["p7zip"]="7z"
+    ["p7zip-full"]="7z"
+    ["poppler"]="pdftotext"
+    ["poppler-utils"]="pdftotext"
+    ["imagemagick"]="magick"
+    ["ImageMagick"]="magick"
+    ["github-cli"]="gh"
+    ["git-delta"]="delta"
     ["golang-go"]="go"
     ["golang"]="go"
     ["python3-pip"]="pip3"
