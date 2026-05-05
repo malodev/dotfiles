@@ -146,6 +146,8 @@ run_stow_preflight_for_selection() {
         log_error "Stow preflight failed. No system packages were installed by this run."
         exit 1
     fi
+
+    report_stow_conflicts
 }
 
 setup_package_manager_for_mode() {

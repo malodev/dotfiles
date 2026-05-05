@@ -139,8 +139,18 @@ group_details() {
 #=============================================================================
 # STOW / USER-LOCAL HELPERS
 #=============================================================================
+declare -a STOW_CONFLICT_REPORTS=()
+declare -A STOW_SKIP_PACKAGES=()
+
+stow_register_conflict() {
+    local pkg="$1"
+    local rel_path="$2"
+    STOW_CONFLICT_REPORTS+=("$pkg:$rel_path")
+}
+
 stow_conflicts_are_identical_files() {
-    local output="$1"
+    local pkg="$1"
+    local output="$2"
     local conflict_line
     local rel_path
     local source_path
@@ -163,6 +173,7 @@ stow_conflicts_are_identical_files() {
         if ! cmp -s "$source_path" "$target_path"; then
             return 1
         fi
+        stow_register_conflict "$pkg" "$rel_path"
     done <<< "$output"
 
     [[ $saw_conflict -eq 1 ]]
@@ -184,8 +195,8 @@ stow_package_preflight() {
     }
 
     printf '%s\n' "$output" | tee -a "$LOG_FILE"
-    if stow_conflicts_are_identical_files "$output"; then
-        log_warn "Stow conflicts for $pkg are identical existing files; skipping this package instead of aborting."
+    if stow_conflicts_are_identical_files "$pkg" "$output"; then
+        log_warn "Stow conflicts for $pkg are identical existing files; will skip only those paths and continue."
         STOW_SKIP_PACKAGES[$pkg]=1
         return 0
     fi
@@ -197,18 +208,32 @@ stow_package_preflight() {
 stow_package() {
     local pkg="$1"
 
-    if [[ -v "STOW_SKIP_PACKAGES[$pkg]" ]]; then
-        log_warn "Skipping $pkg stow because identical files already exist at target paths"
-        return 0
-    fi
-
     log_dry_run "  stow -d $SCRIPT_DIR -t $HOME $pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
         return 0
     fi
 
+    if [[ -v "STOW_SKIP_PACKAGES[$pkg]" ]]; then
+        log_warn "Skipping $pkg stow because identical files already exist at target paths"
+        return 0
+    fi
+
     log_info "Stowing $pkg..."
     stow -d "$SCRIPT_DIR" -t "$HOME" -v "$pkg" 2>&1 | tee -a "$LOG_FILE"
+}
+
+report_stow_conflicts() {
+    if [[ ${#STOW_CONFLICT_REPORTS[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    log_warn "Stow conflicts detected (already-in-place files skipped):"
+    local entry pkg rel_path
+    for entry in "${STOW_CONFLICT_REPORTS[@]}"; do
+        pkg="${entry%%:*}"
+        rel_path="${entry#*:}"
+        log_warn "  $pkg: $rel_path"
+    done
 }
 
 ensure_user_local_bin() {

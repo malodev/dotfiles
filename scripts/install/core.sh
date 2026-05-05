@@ -76,6 +76,10 @@ install_group() {
         fi
 
         if [[ "$group" == "shell" ]]; then
+            if [[ -v "STOW_SKIP_PACKAGES[$pkg]" ]]; then
+                log_warn "Skipping $pkg because identical existing files were detected during stow preflight"
+                continue
+            fi
             if [[ $install_specific_shells -eq 1 ]]; then
                 local should_install=0
                 for manual_shell in $MANUAL_SHELL_PACKAGES; do
