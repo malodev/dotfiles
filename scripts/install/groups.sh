@@ -10,6 +10,7 @@ declare -A DEFAULT_GROUPS
 declare -A SELECTED_GROUPS
 declare -A SELECTED_PACKAGES
 declare -A STOW_SKIP_PACKAGES
+declare -A STOW_SKIP_PATHS
 PACKAGE_ONLY_MODE=0
 
 init_default_groups() {

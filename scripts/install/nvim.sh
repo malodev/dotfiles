@@ -101,6 +101,15 @@ install_nvim_configs() {
         for pkg in ${INSTALL_GROUPS[$group]}; do
             if [[ "$pkg" =~ ^nvim- ]] && [[ -d "$SCRIPT_DIR/$pkg" ]]; then
                 if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
+                continue
+            fi
+
+            if [[ -v "STOW_SKIP_PACKAGES[$pkg]" ]]; then
+                log_warn "Skipping $pkg stow because conflicting files were already present in HOME"
+                continue
+            fi
+
+            if [[ "$(get_group_selection "$group")" != "1" ]]; then
                     continue
                 fi
 

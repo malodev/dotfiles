@@ -77,7 +77,7 @@ install_group() {
 
         if [[ "$group" == "shell" ]]; then
             if [[ -v "STOW_SKIP_PACKAGES[$pkg]" ]]; then
-                log_warn "Skipping $pkg because identical existing files were detected during stow preflight"
+                log_warn "Skipping $pkg stow because conflicting files were already present in HOME"
                 continue
             fi
             if [[ $install_specific_shells -eq 1 ]]; then
