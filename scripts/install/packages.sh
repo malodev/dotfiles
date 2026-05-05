@@ -130,7 +130,18 @@ install_shell_tools() {
     fi
 
     if [[ "$(get_group_selection "terminal")" == "1" ]]; then
-        _linux_pkg_install "Terminal tools" tmux
+        case "$DISTRO" in
+            arch)
+                _linux_pkg_install "Terminal tools" tmux
+                _aur_install_or_warn "urlview" "urlview" "urlview"
+                ;;
+            debian)
+                _linux_pkg_install "Terminal tools" tmux urlview
+                ;;
+            fedora)
+                _linux_pkg_install "Terminal tools" tmux urlview
+                ;;
+        esac
         if ! command_exists kitty; then
             case "$DISTRO" in
                 arch) _linux_pkg_install "Kitty" kitty ;;
