@@ -10,7 +10,7 @@ declare -A INSTALL_GROUPS=(
     ["terminal"]="kitty tmux"
     ["desktop"]="sketchybar aerospace borders"
     ["linux"]="i3"
-    ["dev"]="git bat lazygit"
+    ["dev"]="git bat"
     ["extras"]="shell-color-scripts"
 )
 
@@ -21,7 +21,7 @@ declare -A GROUP_DESC=(
     ["terminal"]="Terminal tools (Kitty, Tmux)"
     ["desktop"]="Desktop environment (SketchyBar, AeroSpace, Borders)"
     ["linux"]="Linux window manager (i3)"
-    ["dev"]="Development tools (Git, Lazygit, Delta, Bat, LLM)"
+    ["dev"]="Development tools (Git, Lazygit, Lazydocker, Delta, Bat, LLM)"
     ["extras"]="Extra utilities (Shell color scripts)"
 )
 
@@ -109,7 +109,7 @@ declare -A GROUP_DETAIL_LINE_1=(
     ["terminal"]="Stow: kitty, tmux"
     ["desktop"]="Stow: sketchybar, aerospace, borders"
     ["linux"]="Stow: i3"
-    ["dev"]="Stow: git, bat, lazygit"
+    ["dev"]="Stow: git, bat"
     ["extras"]="Stow/install: shell-color-scripts, fastfetch"
 )
 
@@ -120,7 +120,7 @@ declare -A GROUP_DETAIL_LINE_2=(
     ["terminal"]="Installs: kitty/tmux where applicable via __PACKAGE_MODE__"
     ["desktop"]="Platform: macOS only; disabled on Linux"
     ["linux"]="Platform: Linux only; disabled on macOS"
-    ["dev"]="Installs: git/gh/delta/lazygit/uv/llm/bun/go/deno/python helpers where applicable via __PACKAGE_MODE__"
+    ["dev"]="Installs: git/gh/delta/lazygit/lazydocker/uv/llm/bun/go/deno/python helpers where applicable via __PACKAGE_MODE__"
     ["extras"]="Installs: optional tools, preferring user-local fallback locations"
 )
 

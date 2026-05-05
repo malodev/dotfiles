@@ -33,6 +33,12 @@ install_bun_tool() {
     if command_exists bun; then
         log_success "bun is already installed: $(bun --version 2>/dev/null || command -v bun)"
         return 0
+    elif [[ -x "$HOME/.bun/bin/bun" ]]; then
+        log_success "bun is already installed: $HOME/.bun/bin/bun"
+        if [[ ":$PATH:" != *":$HOME/.bun/bin:"* ]]; then
+            log_warn "$HOME/.bun/bin is not in PATH. Add: export PATH=\"$HOME/.bun/bin:\$PATH\""
+        fi
+        return 0
     fi
 
     log_info "Installing bun for current user..."
@@ -53,6 +59,46 @@ install_bun_tool() {
         fi
     else
         log_warn "bun installation may have failed (not found in PATH)"
+    fi
+}
+
+install_lazydocker_tool() {
+    if command_exists lazydocker; then
+        log_success "lazydocker is already installed: $(lazydocker --version 2>/dev/null || command -v lazydocker)"
+        return 0
+    fi
+
+    log_info "Installing lazydocker..."
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        if [[ "$DISTRO" == "arch" ]]; then
+            log_dry_run "Would install lazydocker via AUR/native package helper"
+        else
+            log_dry_run "Would install lazydocker from GitHub releases to $HOME/.local/bin/lazydocker"
+        fi
+        return 0
+    fi
+
+    if [[ "$DISTRO" == "arch" ]]; then
+        _aur_install_or_warn "lazydocker" "lazydocker" "lazydocker"
+    else
+        local lazydocker_version
+        lazydocker_version=$(curl -s "https://api.github.com/repos/jesseduffield/lazydocker/releases/latest" | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.24.1")
+        curl -fL "https://github.com/jesseduffield/lazydocker/releases/latest/download/lazydocker_${lazydocker_version}_Linux_x86_64.tar.gz" \
+            -o /tmp/lazydocker.tar.gz 2>/dev/null \
+            && tar -xzf /tmp/lazydocker.tar.gz -C /tmp lazydocker \
+            && install_to_user_local_bin /tmp/lazydocker lazydocker \
+            && rm -f /tmp/lazydocker /tmp/lazydocker.tar.gz \
+            || log_warn "lazydocker installation failed, install manually from https://github.com/jesseduffield/lazydocker"
+    fi
+
+    if command_exists lazydocker; then
+        log_success "lazydocker installed successfully: $(lazydocker --version 2>/dev/null || command -v lazydocker)"
+    elif [[ -x "$HOME/.local/bin/lazydocker" ]]; then
+        log_success "lazydocker installed successfully: $HOME/.local/bin/lazydocker"
+        warn_if_user_local_bin_not_in_path
+    else
+        log_warn "lazydocker installation may have failed (not found in PATH)"
     fi
 }
 
@@ -184,8 +230,16 @@ install_dev_tools() {
 
     install_uv_tool
     install_bun_tool
+    install_lazydocker_tool
 
-    if ! command_exists deno; then
+    if command_exists deno; then
+        log_success "Deno is already installed: $(deno --version 2>/dev/null | head -1 || command -v deno)"
+    elif [[ -x "$HOME/.deno/bin/deno" ]]; then
+        log_success "Deno is already installed: $HOME/.deno/bin/deno"
+        if [[ ":$PATH:" != *":$HOME/.deno/bin:"* ]]; then
+            log_warn "$HOME/.deno/bin is not in PATH. Add: export PATH=\"$HOME/.deno/bin:\$PATH\""
+        fi
+    else
         log_info "Installing Deno..."
         if [[ "$DRY_RUN" == "0" ]]; then
             curl -fsSL https://deno.land/install.sh | sh || log_warn "Deno installation failed"
@@ -205,7 +259,7 @@ install_dev_tools() {
     fi
 
     if [[ "$DRY_RUN" == "1" ]]; then
-        log_dry_run "  Would install: uv, bun, go, python3-pip, composer, unzip, lazygit, delta, bat, llm"
+        log_dry_run "  Would ensure installed: uv, bun, go, python3-pip, composer, unzip, lazygit, lazydocker, delta, bat, llm"
         return 0
     fi
 
