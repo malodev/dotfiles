@@ -71,7 +71,7 @@ selected_stow_packages() {
         fi
 
         for pkg in ${INSTALL_GROUPS[$group]}; do
-            if [[ "$group" == "editor" && "$pkg" =~ ^nvim- ]]; then
+            if [[ ( "$group" == "editor" || "$group" == "editor-alt" ) && "$pkg" =~ ^nvim- ]]; then
                 continue
             fi
             if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
@@ -96,16 +96,18 @@ selected_stow_packages() {
         done
     done
 
-    if [[ "$(get_group_selection "editor")" == "1" ]]; then
-        for pkg in ${INSTALL_GROUPS[editor]}; do
-            if [[ "$pkg" =~ ^nvim- ]]; then
-                if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
-                    continue
+    for group in editor editor-alt; do
+        if [[ "$(get_group_selection "$group")" == "1" ]]; then
+            for pkg in ${INSTALL_GROUPS[$group]}; do
+                if [[ "$pkg" =~ ^nvim- ]]; then
+                    if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
+                        continue
+                    fi
+                    echo "$pkg"
                 fi
-                echo "$pkg"
-            fi
-        done
-    fi
+            done
+        fi
+    done
 
     if has_selected_packages && [[ "$PACKAGE_ONLY_MODE" != "1" ]]; then
         for pkg in "${!SELECTED_PACKAGES[@]}"; do
@@ -200,17 +202,15 @@ run_install_steps() {
         done
     fi
 
-    if [[ "$(get_group_selection "editor")" == "1" ]]; then
+    if nvim_configs_selected; then
         install_nvim_configs
     fi
 
-    if [[ "${SELECTED_GROUPS[editor]:-0}" == "1" ]]; then
+    if nvim_configs_selected; then
         if [[ "$DRY_RUN" == "1" ]]; then
-            if [[ "$PACKAGE_ONLY_MODE" == "1" ]]; then
-                local selected_nvim="nvim-$(first_selected_nvim_key)"
-                log_info "Would set default Neovim to: $selected_nvim"
-            else
-                log_info "Would set default Neovim to: nvim-$DEFAULT_NVIM_KEY"
+            local selected_nvim="nvim-$(first_selected_nvim_key)"
+            log_info "Would set default Neovim to: $selected_nvim"
+            if [[ "$PACKAGE_ONLY_MODE" != "1" ]]; then
                 log_info "(Run without --dry-run to select different config)"
             fi
         else
@@ -221,6 +221,8 @@ run_install_steps() {
     if [[ "$PACKAGE_ONLY_MODE" != "1" ]]; then
         install_shell_color_scripts
         install_fastfetch
+    elif is_package_selected "nvim-malo"; then
+        install_shell_color_scripts
     fi
 }
 
@@ -266,7 +268,7 @@ show_final_summary() {
         if [[ "$OS" == "Darwin" && "$(get_group_selection "desktop")" == "1" ]]; then
             echo "    - Start SketchyBar: brew services restart sketchybar"
         fi
-        if [[ "$(get_group_selection "extras")" == "1" ]]; then
+        if [[ "$(get_group_selection "editor")" == "1" ]] || is_package_selected "nvim-malo"; then
             echo "    - Run: colorscript to see available color scripts"
         fi
     fi

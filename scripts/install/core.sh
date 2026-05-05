@@ -36,7 +36,7 @@ install_group() {
     local has_stow_work=0
     local check_pkg
     for check_pkg in "${packages[@]}"; do
-        if [[ "$group" == "editor" && "$check_pkg" =~ ^nvim- ]]; then
+        if [[ ( "$group" == "editor" || "$group" == "editor-alt" ) && "$check_pkg" =~ ^nvim- ]]; then
             continue
         fi
         if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$check_pkg"; then
@@ -67,7 +67,7 @@ install_group() {
     fi
 
     for pkg in "${packages[@]}"; do
-        if [[ "$group" == "editor" && "$pkg" =~ ^nvim- ]]; then
+        if [[ ( "$group" == "editor" || "$group" == "editor-alt" ) && "$pkg" =~ ^nvim- ]]; then
             continue
         fi
 

@@ -56,6 +56,7 @@ run_case "bash -n" bash -n "$INSTALL_SCRIPT"
 run_case "manifest validation" "$REPO_DIR/scripts/validate-manifest.sh"
 run_case "dry-run default preset" "$INSTALL_SCRIPT" --dry-run
 run_case "dry-run minimal" "$INSTALL_SCRIPT" --minimal --dry-run
+run_case "dry-run ssh" "$INSTALL_SCRIPT" --ssh --dry-run
 run_case "dry-run standard" "$INSTALL_SCRIPT" --standard --dry-run
 run_case "dry-run full" "$INSTALL_SCRIPT" --full --dry-run
 run_case "dry-run explicit group" "$INSTALL_SCRIPT" --group shell --dry-run
@@ -84,7 +85,8 @@ if [[ "$(uname)" != "Darwin" ]]; then
     assert_in_log "dry-run unsupported desktop group" "Group 'desktop' is not supported on this platform; skipping"
 fi
 assert_in_log "list groups" "core: (no stow packages)"
-assert_in_log "list groups" "terminal: kitty tmux"
+assert_in_log "list groups" "terminal: tmux"
+assert_in_log "list groups" "gui-terminal: kitty"
 assert_in_log "dry-run from outside repo" "stow -d $REPO_DIR -t $HOME tmux"
 
 if command -v shellcheck >/dev/null 2>&1; then

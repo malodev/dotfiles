@@ -110,6 +110,19 @@ install_cli_tools() {
     esac
 }
 
+install_kitty_terminfo() {
+    if command_exists infocmp && infocmp xterm-kitty >/dev/null 2>&1; then
+        log_success "kitty terminfo is already installed"
+        return 0
+    fi
+
+    case "$DISTRO" in
+        arch) _linux_pkg_install "Kitty terminfo" kitty-terminfo ;;
+        debian) _linux_pkg_install "Kitty terminfo" kitty-terminfo ;;
+        fedora) _linux_pkg_install "Kitty terminfo" kitty-terminfo ;;
+    esac
+}
+
 install_shell_tools() {
     if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
         return 0
@@ -134,14 +147,20 @@ install_shell_tools() {
             arch)
                 _linux_pkg_install "Terminal tools" tmux
                 _aur_install_or_warn "urlview" "urlview" "urlview"
+                install_kitty_terminfo
                 ;;
             debian)
                 _linux_pkg_install "Terminal tools" tmux urlview
+                install_kitty_terminfo
                 ;;
             fedora)
                 _linux_pkg_install "Terminal tools" tmux urlview
+                install_kitty_terminfo
                 ;;
         esac
+    fi
+
+    if [[ "$(get_group_selection "gui-terminal")" == "1" ]]; then
         if ! command_exists kitty; then
             case "$DISTRO" in
                 arch) _linux_pkg_install "Kitty" kitty ;;
@@ -153,7 +172,7 @@ install_shell_tools() {
 }
 
 install_editor_tools() {
-    if [[ "$(get_group_selection "editor")" != "1" ]]; then
+    if [[ "$(get_group_selection "editor")" != "1" ]] && [[ "$(get_group_selection "editor-alt")" != "1" ]]; then
         return 0
     fi
     if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
@@ -309,7 +328,7 @@ setup_stow() {
 }
 
 install_shell_color_scripts() {
-    if [[ "$(get_group_selection "extras")" != "1" ]]; then
+    if [[ "$(get_group_selection "editor")" != "1" ]] && ! is_package_selected "nvim-malo"; then
         return
     fi
 
@@ -361,7 +380,7 @@ install_shell_color_scripts() {
 }
 
 install_fastfetch() {
-    if [[ "$(get_group_selection "extras")" != "1" ]]; then
+    if [[ "$(get_group_selection "system-info")" != "1" ]]; then
         return
     fi
     if command_exists fastfetch; then

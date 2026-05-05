@@ -38,7 +38,7 @@ done
 
 for key in "${NVIM_CONFIG_ORDER[@]}"; do
     [[ -v "NVIM_CONFIGS[$key]" ]] || fail "nvim key '$key' missing from NVIM_CONFIGS"
-    package_in_group editor "nvim-$key" || fail "editor group missing package nvim-$key"
+    package_in_group editor "nvim-$key" || package_in_group editor-alt "nvim-$key" || fail "nvim package nvim-$key missing from editor/editor-alt groups"
 done
 
 found_default=0

@@ -12,8 +12,9 @@ print_help() {
     echo "  --with-brew     Use Homebrew on Linux (default: skip)"
     echo "  -g, --group G   Install an explicit group"
     echo "  -p, --package P Install an explicit dotfile package only"
-    echo "  --minimal       Minimal installation (core + shell)"
-    echo "  --standard      Standard installation (core + shell + editor + terminal)"
+    echo "  --minimal       SSH-safe minimal installation (core + shell + terminal + dev)"
+    echo "  --ssh           Alias for --minimal"
+    echo "  --standard      Standard installation (minimal + editor + system-info)"
     echo "  --full         Full installation (all groups)"
     echo "  -h, --help      Show this help message"
     echo ""
@@ -58,7 +59,7 @@ parse_cli_args() {
                 list_groups
                 exit 0
                 ;;
-            --minimal|--standard|--full)
+            --minimal|--ssh|--standard|--full)
                 CLI_USE_PRESET="${1#--}"
                 shift
                 ;;

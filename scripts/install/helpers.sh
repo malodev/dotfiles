@@ -92,7 +92,8 @@ first_selected_nvim_key() {
     local key
 
     for key in "${NVIM_CONFIG_ORDER[@]}"; do
-        if is_package_selected "nvim-$key"; then
+        local pkg="nvim-$key"
+        if is_package_selected "$pkg" || package_in_selected_group "$pkg"; then
             echo "$key"
             return 0
         fi

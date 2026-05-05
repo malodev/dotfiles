@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 
+nvim_configs_selected() {
+    [[ "$(get_group_selection "editor")" == "1" ]] || [[ "$(get_group_selection "editor-alt")" == "1" ]]
+}
+
 select_nvim_config() {
     if [[ "$INTERACTIVE" == "0" ]] || [[ ! -t 0 ]]; then
         [[ "$INTERACTIVE" == "0" ]] && log_info "Defaulting to nvim-malo"
 
-        local selected_key="$DEFAULT_NVIM_KEY"
-        local key
-        if [[ "$PACKAGE_ONLY_MODE" == "1" ]]; then
-            selected_key="$(first_selected_nvim_key)"
-        fi
+        local selected_key
+        selected_key="$(first_selected_nvim_key)"
         local selected_pkg="nvim-$selected_key"
         local config_dir="$SCRIPT_DIR/$selected_pkg/.config/nvim-$selected_key"
         local nvim_config="$HOME/.config/nvim"
@@ -90,21 +91,27 @@ select_nvim_config() {
 install_nvim_configs() {
     show_banner "Installing: Neovim Configurations"
 
-    for pkg in ${INSTALL_GROUPS[editor]}; do
-        if [[ "$pkg" =~ ^nvim- ]] && [[ -d "$SCRIPT_DIR/$pkg" ]]; then
-            if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
-                continue
-            fi
+    local group
+    local pkg
+    for group in editor editor-alt; do
+        if [[ "$(get_group_selection "$group")" != "1" ]]; then
+            continue
+        fi
 
-            if [[ "$(get_group_selection "$pkg" "1")" == "1" ]]; then
+        for pkg in ${INSTALL_GROUPS[$group]}; do
+            if [[ "$pkg" =~ ^nvim- ]] && [[ -d "$SCRIPT_DIR/$pkg" ]]; then
+                if [[ "$PACKAGE_ONLY_MODE" == "1" ]] && ! is_package_selected "$pkg"; then
+                    continue
+                fi
+
                 stow_package "$pkg"
             fi
-        fi
+        done
     done
 }
 
 install_neovim_binary() {
-    if [[ "$(get_group_selection "editor")" != "1" ]]; then
+    if ! nvim_configs_selected; then
         return
     fi
     if [[ "$OS" == "Darwin" ]]; then

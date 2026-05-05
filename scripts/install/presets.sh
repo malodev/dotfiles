@@ -4,20 +4,20 @@ apply_preset() {
     local preset="$1"
 
     case "$preset" in
-        minimal)
-            for group in core shell; do
-                SELECTED_GROUPS[$group]=1
-            done
-            for group in editor terminal desktop linux dev extras; do
+        minimal|ssh)
+            for group in "${!INSTALL_GROUPS[@]}"; do
                 SELECTED_GROUPS[$group]=0
+            done
+            for group in core shell terminal dev; do
+                SELECTED_GROUPS[$group]=1
             done
             ;;
         standard)
-            for group in core shell editor terminal; do
-                SELECTED_GROUPS[$group]=1
-            done
-            for group in desktop linux dev extras; do
+            for group in "${!INSTALL_GROUPS[@]}"; do
                 SELECTED_GROUPS[$group]=0
+            done
+            for group in core shell terminal dev editor system-info; do
+                SELECTED_GROUPS[$group]=1
             done
             ;;
         full)
