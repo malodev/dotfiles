@@ -34,8 +34,6 @@ brew "fastfetch"
 # Web tools
 brew "curl"
 brew "wget"
-brew "w3m"
-brew "lynx"
 
 # Dev tools
 brew "git"
@@ -53,7 +51,6 @@ brew "node"
 brew "yarn"
 brew "deno"
 brew "go"
-brew "composer"
 brew "unzip"
 
 # Apps for Mac

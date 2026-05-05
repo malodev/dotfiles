@@ -86,12 +86,12 @@ install_cli_tools() {
 
     case "$DISTRO" in
         arch)
-            _linux_pkg_install "CLI tools" fzf ripgrep lsd bat fd gdu bottom procs jq curl wget w3m lynx imagemagick p7zip poppler ffmpeg ffmpegthumbnailer unzip
+            _linux_pkg_install "CLI tools" fzf ripgrep lsd bat fd gdu bottom procs jq curl wget imagemagick p7zip poppler ffmpeg ffmpegthumbnailer unzip
             _aur_install_or_warn "yazi" "yazi" "yazi"
             _aur_install_or_warn "viu" "viu" "viu"
             ;;
         debian)
-            _linux_pkg_install "CLI tools" fzf ripgrep bat fd-find jq curl wget w3m lynx imagemagick p7zip-full poppler-utils ffmpeg unzip
+            _linux_pkg_install "CLI tools" fzf ripgrep bat fd-find jq curl wget imagemagick p7zip-full poppler-utils ffmpeg unzip
             for tool in lsd yazi bottom gdu procs viu ffmpegthumbnailer; do
                 if ! command_exists "$tool"; then
                     log_warn "$tool is not in default Debian/Ubuntu repos — install manually or use --with-brew"
@@ -99,7 +99,7 @@ install_cli_tools() {
             done
             ;;
         fedora)
-            _linux_pkg_install "CLI tools" fzf ripgrep bat fd-find lsd jq curl wget w3m lynx ImageMagick p7zip poppler-utils ffmpeg ffmpegthumbnailer unzip
+            _linux_pkg_install "CLI tools" fzf ripgrep bat fd-find lsd jq curl wget ImageMagick p7zip poppler-utils ffmpeg ffmpegthumbnailer unzip
             for tool in yazi bottom gdu procs viu; do
                 if ! command_exists "$tool"; then
                     log_warn "$tool may not be in Fedora repos — install manually or use --with-brew"
@@ -107,6 +107,24 @@ install_cli_tools() {
             done
             ;;
         *) log_warn "CLI tools installation not configured for $DISTRO" ;;
+    esac
+}
+
+install_web_cli_tools() {
+    if [[ "$(get_group_selection "web-cli")" != "1" ]]; then
+        return 0
+    fi
+    if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    show_banner "Installing Terminal Web Browsers (Linux)"
+
+    case "$DISTRO" in
+        arch) _linux_pkg_install "Terminal web browsers" w3m lynx ;;
+        debian) _linux_pkg_install "Terminal web browsers" w3m lynx ;;
+        fedora) _linux_pkg_install "Terminal web browsers" w3m lynx ;;
+        *) log_warn "Terminal web browser installation not configured for $DISTRO" ;;
     esac
 }
 

@@ -259,7 +259,7 @@ install_dev_tools() {
     fi
 
     if [[ "$DRY_RUN" == "1" ]]; then
-        log_dry_run "  Would ensure installed: uv, bun, go, python3-pip, composer, unzip, lazygit, lazydocker, delta, bat, llm"
+        log_dry_run "  Would ensure installed: uv, bun, go, unzip, lazygit, lazydocker, delta, bat, hub, llm"
         return 0
     fi
 
@@ -342,22 +342,6 @@ install_dev_tools() {
                     || log_warn "Node.js installation failed, install manually from https://nodejs.org"
             fi
 
-            if command_exists php && ! command_exists composer; then
-                curl -sS https://getcomposer.org/installer | php
-                if [[ -f composer.phar ]]; then
-                    install_to_user_local_bin composer.phar composer
-                    rm -f composer.phar
-                fi
-            fi
-
-            if ! command_exists pip3; then
-                _linux_pkg_install "Python pip" python3-pip
-            fi
-            if command_exists pip3; then
-                log_info "Installing Python packages: basedpyright, black, isort..."
-                pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
-            fi
-
             if ! python3 -m venv --help >/dev/null 2>&1; then
                 log_info "Python venv module not found, installing..."
                 local python_version=$(python3 --version 2>/dev/null | awk '{print $2}' | cut -d. -f1-2)
@@ -427,16 +411,6 @@ install_dev_tools() {
             $sudo_prefix dnf install -y git
             if ! command_exists go; then
                 $sudo_prefix dnf install -y golang
-            fi
-            if command_exists php && ! command_exists composer; then
-                $sudo_prefix dnf install -y composer
-            fi
-            if ! command_exists pip3; then
-                _linux_pkg_install "Python pip" python3-pip
-            fi
-            if command_exists pip3; then
-                log_info "Installing Python packages: basedpyright, black, isort..."
-                pip3 install --user basedpyright black isort 2>/dev/null || log_warn "Some Python packages failed to install"
             fi
             if ! python3 -m venv --help >/dev/null 2>&1; then
                 $sudo_prefix dnf install -y python3-venv || log_warn "python3-venv not found, may be included in python3 package"
