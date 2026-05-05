@@ -39,6 +39,7 @@ LOG_FILE="/tmp/dotfiles_install_$(date +%Y%m%d_%H%M%S).log"
 ORIGINAL_DIR="$(pwd)"
 DRY_RUN=0
 INTERACTIVE=1
+USER_LOCAL=0
 
 #=============================================================================
 # SOURCE COMMON FUNCTIONS (must be early for log_* functions)

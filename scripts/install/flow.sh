@@ -174,6 +174,7 @@ run_install_steps() {
             install_homebrew_packages
         fi
         install_cli_tools
+        install_user_local_preferred_tools
         install_web_cli_tools
         install_shell_tools
         install_editor_tools

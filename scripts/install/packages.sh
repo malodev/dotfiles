@@ -24,6 +24,11 @@ _aur_install_or_warn() {
     local package_name="$2"
     local description="${3:-$package_name}"
 
+    if [[ "${USER_LOCAL:-0}" == "1" ]] && user_local_preferred_package "$package_name"; then
+        log_info "$package_name is user-local preferred; skipping AUR/system package install"
+        return 0
+    fi
+
     if command_exists "$command_name"; then
         return 0
     fi
@@ -42,6 +47,18 @@ _aur_install_or_warn() {
     fi
 }
 
+user_local_preferred_package() {
+    local pkg="$1"
+    case "$pkg" in
+        fzf|ripgrep|bat|fd|fd-find|git-delta|lazygit|lazydocker|go|golang|golang-go|starship|zoxide)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 _linux_pkg_install() {
     local description="$1"
     shift
@@ -56,6 +73,11 @@ _linux_pkg_install() {
 
     local to_install=()
     for pkg in "${packages[@]}"; do
+        if [[ "${USER_LOCAL:-0}" == "1" ]] && user_local_preferred_package "$pkg"; then
+            log_info "$pkg is user-local preferred; skipping system package install"
+            continue
+        fi
+
         local cmd
         cmd="$(command_for_package "$pkg")"
         if ! command_exists "$cmd"; then
@@ -494,6 +516,61 @@ install_fastfetch() {
     fi
 }
 
+install_user_local_preferred_tools() {
+    if [[ "${USER_LOCAL:-0}" != "1" ]]; then
+        return 0
+    fi
+    if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    show_banner "Installing User-local Preferred Tools"
+    log_info "User-local mode: system package managers are avoided for fzf/rg/bat/fd/delta/lazygit/lazydocker/go/starship/zoxide when possible."
+
+    install_uv_tool
+    install_bun_tool
+    install_lazydocker_tool
+
+    if ! command_exists starship; then
+        log_dry_run "Would install starship to $HOME/.local/bin/starship"
+        if [[ "$DRY_RUN" == "0" ]]; then
+            ensure_user_local_bin
+            curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" || log_warn "starship installation failed"
+        fi
+    else
+        log_success "starship is already installed"
+    fi
+
+    if ! command_exists zoxide; then
+        log_dry_run "Would install zoxide to $HOME/.local/bin/zoxide"
+        if [[ "$DRY_RUN" == "0" ]]; then
+            ensure_user_local_bin
+            curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh -s -- --bin-dir "$HOME/.local/bin" || log_warn "zoxide installation failed"
+        fi
+    else
+        log_success "zoxide is already installed"
+    fi
+
+    if ! command_exists go; then
+        log_dry_run "Would install Go to $HOME/.local/opt/go with symlinks in $HOME/.local/bin"
+        if [[ "$DRY_RUN" == "0" ]]; then
+            local go_version go_root
+            go_root="$HOME/.local/opt/go"
+            go_version=$(curl -s "https://go.dev/dl/?mode=json" | grep -Po '"version": "go\K[^"]*' | head -1 2>/dev/null || echo "1.26.0")
+            mkdir -p "$HOME/.local/opt"
+            curl -Lo /tmp/go.tar.gz "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" 2>/dev/null \
+                && rm -rf "$go_root" \
+                && tar -C "$HOME/.local/opt" -xzf /tmp/go.tar.gz \
+                && symlink_to_user_local_bin "$go_root/bin/go" go \
+                && symlink_to_user_local_bin "$go_root/bin/gofmt" gofmt \
+                && rm -f /tmp/go.tar.gz \
+                || log_warn "Go installation failed, install manually from https://go.dev/dl"
+        fi
+    else
+        log_success "go is already installed"
+    fi
+}
+
 setup_zoxide() {
     if [[ "$(get_group_selection "shell")" != "1" ]]; then
         return
@@ -506,6 +583,11 @@ setup_zoxide() {
         return 0
     fi
     if [[ "$OS" == "Linux" ]] && [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    if [[ "${USER_LOCAL:-0}" == "1" ]]; then
+        log_info "zoxide is handled by user-local preferred tools"
         return 0
     fi
 
@@ -552,6 +634,11 @@ setup_starship() {
         return 0
     fi
     if [[ "$OS" == "Linux" ]] && [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    if [[ "${USER_LOCAL:-0}" == "1" ]]; then
+        log_info "starship is handled by user-local preferred tools"
         return 0
     fi
 

@@ -265,7 +265,7 @@ install_dev_tools() {
 
     case "$DISTRO" in
         arch)
-            if ! command_exists go; then
+            if ! command_exists go && [[ "${USER_LOCAL:-0}" != "1" ]]; then
                 if command_exists yay; then
                     yay -S --noconfirm go || log_warn "go installation failed"
                 elif command_exists paru; then
@@ -285,7 +285,7 @@ install_dev_tools() {
                 fi
             fi
 
-            if ! command_exists lazygit; then
+            if ! command_exists lazygit && [[ "${USER_LOCAL:-0}" != "1" ]]; then
                 log_info "Installing lazygit..."
                 if command_exists yay; then
                     yay -S --noconfirm lazygit || log_warn "lazygit installation failed"
@@ -296,7 +296,7 @@ install_dev_tools() {
                 fi
             fi
 
-            if ! command_exists delta; then
+            if ! command_exists delta && [[ "${USER_LOCAL:-0}" != "1" ]]; then
                 log_info "Installing delta..."
                 if command_exists yay; then
                     yay -S --noconfirm git-delta || log_warn "git-delta installation failed"
@@ -307,7 +307,7 @@ install_dev_tools() {
                 fi
             fi
 
-            if ! command_exists bat; then
+            if ! command_exists bat && [[ "${USER_LOCAL:-0}" != "1" ]]; then
                 log_info "Installing bat..."
                 $sudo_prefix pacman -S --noconfirm bat || log_warn "bat installation failed"
             fi

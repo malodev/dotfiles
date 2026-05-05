@@ -10,6 +10,7 @@ print_help() {
     echo "  --dry-run       Show what would be installed without making changes"
     echo "  --list-groups   List available installation groups"
     echo "  --with-brew     Use Homebrew on Linux (default: skip)"
+    echo "  --user-local    Prefer current-user installs for supported SSH/dev tools"
     echo "  -g, --group G   Install an explicit group"
     echo "  -p, --package P Install an explicit dotfile package only"
     echo "  --minimal       SSH-safe minimal installation (core + shell + terminal + dev)"
@@ -49,6 +50,10 @@ parse_cli_args() {
                 ;;
             --with-brew)
                 WITH_BREW=1
+                shift
+                ;;
+            --user-local)
+                USER_LOCAL=1
                 shift
                 ;;
             -h|--help)

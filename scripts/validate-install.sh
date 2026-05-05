@@ -57,6 +57,7 @@ run_case "manifest validation" "$REPO_DIR/scripts/validate-manifest.sh"
 run_case "dry-run default preset" "$INSTALL_SCRIPT" --dry-run
 run_case "dry-run minimal" "$INSTALL_SCRIPT" --minimal --dry-run
 run_case "dry-run ssh" "$INSTALL_SCRIPT" --ssh --dry-run
+run_case "dry-run ssh user-local" "$INSTALL_SCRIPT" --ssh --user-local --dry-run
 run_case "dry-run standard" "$INSTALL_SCRIPT" --standard --dry-run
 run_case "dry-run full" "$INSTALL_SCRIPT" --full --dry-run
 run_case "dry-run explicit group" "$INSTALL_SCRIPT" --group shell --dry-run
