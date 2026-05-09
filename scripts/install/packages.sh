@@ -373,7 +373,7 @@ install_shell_color_scripts() {
     fi
 
     local colorscript_install_dir="$HOME/.local/bin"
-    local colorscript_prefix="$HOME/.local"
+    local colorscript_share_dir="$HOME/.local/share/shell-color-scripts"
     local colorscript_path="$colorscript_install_dir/colorscript"
 
     if [[ -x "$colorscript_path" ]]; then
@@ -381,40 +381,26 @@ install_shell_color_scripts() {
         return 0
     fi
 
-    log_dry_run "Would install shell-color-scripts for current user to $colorscript_install_dir"
+    log_dry_run "Would install shell-color-scripts for current user to $colorscript_install_dir and $colorscript_share_dir"
     [[ "$DRY_RUN" == "1" ]] && return 0
 
     log_info "Installing shell-color-scripts..."
     local sudo_prefix=""
     [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
 
-    if [[ "$OS" == "Linux" ]] && ! command_exists make; then
-        log_info "Installing build tools (make)..."
-        if [[ "$DISTRO" == "debian" ]]; then
-            $sudo_prefix apt-get update -qq
-            $sudo_prefix apt-get install -y build-essential
-        elif [[ "$DISTRO" == "arch" ]]; then
-            if command_exists yay; then
-                yay -S --noconfirm base-devel
-            elif command_exists paru; then
-                paru -S --noconfirm base-devel
-            else
-                $sudo_prefix pacman -S --noconfirm base-devel
-            fi
-        elif [[ "$DISTRO" == "fedora" ]]; then
-            $sudo_prefix dnf install -y @development-tools
-        fi
-    fi
-
-    mkdir -p "$colorscript_install_dir"
+    mkdir -p "$colorscript_install_dir" "$colorscript_share_dir"
     mkdir -p ~/.local/src
     cd ~/.local/src
     [[ -d shell-color-scripts ]] && rm -rf shell-color-scripts
     git clone https://gitlab.com/dwt1/shell-color-scripts.git
     cd shell-color-scripts
-    make PREFIX="$colorscript_prefix" install 2>&1 | tee -a "$LOG_FILE"
+    cp -rf colorscripts "$colorscript_share_dir/"
+    install -m 0755 colorscript.sh "$colorscript_install_dir/colorscript"
+    mkdir -p "$HOME/.local/share/man/man1" 2>/dev/null || true
+    cp colorscript.1 "$HOME/.local/share/man/man1/" 2>/dev/null || true
     mkdir -p ~/.zsh/completion 2>/dev/null || true
     cp completions/_colorscript ~/.zsh/completion/ 2>/dev/null || true
+    cp completions/colorscript.fish "$HOME/.local/share/fish/vendor_completions.d/" 2>/dev/null || true
     [[ ":$PATH:" != *":$colorscript_install_dir:"* ]] && log_warn "$colorscript_install_dir is not in PATH. Add: export PATH=\"$colorscript_install_dir:\$PATH\""
     cd "$ORIGINAL_DIR"
 }
