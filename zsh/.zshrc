@@ -3,6 +3,9 @@
 
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/.local/bin:$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
+export BUN_INSTALL="$HOME/.bun"
+export DENO_INSTALL="$HOME/.deno"
+export NVM_DIR="$HOME/.nvm"
 
 export DEFAULT_USER="$USER"
 
@@ -69,6 +72,9 @@ fi
 if [[ "$IS_LINUX" == "1" ]] && [[ -d /home/linuxbrew/.linuxbrew/bin ]]; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
+
+# User-local toolchains
+export PATH="$HOME/.local/bin:$BUN_INSTALL/bin:$DENO_INSTALL/bin:$PATH"
 
 #=============================================================================
 # COMPLETION
@@ -281,12 +287,12 @@ bindkey "^[[B" history-substring-search-down
 # MACHINE-SPECIFIC OVERRIDES
 #=============================================================================
 # These files exist in $HOME (not in repo) for per-machine configuration
-[[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
+[[ -f ~/.zshrc_local ]] && source ~/.zshrc_local
+[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
-
-echo "🛠️zshrc loaded."
+[[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 
 # bun completions
-[ -s "/Users/mauro/.bun/_bun" ] && source "/Users/mauro/.bun/_bun"
+[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
 
-alias gam="/Users/mauro/bin/gam7/gam"
+alias gam="$HOME/bin/gam7/gam"

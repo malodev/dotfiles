@@ -13,4 +13,5 @@ fi
 # User-local toolchains
 export BUN_INSTALL="$HOME/.bun"
 export DENO_INSTALL="$HOME/.deno"
-export PATH="$BUN_INSTALL/bin:$DENO_INSTALL/bin:$PATH"
+export NVM_DIR="$HOME/.nvm"
+export PATH="$HOME/.local/bin:$BUN_INSTALL/bin:$DENO_INSTALL/bin:$PATH"
