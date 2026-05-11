@@ -194,15 +194,30 @@ detect_package_manager() {
     fi
 }
 
+# Get the sudo prefix taking into account:
+# - root user (EUID=0): no sudo needed
+# - --user-local flag: skip sudo, all installs are user-local
+# - sudo binary availability: skip if sudo not installed
+# Returns "sudo" or empty string.
+get_sudo_prefix() {
+    if [[ $EUID -eq 0 ]]; then
+        return 0
+    fi
+    if [[ "${USER_LOCAL:-0}" == "1" ]]; then
+        return 0
+    fi
+    if ! command -v sudo &>/dev/null; then
+        return 0
+    fi
+    echo "sudo"
+}
+
 # Install a package using the appropriate package manager
 pm_install() {
     local packages=("$@")
 
-    # Use sudo prefix for non-root users
-    local sudo_prefix=""
-    if [[ $EUID -ne 0 ]]; then
-        sudo_prefix="sudo"
-    fi
+    local sudo_prefix
+    sudo_prefix=$(get_sudo_prefix)
 
     if is_macos && command_exists brew; then
         brew install "${packages[@]}"

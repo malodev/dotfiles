@@ -113,8 +113,8 @@ install_llm_cli() {
         uv tool install llm || log_warn "llm installation failed, install manually: uv tool install llm"
     else
         if ! command_exists pipx; then
-            local sudo_prefix=""
-            [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+            local sudo_prefix
+            sudo_prefix=$(get_sudo_prefix)
 
             case "$DISTRO" in
                 arch) $sudo_prefix pacman -S --noconfirm python-pipx || log_warn "python-pipx installation failed" ;;
@@ -148,10 +148,8 @@ install_dev_tools() {
 
     show_banner "Installing Developer Tools"
 
-    local sudo_prefix=""
-    if [[ $EUID -ne 0 ]]; then
-        sudo_prefix="sudo"
-    fi
+    local sudo_prefix
+    sudo_prefix=$(get_sudo_prefix)
 
     if [[ "$OS" == "Darwin" ]]; then
         log_info "Developer tools installed via Brewfile"

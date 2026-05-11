@@ -256,8 +256,8 @@ install_editor_tools() {
                     log_dry_run "Would install neovim (via apt or AppImage)"
                 else
                     log_info "Installing Neovim..."
-                    local sudo_prefix=""
-                    [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+                    local sudo_prefix
+                    sudo_prefix=$(get_sudo_prefix)
                     if $sudo_prefix apt-get install -y neovim 2>/dev/null; then
                         local nvim_version
                         nvim_version=$(nvim --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+' || echo "0.0")
@@ -359,20 +359,12 @@ setup_stow() {
     fi
 
     log_info "Installing GNU Stow..."
-    local sudo_prefix=""
-    [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+    local sudo_prefix
+    sudo_prefix=$(get_sudo_prefix)
     local install_ok=0
 
-    # Check if we can use sudo (skip system package managers if not)
-    local can_sudo=1
-    if [[ -n "$sudo_prefix" ]]; then
-        if ! sudo -n true 2>/dev/null; then
-            can_sudo=0
-            log_info "No passwordless sudo available; will try user-local install..."
-        fi
-    fi
-
-    if [[ $can_sudo -eq 1 ]]; then
+    # Only try system package manager if sudo is available and passwordless
+    if [[ -n "$sudo_prefix" ]] && sudo -n true 2>/dev/null; then
         case "$DISTRO" in
             arch)
                 if command_exists yay; then
@@ -494,8 +486,8 @@ install_shell_color_scripts() {
     [[ "$DRY_RUN" == "1" ]] && return 0
 
     log_info "Installing shell-color-scripts..."
-    local sudo_prefix=""
-    [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+    local sudo_prefix
+    sudo_prefix=$(get_sudo_prefix)
 
     mkdir -p "$colorscript_install_dir" "$colorscript_share_dir"
     mkdir -p ~/.local/src
@@ -535,8 +527,8 @@ install_fastfetch() {
 
     log_info "Installing fastfetch..."
     mkdir -p "$fastfetch_bin_dir"
-    local sudo_prefix=""
-    [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+    local sudo_prefix
+    sudo_prefix=$(get_sudo_prefix)
 
     case "$DISTRO" in
         arch)
@@ -741,8 +733,8 @@ setup_starship() {
     [[ "$DRY_RUN" == "1" ]] && return 0
 
     log_info "Installing starship..."
-    local sudo_prefix=""
-    [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+    local sudo_prefix
+    sudo_prefix=$(get_sudo_prefix)
     local install_success=0
 
     if [[ "$DISTRO" == "debian" ]]; then
