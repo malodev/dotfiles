@@ -43,13 +43,33 @@ This launches an interactive menu where you can select which groups of configura
 ./install.sh --dry-run        # Preview what would be installed
 ./install.sh --list-groups    # List available groups
 ./install.sh shell editor     # Install specific groups
-./install.sh --minimal        # Preset: core + shell only
-./install.sh --standard       # Preset: core + shell + editor + terminal
+./install.sh --minimal        # Preset: core + shell + terminal + dev
+./install.sh --standard       # Preset: core + shell + editor + terminal + system-info
 ./install.sh --full           # Preset: everything
 ./install.sh --with-brew      # Enable Homebrew on Linux
+./install.sh --user-local     # Install everything as current user (no sudo required)
+./install.sh --lightweight    # Optimise for constrained machines (minimal prompt, etc.)
 ```
 
 Flags can be combined, e.g. `./install.sh --dry-run --minimal` to preview a minimal install.
+
+### Constrained / Shared Hosting
+
+For machines where `sudo` is unavailable (shared hosting, restricted VPS), use:
+
+```sh
+./install.sh --user-local --lightweight --minimal
+```
+
+| Flag | What it does |
+|------|--------------|
+| `--user-local` | Skips `sudo apt/dnf/pacman`. Installs stow from source to `~/.local`. All CLI tools installed to `~/.local/bin`. |
+| `--lightweight` | Creates a persistent marker (`~/.config/dotfiles-lightweight.enabled`). On shell startup, switches to a minimal starship config (no `git_status`, no `python` version detection, 500ms timeout). |
+| `--minimal` | Installs only core + shell + terminal + dev groups (no GUI, no editor). |
+
+The `--user-local` flag also handles machines where the login shell is `/bin/false`
+or `/usr/sbin/nologin` — the script auto-detects a usable shell (`bash` → `zsh` → `sh`)
+instead of skipping shell config stow.
 
 ### Installation Groups
 
@@ -128,7 +148,11 @@ The following tables show how each tool is installed per platform. On macOS, mos
 
 | Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
 | ---- | ----- | ---------- | ------------- | ------ |
-| **GNU Stow** | `brew install` | `pacman -S stow` | `apt-get install stow` | `dnf install stow` |
+| **GNU Stow** | `brew install` | `pacman -S stow` | `apt-get install stow`¹ | `dnf install stow` |
+
+> ¹ On Debian/Ubuntu without sudo (or with `--user-local`), Stow is built from
+> source into `~/.local` via `./configure --prefix=$HOME/.local && make install`.
+> Requires `make` and `perl` (standard on Debian).
 
 #### CLI Tools (installed automatically)
 
