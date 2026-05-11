@@ -1,0 +1,12 @@
+# ~/.gitconfig_local — machine-specific git settings (gitignored)
+# Copy this to ~/.gitconfig_local and replace the placeholders.
+# The main ~/.gitconfig (stow'd from dotfiles) includes this file.
+
+[user]
+	name = __YOUR_NAME__
+	email = __YOUR_EMAIL__
+
+# Safe directories for repos owned by other users (e.g. web server)
+# Add entries like:
+# [safe]
+# 	directory = /var/www/some-project

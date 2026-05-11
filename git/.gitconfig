@@ -1,8 +1,9 @@
 [init]
 	defaultBranch = main
-[user]
-	name = Mauro Longano
-	email = mauro.longano@marconirovereto.it
+# Machine-specific settings (name, email, safe.directory) are in ~/.gitconfig_local
+# which is gitignored. Create it from ~/.config/git/.gitconfig.local.template on first install.
+[include]
+	path = ~/.gitconfig_local
 [filter "lfs"]
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
@@ -11,7 +12,7 @@
 [core]
 	editor = nvim
         pager = delta
-	hooksPath = /home/mauro/.config/git-hooks
+	hooksPath = ~/.config/git-hooks
 
 [interactive]
     diffFilter = delta --color-only

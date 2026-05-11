@@ -162,6 +162,17 @@ ensure_stow_target_dirs() {
                 log_info "Created $HOME/.pi/agent/"
             fi
             ;;
+        git)
+            # Ensure ~/.gitconfig_local exists (machine-specific: user.name, user.email, safe.directory)
+            if [[ ! -f "$HOME/.gitconfig_local" && -f "$SCRIPT_DIR/git/.gitconfig.local.template" ]]; then
+                if [[ "$DRY_RUN" == "1" ]]; then
+                    log_dry_run "Would create $HOME/.gitconfig_local from template"
+                else
+                    cp "$SCRIPT_DIR/git/.gitconfig.local.template" "$HOME/.gitconfig_local"
+                    log_info "Created $HOME/.gitconfig_local from template (edit with your name/email)"
+                fi
+            fi
+            ;;
         *) ;;
     esac
 }
