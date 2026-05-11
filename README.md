@@ -61,10 +61,33 @@ Flags can be combined, e.g. `./install.sh --dry-run --minimal` to preview a mini
 | `terminal` | Kitty, Tmux                                           |              |
 | `desktop`  | SketchyBar, AeroSpace, Borders                        | macOS only   |
 | `linux`    | i3                                                    | Linux only   |
-| `dev`      | Git, Lazygit                                          |              |
+| `dev`      | Git, Lazygit, Lazydocker, Delta, Bat, LLM             |              |
 | `extras`   | Shell color scripts                                   |              |
 
 You can also install individual packages directly: `./install.sh bash zsh nvim-malo`
+
+### Machine-Specific vs Shared Settings
+
+Some config files need machine-specific values (API keys, model preferences, file paths).
+These are split into a **tracked** base and a **gitignored** local override:
+
+| Config | Tracked (shared) | Local (per-machine) |
+|--------|------------------|---------------------|
+| **Pi** | `pi/.pi/agent/settings.json.template` | `~/.pi/agent/settings.json` |
+| **Git** | `git/.gitconfig` | `~/.gitconfig_local` |
+| **Shell** | `bash/.bashrc`, `zsh/.zshrc` (sources `_local`) | `~/.bashrc_local`, `~/.zshrc_local` |
+
+- **Pi settings**: template is copied to `~/.pi/agent/settings.json` on first install.
+  Pi auto-updates `lastChangelogVersion`; you add `defaultModel`/`defaultProvider` there.
+- **Git**: `~/.gitconfig` includes `~/.gitconfig_local`. Use it for `safe.directory`:
+  `git config --file ~/.gitconfig_local --add safe.directory /path`
+- **Shell**: external tools (deno, nvm, etc.) that write to `~/.zshrc`/`~/.bashrc` are
+  auto-relocated to `_local` files during install (see `relocate_shell_configs_to_local`).
+
+See also:
+- `scripts/init-pi-settings.sh` — initialize pi settings from template
+- `scripts/import-pi-settings.sh` — review and import new keys from active settings into template
+- `scripts/localize-dotfile-changes.sh` — extract machine-specific lines from shell rc files to `_local`
 
 ### What It Does
 
@@ -92,6 +115,10 @@ On Linux, **the native package manager is preferred** — the script uses `pacma
 For tools not available in the system repos, the script falls back to official install scripts or prebuilt binaries from GitHub releases (e.g., lazygit, git-delta, deno on Debian/Ubuntu).
 
 > On Arch Linux, `yay` or `paru` are used when available as AUR helpers, falling back to `pacman` for official repos.
+>
+> On **Debian/Ubuntu**, tools like `fzf`, `ripgrep`, `fd`, `lsd`, and `bat` are **not** installed
+> via `apt` (which ships outdated versions). The script downloads the latest binaries from
+> GitHub releases into `~/.local/bin`. Ensure `~/.local/bin` is early in your `$PATH`.
 
 ### Binary Installation Reference
 
@@ -107,11 +134,11 @@ The following tables show how each tool is installed per platform. On macOS, mos
 
 | Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
 | ---- | ----- | ---------- | ------------- | ------ |
-| **fzf** | Brewfile | `pacman -S fzf` | `apt-get install fzf` | `dnf install fzf` |
-| **ripgrep** | Brewfile | `pacman -S ripgrep` | `apt-get install ripgrep` | `dnf install ripgrep` |
-| **bat** | Brewfile | `pacman -S bat` | `apt-get install bat` | `dnf install bat` |
-| **fd** | Brewfile | `pacman -S fd` | `apt-get install fd-find` | `dnf install fd-find` |
-| **lsd** | Brewfile | `pacman -S lsd` | Not in repos | `dnf install lsd` |
+| **fzf** | Brewfile | `pacman -S fzf` | GitHub release (latest) | `dnf install fzf` |
+| **ripgrep** | Brewfile | `pacman -S ripgrep` | GitHub release (latest) | `dnf install ripgrep` |
+| **bat** | Brewfile | `pacman -S bat` | GitHub release (latest) | `dnf install bat` |
+| **fd** | Brewfile | `pacman -S fd` | GitHub release (latest) | `dnf install fd-find` |
+| **lsd** | Brewfile | `pacman -S lsd` | GitHub release (latest) | `dnf install lsd` |
 | **jq** | Brewfile | `pacman -S jq` | `apt-get install jq` | `dnf install jq` |
 | **yazi** | Brewfile | AUR (`yay -S yazi`) | Not in repos | Not in repos |
 | **gdu** | Brewfile | `pacman -S gdu` | Not in repos | Not in repos |
@@ -154,13 +181,15 @@ The following tables show how each tool is installed per platform. On macOS, mos
 | ---- | ----- | ---------- | ------------- | ------ |
 | **Git** | Brewfile | `pacman -S git` | `apt-get install git` | `dnf install git` |
 | **GitHub CLI (gh)** | Brewfile | `pacman -S github-cli` | Official apt repo | `dnf install gh` |
-| **git-delta** | Brewfile | `pacman -S git-delta` | GitHub release `.deb` | `dnf install git-delta` |
+| **git-delta** | Brewfile | `pacman -S git-delta` | GitHub release binary | `dnf install git-delta` |
 | **Lazygit** | Brewfile | AUR (`yay -S lazygit`) | GitHub release binary | `dnf copr` repo |
-| **Go** | Brewfile | `pacman -S go` | `apt-get install golang-go` | `dnf install golang` |
-| **Deno** | Brewfile | Official installer (`deno.land`) | Official installer (`deno.land`) | Official installer (`deno.land`) |
-| **Python pip** | Brewfile | `pacman -S python-pip` | `apt-get install python3-pip` | `dnf install python3-pip` |
-| **Python venv** | Brewfile | `pacman -S python-virtualenv` | `apt-get install python3.x-venv` | `dnf install python3-venv` |
-| **Composer** | Brewfile | `pacman -S php-composer` | Official installer (`getcomposer.org`) | `dnf install composer` |
+| **Lazydocker** | Brewfile | AUR (`yay -S lazydocker`) | GitHub release binary | GitHub release binary |
+| **Go** | Brewfile | `pacman -S go` | `go.dev` tarball (latest) | `dnf install golang` |
+| **Deno** | Brewfile | Official installer | Official installer | Official installer |
+| **uv** | Brewfile | Official installer | Official installer | Official installer |
+| **Bun** | Brewfile | Official installer | Official installer | Official installer |
+| **LLM (SimonW)** | Brewfile | `pipx install llm` | `pipx install llm` (or `uv tool install`) | `pipx install llm` |
+| **Node.js** | Brewfile | `pacman -S nodejs npm` | `deb.nodesource.com` LTS | `dnf install nodejs npm` |
 | **Hub** | Brewfile | AUR (`yay -S hub`) | GitHub release binary | `dnf install hub` |
 | **Python packages** (basedpyright, black, isort) | Brewfile | `pip install --user` | `pip3 install --user` | `pip3 install --user` |
 
