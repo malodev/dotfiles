@@ -80,8 +80,9 @@ if [[ "$MODE" == "force" ]]; then
 else
   ok "Created $OUTPUT from template"
   echo ""
-  info "Edit it to configure your model and provider:"
-  info "  defaultModel   — e.g. \"claude-sonnet-4-20250514\""
-  info "  defaultProvider — e.g. \"openrouter\""
-  info "Then restart pi or reload settings."
+  info "Edit it to add machine-specific keys if needed:"
+  info "  \"defaultModel\"    — e.g. \"claude-sonnet-4-20250514\""
+  info "  \"defaultProvider\" — e.g. \"openrouter\""
+  info "  \"tools\"            — machine-specific write paths"
+  info "pi works without them — it picks sensible defaults."
 fi
