@@ -87,7 +87,7 @@ These are split into a **tracked** base and a **gitignored** local override:
 See also:
 - `scripts/init-pi-settings.sh` — initialize pi settings from template
 - `scripts/import-pi-settings.sh` — review and import new keys from active settings into template
-- `scripts/localize-dotfile-changes.sh` — extract machine-specific lines from shell rc files to `_local`
+- `scripts/extract-shell-local-overrides.sh` — extract machine-specific lines from shell rc files to `_local`
 
 ### What It Does
 
