@@ -335,8 +335,11 @@ install_dev_tools() {
             fi
 
             log_info "Installing latest Go for current user..."
-            local go_version
             local go_root="$HOME/.local/opt/go"
+            if command -v go &>/dev/null || [[ -x "$go_root/bin/go" ]]; then
+                log_success "Go is already installed"
+            else
+            local go_version
             go_version=$(curl -s "https://go.dev/dl/?mode=json" | grep -Po '"version": "go\K[^"]*' | head -1 2>/dev/null || echo "1.26.0")
             mkdir -p "$HOME/.local/opt"
             curl -Lo /tmp/go.tar.gz "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" 2>/dev/null \
@@ -346,6 +349,7 @@ install_dev_tools() {
                 && symlink_to_user_local_bin "$go_root/bin/gofmt" gofmt \
                 && rm -f /tmp/go.tar.gz \
                 || log_warn "Go installation failed, install manually from https://go.dev/dl"
+            fi
 
             if ! command_exists node; then
                 if can_sys_install; then
