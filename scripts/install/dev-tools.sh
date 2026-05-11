@@ -231,6 +231,7 @@ install_dev_tools() {
     install_uv_tool
     install_bun_tool
     install_lazydocker_tool
+    install_bat_user_local
 
     if command_exists deno; then
         log_success "Deno is already installed: $(deno --version 2>/dev/null | head -1 || command -v deno)"
@@ -393,16 +394,7 @@ install_dev_tools() {
                     || log_warn "delta installation failed, install manually from https://github.com/dandavison/delta"
             fi
 
-            if ! command_exists bat; then
-                log_info "Installing bat from GitHub releases for current user..."
-                local bat_version
-                bat_version=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" | grep -Po '"tag_name": "v\K[^"]*' 2>/dev/null || echo "0.24.0")
-                curl -Lo /tmp/bat.tar.gz "https://github.com/sharkdp/bat/releases/latest/download/bat-v${bat_version}-x86_64-unknown-linux-musl.tar.gz" 2>/dev/null \
-                    && tar -xzf /tmp/bat.tar.gz -C /tmp \
-                    && install_to_user_local_bin "/tmp/bat-v${bat_version}-x86_64-unknown-linux-musl/bat" bat \
-                    && rm -rf /tmp/bat* \
-                    || log_warn "bat installation failed, install manually from https://github.com/sharkdp/bat"
-            fi
+            install_bat_user_local
 
             install_llm_cli
             ;;
