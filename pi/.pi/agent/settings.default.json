@@ -1,21 +1,11 @@
 {
-  "defaultModel": "deepseek-v4-flash",
-  "defaultProvider": "opencode-go",
-  "defaultThinkingLevel": "off",
-  "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.72.1",
   "packages": [
     "npm:pi-markdown-preview",
     "npm:pi-connect",
     "npm:pi-mcp-adapter",
     "npm:@tmustier/pi-usage-extension",
     "npm:@marckrenn/pi-sub-bar",
-    {
-      "source": "npm:@ollama/pi-web-search",
-      "extensions": [
-        "+index.ts"
-      ]
-    },
+    { "source": "npm:@ollama/pi-web-search", "extensions": ["+index.ts"] },
     "npm:@ifi/oh-pi",
     "npm:@ifi/oh-pi-extensions",
     "npm:@ifi/oh-pi-ant-colony",
@@ -32,12 +22,5 @@
     "jumpPreviousUserMessage": "ctrl+shift+9",
     "jumpNextUserMessage": "ctrl+shift+0"
   },
-  "theme": "nord",
-  "tools": {
-    "write": {
-      "include": [
-        "+/Users/mauro/.pi/**/*"
-      ]
-    }
-  }
+  "theme": "nord"
 }

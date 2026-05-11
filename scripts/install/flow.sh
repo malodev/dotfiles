@@ -228,6 +228,18 @@ run_install_steps() {
     elif is_package_selected "nvim-malo"; then
         install_shell_color_scripts
     fi
+
+    # Generate pi settings.json from default + local override
+    if [[ -f "$SCRIPT_DIR/scripts/generate-pi-settings.sh" ]]; then
+        show_banner "Generating Pi Settings"
+        if [[ "$DRY_RUN" == "1" ]]; then
+            log_dry_run "Would run: generate-pi-settings.sh --force"
+        elif bash "$SCRIPT_DIR/scripts/generate-pi-settings.sh" --force; then
+            log_success "Pi settings generated"
+        else
+            log_warn "Pi settings generation skipped or failed"
+        fi
+    fi
 }
 
 show_final_summary() {
