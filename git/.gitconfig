@@ -1,9 +1,8 @@
 [init]
 	defaultBranch = main
-# Machine-specific settings (name, email, safe.directory) are in ~/.gitconfig_local
-# which is gitignored. Create it from ~/.config/git/.gitconfig.local.template on first install.
-[include]
-	path = ~/.gitconfig_local
+[user]
+	name = Mauro Longano
+	email = mauro.longano@marconirovereto.it
 [filter "lfs"]
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
@@ -35,3 +34,8 @@
 	insteadOf = git://
 [credential]
 	helper = store
+
+# Machine-specific overrides (safe.directory entries).
+# Write with:  git config --file ~/.gitconfig_local --add safe.directory /path
+[include]
+	path = ~/.gitconfig_local

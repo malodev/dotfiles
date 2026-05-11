@@ -21,4 +21,3 @@ package-lock.json
 /pi/.pi/.task-forge
 /pi/.pi/agent/settings.json
 /pi/.pi/agent/auth.json
-/git/.gitconfig_local
