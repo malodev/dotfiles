@@ -113,7 +113,30 @@ install_cli_tools() {
             _aur_install_or_warn "viu" "viu" "viu"
             ;;
         debian)
-            _linux_pkg_install "CLI tools" fzf ripgrep bat fd-find jq curl wget imagemagick p7zip-full poppler-utils ffmpeg unzip
+            # On Ubuntu/Debian LTS, apt versions of many CLI tools are very old.
+            # Install from GitHub releases / official installers for the latest versions.
+            log_info "Preferring latest user-local installs for CLI tools on Debian/Ubuntu..."
+
+            # Tools best installed via GitHub release (latest version)
+            install_fzf_user_local
+            install_ripgrep_user_local
+            install_fd_user_local
+            install_lsd_user_local
+            install_bat_user_local
+
+            # libripgrep from GitHub release (for nvim telescope)
+            _linux_pkg_install "CLI tools (apt fallback)" jq curl wget unzip imagemagick p7zip-full poppler-utils ffmpeg
+
+            for tool in yazi bottom gdu procs viu ffmpegthumbnailer; do
+                if ! command_exists "$tool"; then
+                    log_info "$tool not found — skipping (install manually or use --with-brew)"
+                fi
+            done
+            ;;
+
+        debian-apt-fallback)
+            # Legacy apt-only path — used when --user-local or --with-brew is not desired.
+            _linux_pkg_install "CLI tools (apt)" fzf ripgrep bat fd-find jq curl wget imagemagick p7zip-full poppler-utils ffmpeg unzip
             for tool in lsd yazi bottom gdu procs viu ffmpegthumbnailer; do
                 if ! command_exists "$tool"; then
                     log_warn "$tool is not in default Debian/Ubuntu repos — install manually or use --with-brew"
