@@ -6,7 +6,8 @@
 palette = "catppuccin_mocha"
 
 # Only modules that are fast — no git_status, python, or custom hostname forks
-format = """$username$hostname $directory $git_branch$git_commit$character"""
+format = """$username$hostname $directory $git_branch$git_commit
+$character"""
 
 # Tight timeout — never block the prompt for more than 500ms
 command_timeout = 500
