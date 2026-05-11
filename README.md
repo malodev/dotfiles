@@ -239,6 +239,22 @@ stow nvim-malo
 
 Run these from the `~/.dotfiles` directory. This **only creates symlinks** — no packages or binaries are installed.
 
+### Baking Configs for a Shared Machine
+
+If you bootstrap a shared machine (e.g., root on a server) with your configs but don't
+want to leave your personal dotfiles repo behind, you can convert the stow symlinks into
+real files and remove the repo:
+
+```sh
+cd ~/.dotfiles
+./scripts/unstow-as-real.sh          # Convert all, delete repo
+./scripts/unstow-as-real.sh bash zsh # Convert only bash + zsh
+./scripts/unstow-as-real.sh --dry-run # Preview
+```
+
+This copies the content through each symlink, turning it into a standalone file, then
+deletes `~/.dotfiles`. The configs stay functional, your personal repo is gone.
+
 ## Inspiration
 
 The inspiration for this configuration comes from
