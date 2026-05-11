@@ -194,6 +194,32 @@ detect_package_manager() {
     fi
 }
 
+# Detect the user's real interactive shell, falling back when $SHELL is
+# non-interactive (e.g. /bin/false on constrained shared hosting).
+# Returns just the basename: "bash", "zsh", etc.
+detect_user_shell() {
+    local shell_name
+    shell_name="${SHELL##*/}"
+
+    # Recognized interactive shell names — return as-is
+    case "$shell_name" in
+        bash|zsh|fish|nushell|sh|dash|ksh|tcsh|csh) echo "$shell_name"; return 0 ;;
+    esac
+
+    # $SHELL is not a real shell (e.g. /bin/false, /usr/sbin/nologin).
+    # Try to find a real shell that's available on the system.
+    local candidate
+    for candidate in bash zsh sh; do
+        if command -v "$candidate" &>/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    # Last resort — bash is the safest default
+    echo "bash"
+}
+
 # Get the sudo prefix taking into account:
 # - root user (EUID=0): no sudo needed
 # - --user-local flag: skip sudo, all installs are user-local

@@ -56,13 +56,17 @@ install_group() {
     local install_specific_shells=0
 
     if [[ "$group" == "shell" ]]; then
-        current_shell=$(basename "$SHELL")
+        current_shell=$(detect_user_shell)
 
         if [[ -n "${MANUAL_SHELL_PACKAGES:-}" ]]; then
             install_specific_shells=1
             log_info "Installing manually specified shell configs: $MANUAL_SHELL_PACKAGES"
         else
-            log_info "Current shell: $current_shell - only stowing $current_shell config"
+            if [[ "${SHELL##*/}" != "$current_shell" ]]; then
+                log_info "Login shell is '${SHELL##*/}' — falling back to $current_shell config"
+            else
+                log_info "Current shell: $current_shell - only stowing $current_shell config"
+            fi
         fi
     fi
 

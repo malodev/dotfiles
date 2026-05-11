@@ -88,7 +88,7 @@ selected_stow_packages() {
                         fi
                     done
                     [[ $should_include_shell -eq 0 ]] && continue
-                elif [[ "$pkg" != "${SHELL##*/}" ]]; then
+                elif [[ "$pkg" != "$(detect_user_shell)" ]]; then
                     continue
                 fi
             fi
@@ -277,7 +277,7 @@ show_final_summary() {
         echo "  Log saved to: $LOG_FILE"
         echo ""
         echo "  Next steps:"
-        echo "    - Restart your shell or run: source ~/.zshrc"
+        echo "    - Restart your shell or run: source ~/.$(detect_user_shell)rc"
         if [[ "$OS" == "Darwin" && "$(get_group_selection "desktop")" == "1" ]]; then
             echo "    - Start SketchyBar: brew services restart sketchybar"
         fi

@@ -121,7 +121,8 @@ _render_group_detail_line() {
 
 group_details() {
     local group="$1"
-    local current_shell="${SHELL##*/}"
+    local current_shell
+    current_shell="$(detect_user_shell)"
     local package_mode="native package manager"
 
     if [[ "$OS" == "Darwin" ]]; then
