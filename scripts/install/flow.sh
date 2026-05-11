@@ -275,5 +275,14 @@ show_final_summary() {
         if [[ "$(get_group_selection "editor")" == "1" ]] || is_package_selected "nvim-malo"; then
             echo "    - Run: colorscript to see available color scripts"
         fi
+        if [[ "${RELOCATED_SHELL_CONFIGS:-0}" == "1" ]]; then
+            echo ""
+            echo "  ⚠  Shell config files were relocated to machine-local files:"
+            echo "       ~/.bashrc_local and/or ~/.zshrc_local"
+            echo "    These files contain content that was previously in regular files"
+            echo "    (added by tools like deno, nvm, etc.) and is NOT in the dotfiles repo."
+            echo "    Review them to make sure everything still works:"
+            echo "       cat ~/.bashrc_local ~/.zshrc_local"
+        fi
     fi
 }
