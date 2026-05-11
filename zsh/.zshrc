@@ -1,6 +1,9 @@
 # ~/.zshrc — Optimized with zinit + turbo mode
 # Migration from zplug: 2026-03-12
 
+# Cache hostname once per session (used by starship prompt)
+export DOTFILES_HOSTNAME="${DOTFILES_HOSTNAME:-$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || echo unknown)}"
+
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/.local/bin:$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
 export BUN_INSTALL="$HOME/.bun"

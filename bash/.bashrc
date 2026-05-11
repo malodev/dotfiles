@@ -2,6 +2,10 @@
 # Bash Configuration
 #=============================================================================
 
+# Cache hostname once per session (used by starship prompt — avoids forking
+# hostname binary on every prompt render, critical on constrained machines)
+export DOTFILES_HOSTNAME="${DOTFILES_HOSTNAME:-$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || echo unknown)}"
+
 # Better history
 export HISTCONTROL=ignoredups:erasedups
 export HISTSIZE=
@@ -67,6 +71,19 @@ fi
 
 # Initialize starship if available, otherwise use simple prompt
 if command -v starship >/dev/null 2>&1; then
+    # Auto-detect constrained machines (shared hosting, low-spec VPS)
+    # and use a lightweight prompt config to avoid per-prompt lag.
+    if [[ ! -f "${STARSHIP_CONFIG:-}" ]]; then
+        _mem_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        _cpu_count=$(nproc 2>/dev/null || echo 0)
+        if [[ "$_mem_kb" -gt 0 && "$_mem_kb" -lt 2000000 ]] || [[ "$_cpu_count" -gt 0 && "$_cpu_count" -le 2 ]]; then
+            _minimal_config="$HOME/.config/starship-minimal.toml"
+            if [[ -f "$_minimal_config" ]]; then
+                export STARSHIP_CONFIG="$_minimal_config"
+            fi
+        fi
+        unset _mem_kb _cpu_count _minimal_config
+    fi
     eval "$(starship init bash)"
 elif [[ -x "$HOME/.local/bin/starship" ]]; then
     export PATH="$HOME/.local/bin:$PATH"

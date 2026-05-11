@@ -244,14 +244,14 @@ disabled=true
 
 # Show this module ONLY when NOT in SSH
 [custom.hostname_local]
-command = "hostname" 
+command = "echo $DOTFILES_HOSTNAME"
 when = '[ -z "$SSH_CONNECTION" ]' # Triggers if the variable is empty
 style = "bold #595B71"
 format = "[$output]($style) "
 
 # Show this module ONLY when in SSH
 [custom.hostname_ssh]
-command = "hostname"
+command = "echo $DOTFILES_HOSTNAME"
 when = '[ -n "$SSH_CONNECTION" ]' # Triggers if the variable is NOT empty
 style = "bold red"
 format = "[$output]($style) "
