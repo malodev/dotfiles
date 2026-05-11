@@ -361,33 +361,119 @@ setup_stow() {
     log_info "Installing GNU Stow..."
     local sudo_prefix=""
     [[ $EUID -ne 0 ]] && sudo_prefix="sudo"
+    local install_ok=0
 
-    case "$DISTRO" in
-        arch)
-            if command_exists yay; then
-                yay -S --noconfirm stow
-            elif command_exists paru; then
-                paru -S --noconfirm stow
-            else
-                $sudo_prefix pacman -S --noconfirm stow
-            fi
-            ;;
-        debian)
-            $sudo_prefix apt-get update
-            $sudo_prefix apt-get install -y stow
-            ;;
-        fedora)
-            $sudo_prefix dnf install -y stow
-            ;;
-        *)
-            if [[ "$OS" == "Darwin" ]]; then
-                brew install stow
-            else
-                log_error "Don't know how to install stow on this system"
-                exit 1
-            fi
-            ;;
-    esac
+    # Check if we can use sudo (skip system package managers if not)
+    local can_sudo=1
+    if [[ -n "$sudo_prefix" ]]; then
+        if ! sudo -n true 2>/dev/null; then
+            can_sudo=0
+            log_info "No passwordless sudo available; will try user-local install..."
+        fi
+    fi
+
+    if [[ $can_sudo -eq 1 ]]; then
+        case "$DISTRO" in
+            arch)
+                if command_exists yay; then
+                    yay -S --noconfirm stow 2>/dev/null && install_ok=1 || true
+                elif command_exists paru; then
+                    paru -S --noconfirm stow 2>/dev/null && install_ok=1 || true
+                else
+                    $sudo_prefix pacman -S --noconfirm stow 2>/dev/null && install_ok=1 || true
+                fi
+                ;;
+            debian)
+                $sudo_prefix apt-get update -qq 2>/dev/null || true
+                $sudo_prefix apt-get install -y stow 2>/dev/null && install_ok=1 || true
+                ;;
+            fedora)
+                $sudo_prefix dnf install -y stow 2>/dev/null && install_ok=1 || true
+                ;;
+            *)
+                if [[ "$OS" == "Darwin" ]]; then
+                    brew install stow 2>/dev/null && install_ok=1 || true
+                fi
+                ;;
+        esac
+    fi
+
+    if [[ $install_ok -eq 1 ]]; then
+        log_success "GNU Stow installed via system package manager"
+        return 0
+    fi
+
+    # Fallback: build from source into ~/.local (no root needed)
+    setup_stow_user_local
+}
+
+setup_stow_user_local() {
+    local stow_version="2.4.1"
+    local stow_url="https://ftp.gnu.org/gnu/stow/stow-${stow_version}.tar.gz"
+    local tmpdir
+    ensure_user_local_bin
+    tmpdir="$(mktemp -d)"
+
+    log_info "Building GNU Stow ${stow_version} from source into ~/.local..."
+
+    if ! command_exists make; then
+        log_error "'make' is not available — required to build stow from source."
+        log_error "Install stow manually or ask your hosting provider to install make."
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    if ! command_exists perl; then
+        log_error "'perl' is not available — required to run GNU Stow."
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    log_info "Downloading stow ${stow_version}..."
+    if ! curl -fL "$stow_url" -o "$tmpdir/stow.tar.gz" 2>/dev/null; then
+        log_error "Failed to download stow from $stow_url"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    tar -xzf "$tmpdir/stow.tar.gz" -C "$tmpdir" || {
+        log_error "Failed to extract stow tarball"
+        rm -rf "$tmpdir"
+        return 1
+    }
+
+    local build_dir
+    build_dir="$(find "$tmpdir" -maxdepth 1 -type d -name 'stow-*' | head -1)"
+    if [[ -z "$build_dir" || ! -d "$build_dir" ]]; then
+        log_error "Could not find stow source directory after extraction"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    (
+        cd "$build_dir"
+        ./configure --prefix="$HOME/.local" 2>/dev/null || {
+            log_error "stow ./configure failed"
+            exit 1
+        }
+        make 2>/dev/null || {
+            log_error "stow make failed"
+            exit 1
+        }
+        make install 2>/dev/null || {
+            log_error "stow make install failed"
+            exit 1
+        }
+    ) || {
+        rm -rf "$tmpdir"
+        return 1
+    }
+
+    rm -rf "$tmpdir"
+    export PATH="$HOME/.local/bin:$PATH"
+    log_success "GNU Stow installed to ~/.local/bin"
+    warn_if_user_local_bin_not_in_path
+    return 0
 }
 
 install_shell_color_scripts() {
