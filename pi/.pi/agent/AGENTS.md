@@ -6,7 +6,8 @@ trust and can destroy work.
 ## Destructive commands — NEVER run without explicit permission
 
 - NEVER run `rm -rf` on any path, anywhere, under any circumstances,
-  unless the user has explicitly and unambiguously asked for it
+  unless explicitly and unambiguously authorized — either the user asked for it,
+  or you asked and the user confirmed
 - NEVER delete directories without user's explicit consent
 - NEVER force-delete (`-f`) unless the user specifically says "force"
 - Always stop, explain what would be lost, and wait for explicit confirmation
