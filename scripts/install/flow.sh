@@ -229,15 +229,12 @@ run_install_steps() {
         install_shell_color_scripts
     fi
 
-    # Generate pi settings.json from default + local override
-    if [[ -f "$SCRIPT_DIR/scripts/generate-pi-settings.sh" ]]; then
-        show_banner "Generating Pi Settings"
+    # Initialize pi settings.json from template if missing
+    if [[ -f "$SCRIPT_DIR/scripts/init-pi-settings.sh" ]]; then
         if [[ "$DRY_RUN" == "1" ]]; then
-            log_dry_run "Would run: generate-pi-settings.sh --force"
-        elif bash "$SCRIPT_DIR/scripts/generate-pi-settings.sh" --force; then
-            log_success "Pi settings generated"
+            log_dry_run "Would run: init-pi-settings.sh"
         else
-            log_warn "Pi settings generation skipped or failed"
+            bash "$SCRIPT_DIR/scripts/init-pi-settings.sh" || true
         fi
     fi
 }
