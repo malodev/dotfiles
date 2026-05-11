@@ -116,12 +116,17 @@ install_llm_cli() {
             local sudo_prefix
             sudo_prefix=$(get_sudo_prefix)
 
-            case "$DISTRO" in
-                arch) $sudo_prefix pacman -S --noconfirm python-pipx || log_warn "python-pipx installation failed" ;;
-                debian) $sudo_prefix apt-get install -y pipx 2>/dev/null || $sudo_prefix apt-get install -y python3-pipx 2>/dev/null || pip3 install --user pipx ;;
-                fedora) $sudo_prefix dnf install -y pipx || log_warn "pipx installation failed" ;;
-                *) pip3 install --user pipx || log_warn "pipx installation failed" ;;
-            esac
+            if can_sys_install; then
+                case "$DISTRO" in
+                    arch) $sudo_prefix pacman -S --noconfirm python-pipx || log_warn "python-pipx installation failed" ;;
+                    debian) $sudo_prefix apt-get install -y pipx 2>/dev/null || $sudo_prefix apt-get install -y python3-pipx 2>/dev/null || pip3 install --user pipx ;;
+                    fedora) $sudo_prefix dnf install -y pipx || log_warn "pipx installation failed" ;;
+                    *) pip3 install --user pipx || log_warn "pipx installation failed" ;;
+                esac
+            else
+                log_info "Skipping pipx system install (no sudo / --user-local)"
+                pip3 install --user pipx || log_warn "pipx installation failed"
+            fi
         fi
 
         if command_exists pipx; then
@@ -171,15 +176,19 @@ install_dev_tools() {
         debian)
             _linux_pkg_install "Git tools" git
             if ! command_exists gh; then
-                log_info "Installing GitHub CLI..."
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | $sudo_prefix dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null \
-                        && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | $sudo_prefix tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-                        && $sudo_prefix apt-get update -qq \
-                        && $sudo_prefix apt-get install -y gh \
-                        || log_warn "GitHub CLI installation failed"
+                if can_sys_install; then
+                    log_info "Installing GitHub CLI..."
+                    if [[ "$DRY_RUN" == "0" ]]; then
+                        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | $sudo_prefix dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null \
+                            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | $sudo_prefix tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+                            && $sudo_prefix apt-get update -qq \
+                            && $sudo_prefix apt-get install -y gh \
+                            || log_warn "GitHub CLI installation failed"
+                    else
+                        log_dry_run "Would install gh CLI from GitHub apt repo"
+                    fi
                 else
-                    log_dry_run "Would install gh CLI from GitHub apt repo"
+                    log_info "Skipping GitHub CLI system install (no sudo / --user-local)"
                 fi
             fi
             if ! command_exists delta; then
@@ -315,11 +324,15 @@ install_dev_tools() {
             ;;
 
         debian)
-            if command_exists add-apt-repository; then
-                $sudo_prefix add-apt-repository -y ppa:git-core/ppa 2>/dev/null || true
+            if can_sys_install; then
+                if command_exists add-apt-repository; then
+                    $sudo_prefix add-apt-repository -y ppa:git-core/ppa 2>/dev/null || true
+                fi
+                $sudo_prefix apt-get update -qq
+                $sudo_prefix apt-get install -y git
+            else
+                log_info "Skipping git system upgrade (no sudo / --user-local)"
             fi
-            $sudo_prefix apt-get update -qq
-            $sudo_prefix apt-get install -y git
 
             log_info "Installing latest Go for current user..."
             local go_version
@@ -335,24 +348,32 @@ install_dev_tools() {
                 || log_warn "Go installation failed, install manually from https://go.dev/dl"
 
             if ! command_exists node; then
-                log_info "Installing Node.js LTS..."
-                curl -fsSL https://deb.nodesource.com/setup_lts.x | $sudo_prefix bash - 2>/dev/null \
-                    && $sudo_prefix apt-get install -y nodejs \
-                    || log_warn "Node.js installation failed, install manually from https://nodejs.org"
+                if can_sys_install; then
+                    log_info "Installing Node.js LTS..."
+                    curl -fsSL https://deb.nodesource.com/setup_lts.x | $sudo_prefix bash - 2>/dev/null \
+                        && $sudo_prefix apt-get install -y nodejs \
+                        || log_warn "Node.js installation failed, install manually from https://nodejs.org"
+                else
+                    log_info "Skipping Node.js system install (no sudo / --user-local)"
+                fi
             fi
 
             if ! python3 -m venv --help >/dev/null 2>&1; then
-                log_info "Python venv module not found, installing..."
-                local python_version=$(python3 --version 2>/dev/null | awk '{print $2}' | cut -d. -f1-2)
-                if [[ -n "$python_version" ]]; then
-                    local venv_package="python${python_version}-venv"
-                    log_info "Installing $venv_package for Python $python_version..."
-                    if ! $sudo_prefix apt-get install -y "$venv_package" 2>/dev/null; then
-                        log_warn "Versioned venv package not found, trying python3-venv..."
+                if can_sys_install; then
+                    log_info "Python venv module not found, installing..."
+                    local python_version=$(python3 --version 2>/dev/null | awk '{print $2}' | cut -d. -f1-2)
+                    if [[ -n "$python_version" ]]; then
+                        local venv_package="python${python_version}-venv"
+                        log_info "Installing $venv_package for Python $python_version..."
+                        if ! $sudo_prefix apt-get install -y "$venv_package" 2>/dev/null; then
+                            log_warn "Versioned venv package not found, trying python3-venv..."
+                            $sudo_prefix apt-get install -y python3-venv
+                        fi
+                    else
                         $sudo_prefix apt-get install -y python3-venv
                     fi
                 else
-                    $sudo_prefix apt-get install -y python3-venv
+                    log_info "Skipping Python venv system install (no sudo / --user-local)"
                 fi
             else
                 log_success "Python venv module is available"
@@ -398,27 +419,31 @@ install_dev_tools() {
             ;;
 
         fedora)
-            $sudo_prefix dnf install -y git
-            if ! command_exists go; then
-                $sudo_prefix dnf install -y golang
-            fi
-            if ! python3 -m venv --help >/dev/null 2>&1; then
-                $sudo_prefix dnf install -y python3-venv || log_warn "python3-venv not found, may be included in python3 package"
+            if can_sys_install; then
+                $sudo_prefix dnf install -y git
+                if ! command_exists go; then
+                    $sudo_prefix dnf install -y golang
+                fi
+                if ! python3 -m venv --help >/dev/null 2>&1; then
+                    $sudo_prefix dnf install -y python3-venv || log_warn "python3-venv not found, may be included in python3 package"
+                else
+                    log_success "Python venv module is available"
+                fi
+                if ! command_exists hub; then
+                    $sudo_prefix dnf install -y hub 2>/dev/null || log_warn "hub not in repos, install manually from https://github.com/mislav/hub"
+                fi
+                if ! command_exists lazygit; then
+                    log_info "Installing lazygit..."
+                    $sudo_prefix dnf copr enable -y atim/lazygit 2>/dev/null \
+                        && $sudo_prefix dnf install -y lazygit \
+                        || log_warn "lazygit installation failed, install manually from https://github.com/jesseduffield/lazygit"
+                fi
+                if ! command_exists delta; then
+                    log_info "Installing delta..."
+                    $sudo_prefix dnf install -y git-delta 2>/dev/null || log_warn "delta installation failed, install manually from https://github.com/dandavison/delta"
+                fi
             else
-                log_success "Python venv module is available"
-            fi
-            if ! command_exists hub; then
-                $sudo_prefix dnf install -y hub 2>/dev/null || log_warn "hub not in repos, install manually from https://github.com/mislav/hub"
-            fi
-            if ! command_exists lazygit; then
-                log_info "Installing lazygit..."
-                $sudo_prefix dnf copr enable -y atim/lazygit 2>/dev/null \
-                    && $sudo_prefix dnf install -y lazygit \
-                    || log_warn "lazygit installation failed, install manually from https://github.com/jesseduffield/lazygit"
-            fi
-            if ! command_exists delta; then
-                log_info "Installing delta..."
-                $sudo_prefix dnf install -y git-delta 2>/dev/null || log_warn "delta installation failed, install manually from https://github.com/dandavison/delta"
+                log_info "Skipping Fedora system package installs (no sudo / --user-local)"
             fi
             if ! command_exists bat; then
                 log_info "Installing bat from GitHub releases for current user..."

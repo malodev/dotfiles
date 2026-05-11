@@ -258,7 +258,7 @@ install_editor_tools() {
                     log_info "Installing Neovim..."
                     local sudo_prefix
                     sudo_prefix=$(get_sudo_prefix)
-                    if $sudo_prefix apt-get install -y neovim 2>/dev/null; then
+                    if can_sys_install && $sudo_prefix apt-get install -y neovim 2>/dev/null; then
                         local nvim_version
                         nvim_version=$(nvim --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+' || echo "0.0")
                         if [[ "$(echo "$nvim_version < 0.9" | bc -l 2>/dev/null || echo 1)" == "1" ]]; then
@@ -572,7 +572,10 @@ install_fastfetch() {
             fi
             ;;
         fedora)
-            if ! $sudo_prefix dnf install -y fastfetch 2>/dev/null; then
+            if can_sys_install && $sudo_prefix dnf install -y fastfetch 2>/dev/null; then
+                :
+            else
+                [[ -n "$(get_sudo_prefix)" ]] || log_info "Skipping fastfetch system install (no sudo / --user-local)"
                 log_info "Installing fastfetch from GitHub releases..."
                 local fastfetch_dir="$HOME/.local/share/fastfetch"
                 mkdir -p "$fastfetch_dir"
@@ -738,10 +741,14 @@ setup_starship() {
     local install_success=0
 
     if [[ "$DISTRO" == "debian" ]]; then
-        if $sudo_prefix apt-get update -qq 2>/dev/null; then
-            if $sudo_prefix apt-get install -y starship 2>/dev/null; then
-                install_success=1
+        if can_sys_install; then
+            if $sudo_prefix apt-get update -qq 2>/dev/null; then
+                if $sudo_prefix apt-get install -y starship 2>/dev/null; then
+                    install_success=1
+                fi
             fi
+        else
+            log_info "Skipping starship system install (no sudo / --user-local)"
         fi
         if [[ $install_success -eq 0 ]]; then
             log_info "apt install failed, using official install script in $HOME/.local/bin..."
@@ -757,7 +764,11 @@ setup_starship() {
             $sudo_prefix pacman -S --noconfirm starship && install_success=1
         fi
     elif [[ "$DISTRO" == "fedora" ]]; then
-        $sudo_prefix dnf install -y starship && install_success=1
+        if can_sys_install; then
+            $sudo_prefix dnf install -y starship && install_success=1
+        else
+            log_info "Skipping starship system install (no sudo / --user-local)"
+        fi
     fi
 
     if command_exists starship; then

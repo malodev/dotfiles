@@ -212,12 +212,25 @@ get_sudo_prefix() {
     echo "sudo"
 }
 
+# Check whether system package manager commands can run (root, or sudo available).
+# Returns 0 if we can, 1 if we should skip all $sudo_prefix system-install calls.
+can_sys_install() {
+    [[ $EUID -eq 0 ]] || [[ -n "$(get_sudo_prefix)" ]]
+}
+
 # Install a package using the appropriate package manager
 pm_install() {
     local packages=("$@")
 
     local sudo_prefix
     sudo_prefix=$(get_sudo_prefix)
+
+    # Skip system package manager when sudo is unavailable (--user-local, no sudo binary)
+    # Only root can run apt/dnf/pacman without sudo.
+    if [[ $EUID -ne 0 ]] && [[ -z "$sudo_prefix" ]]; then
+        log_info "Skipping system package install (no sudo / --user-local): ${packages[*]}"
+        return 1
+    fi
 
     if is_macos && command_exists brew; then
         brew install "${packages[@]}"
