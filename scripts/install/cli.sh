@@ -11,6 +11,7 @@ print_help() {
     echo "  --list-groups   List available installation groups"
     echo "  --with-brew     Use Homebrew on Linux (default: skip)"
     echo "  --user-local    Prefer current-user installs for supported SSH/dev tools"
+    echo "  --lightweight   Optimise for constrained machines (starship prompt, etc.)"
     echo "  -g, --group G   Install an explicit group"
     echo "  -p, --package P Install an explicit dotfile package only"
     echo "  --minimal       SSH-safe minimal installation (core + shell + terminal + dev)"
@@ -56,6 +57,10 @@ parse_cli_args() {
                 USER_LOCAL=1
                 shift
                 ;;
+            --lightweight)
+                LIGHTWEIGHT=1
+                shift
+                ;; 
             -h|--help)
                 print_help
                 exit 0

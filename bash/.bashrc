@@ -71,18 +71,28 @@ fi
 
 # Initialize starship if available, otherwise use simple prompt
 if command -v starship >/dev/null 2>&1; then
-    # Auto-detect constrained machines (shared hosting, low-spec VPS)
-    # and use a lightweight prompt config to avoid per-prompt lag.
+    # Auto-detect constrained machines and use a lightweight prompt config.
+    # Only runs once (when STARSHIP_CONFIG is not already set by user).
     if [[ ! -f "${STARSHIP_CONFIG:-}" ]]; then
+        _use_minimal=0
+        # Explicit lightweight marker (created by ./install.sh --lightweight)
+        [[ -f "$HOME/.config/dotfiles-lightweight.enabled" ]] && _use_minimal=1
+        # Aruba / shared hosting — web directory structure exists
+        [[ -d /web/htdocs ]] && _use_minimal=1
+        # Low memory (<2GB)
         _mem_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        [[ "$_mem_kb" -gt 0 && "$_mem_kb" -lt 2000000 ]] && _use_minimal=1
+        # Few CPUs (<=2)
         _cpu_count=$(nproc 2>/dev/null || echo 0)
-        if [[ "$_mem_kb" -gt 0 && "$_mem_kb" -lt 2000000 ]] || [[ "$_cpu_count" -gt 0 && "$_cpu_count" -le 2 ]]; then
+        [[ "$_cpu_count" -gt 0 && "$_cpu_count" -le 2 ]] && _use_minimal=1
+
+        if [[ $_use_minimal -eq 1 ]]; then
             _minimal_config="$HOME/.config/starship-minimal.toml"
             if [[ -f "$_minimal_config" ]]; then
                 export STARSHIP_CONFIG="$_minimal_config"
             fi
         fi
-        unset _mem_kb _cpu_count _minimal_config
+        unset _use_minimal _mem_kb _cpu_count _minimal_config
     fi
     eval "$(starship init bash)"
 elif [[ -x "$HOME/.local/bin/starship" ]]; then

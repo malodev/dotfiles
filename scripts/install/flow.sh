@@ -237,6 +237,19 @@ run_install_steps() {
             bash "$SCRIPT_DIR/scripts/init-pi-settings.sh" || true
         fi
     fi
+
+    # Lightweight mode: create a persistent marker for constrained machines.
+    # .bashrc checks this to enable optimisations (minimal starship prompt, etc.)
+    if [[ "${LIGHTWEIGHT:-0}" == "1" ]]; then
+        local _marker="$HOME/.config/dotfiles-lightweight.enabled"
+        if [[ "$DRY_RUN" == "1" ]]; then
+            log_dry_run "Would create: $_marker"
+        else
+            mkdir -p "$(dirname "$_marker")"
+            touch "$_marker"
+            log_info "Created $_marker — lightweight mode enabled"
+        fi
+    fi
 }
 
 show_final_summary() {
