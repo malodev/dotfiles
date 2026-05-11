@@ -146,6 +146,26 @@ declare -A STOW_SKIP_PACKAGES=()
 # is relocated to _local files during stow. Checked in final summary.
 RELOCATED_SHELL_CONFIGS=0
 
+# Ensure directories exist for packages that need real dirs (not symlinks to repo).
+# Without this, stow creates ~/.pi as a symlink to pi/.pi, preventing pi from
+# writing sessions/, bin/, auth.json, mcp-cache.json, etc. to its own space.
+ensure_stow_target_dirs() {
+    local pkg="$1"
+
+    case "$pkg" in
+        pi)
+            if [[ ! -d "$HOME/.pi" ]]; then
+                mkdir -p "$HOME/.pi/agent"
+                log_info "Created $HOME/.pi/agent/ (real directory for pi runtime files)"
+            elif [[ ! -d "$HOME/.pi/agent" ]]; then
+                mkdir -p "$HOME/.pi/agent"
+                log_info "Created $HOME/.pi/agent/"
+            fi
+            ;;
+        *) ;;
+    esac
+}
+
 stow_register_conflict() {
     local pkg="$1"
     local rel_path="$2"
@@ -187,6 +207,8 @@ stow_collect_conflicts() {
 stow_package_preflight() {
     local pkg="$1"
     local output
+
+    ensure_stow_target_dirs "$pkg"
 
     log_dry_run "  stow preflight -d $SCRIPT_DIR -t $HOME $pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
@@ -308,6 +330,8 @@ relocate_shell_configs_to_local() {
 
 stow_package() {
     local pkg="$1"
+
+    ensure_stow_target_dirs "$pkg"
 
     log_dry_run "  stow -d $SCRIPT_DIR -t $HOME $pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
