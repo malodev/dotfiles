@@ -171,6 +171,10 @@ run_install_steps() {
 
     if [[ "$PACKAGE_ONLY_MODE" == "1" ]]; then
         log_info "Package-only mode: skipping system package/tool installers"
+        # Neovim binary is still useful when only installing an nvim config
+        if nvim_package_selected; then
+            install_neovim_binary
+        fi
     else
         if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
             install_homebrew_packages

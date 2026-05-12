@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 
 nvim_configs_selected() {
-    [[ "$(get_group_selection "editor")" == "1" ]] || [[ "$(get_group_selection "editor-alt")" == "1" ]]
+    [[ "$(get_group_selection "editor")" == "1" ]] || [[ "$(get_group_selection "editor-alt")" == "1" ]] || nvim_package_selected
+}
+
+nvim_package_selected() {
+    local pkg
+    for pkg in "${!SELECTED_PACKAGES[@]}"; do
+        [[ "$pkg" == nvim-* ]] && return 0
+    done
+    return 1
 }
 
 select_nvim_config() {
