@@ -149,10 +149,6 @@ if [[ -n "${NVM_DIR:-}" && -s "$NVM_DIR/nvm.sh" ]]; then
       PATH="$NVM_DIR/versions/node/$NVM_DEFAULT/bin:$PATH"
     fi
   fi
-  # Only install lazy wrappers if node isn't already reachable from PATH.
-  # On constrained hosts sourcing nvm.sh may hang — the direct binary from
-  # the versions path above is sufficient.
-  if ! command -v node &>/dev/null; then
   nvm() {
     unfunction nvm node npm npx 2>/dev/null
     . "$NVM_DIR/nvm.sh"
@@ -173,7 +169,6 @@ if [[ -n "${NVM_DIR:-}" && -s "$NVM_DIR/nvm.sh" ]]; then
     . "$NVM_DIR/nvm.sh"
     npx "$@"
   }
-  fi
 fi
 
 # deno
