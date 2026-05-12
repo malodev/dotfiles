@@ -560,9 +560,9 @@ install_fastfetch() {
             log_info "Installing fastfetch from GitHub releases..."
             if curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64.tar.gz" -o "/tmp/fastfetch.tar.gz" 2>/dev/null; then
                 if [[ -s "/tmp/fastfetch.tar.gz" ]] && ! grep -q "Not Found" "/tmp/fastfetch.tar.gz" 2>/dev/null; then
-                    tar -xzf "/tmp/fastfetch.tar.gz" -C "/tmp" --strip-components=1 fastfetch 2>/dev/null \
-                        && install_to_user_local_bin /tmp/fastfetch fastfetch \
-                        && rm -f /tmp/fastfetch /tmp/fastfetch.tar.gz \
+                    tar -xzf "/tmp/fastfetch.tar.gz" -C "/tmp" 2>/dev/null \
+                        && install_to_user_local_bin /tmp/fastfetch-linux-amd64/usr/bin/fastfetch fastfetch \
+                        && rm -rf /tmp/fastfetch-linux-amd64 /tmp/fastfetch.tar.gz \
                         && log_success "fastfetch installed" \
                         || log_warn "fastfetch tarball appears invalid"
                     rm -f "/tmp/fastfetch.tar.gz"
