@@ -558,16 +558,17 @@ install_fastfetch() {
             ;;
         debian)
             log_info "Installing fastfetch from GitHub releases..."
-            local fastfetch_dir="$HOME/.local/share/fastfetch"
-            mkdir -p "$fastfetch_dir"
-            if curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64" -o "$fastfetch_dir/fastfetch" 2>/dev/null; then
-                if [[ -s "$fastfetch_dir/fastfetch" ]] && ! grep -q "Not Found" "$fastfetch_dir/fastfetch" 2>/dev/null; then
-                    chmod +x "$fastfetch_dir/fastfetch"
-                    ln -sfn "$fastfetch_dir/fastfetch" "$fastfetch_bin_dir/fastfetch"
-                    log_success "fastfetch installed to $fastfetch_bin_dir/fastfetch"
+            if curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-amd64.tar.gz" -o "/tmp/fastfetch.tar.gz" 2>/dev/null; then
+                if [[ -s "/tmp/fastfetch.tar.gz" ]] && ! grep -q "Not Found" "/tmp/fastfetch.tar.gz" 2>/dev/null; then
+                    tar -xzf "/tmp/fastfetch.tar.gz" -C "/tmp" --strip-components=1 fastfetch 2>/dev/null \
+                        && install_to_user_local_bin /tmp/fastfetch fastfetch \
+                        && rm -f /tmp/fastfetch /tmp/fastfetch.tar.gz \
+                        && log_success "fastfetch installed" \
+                        || log_warn "fastfetch tarball appears invalid"
+                    rm -f "/tmp/fastfetch.tar.gz"
                 else
                     log_warn "fastfetch download appears invalid"
-                    rm -f "$fastfetch_dir/fastfetch"
+                    rm -f "/tmp/fastfetch.tar.gz"
                 fi
             else
                 log_warn "fastfetch download failed, install manually from https://github.com/fastfetch-cli/fastfetch/releases"
