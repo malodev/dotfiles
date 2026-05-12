@@ -358,7 +358,19 @@ install_dev_tools() {
                         && $sudo_prefix apt-get install -y nodejs \
                         || log_warn "Node.js installation failed, install manually from https://nodejs.org"
                 else
-                    log_info "Skipping Node.js system install (no sudo / --user-local)"
+                    log_info "Installing Node.js LTS to ~/.local..."
+                    local node_version node_root="$HOME/.local/opt/node"
+                    node_version=$(curl -s "https://nodejs.org/download/release/index.json" 2>/dev/null | grep -Po '"version":"v\K[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | tr -d '"' || echo "22.14.0")
+                    mkdir -p "$HOME/.local/opt"
+                    curl -Lo /tmp/node.tar.xz "https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-x64.tar.xz" 2>/dev/null \
+                        && rm -rf "$node_root" \
+                        && tar -C "$HOME/.local/opt" -xJf /tmp/node.tar.xz \
+                        && mv "$HOME/.local/opt/node-v${node_version}-linux-x64" "$node_root" \
+                        && symlink_to_user_local_bin "$node_root/bin/node" node \
+                        && symlink_to_user_local_bin "$node_root/bin/npm" npm \
+                        && symlink_to_user_local_bin "$node_root/bin/npx" npx \
+                        && rm -f /tmp/node.tar.xz \
+                        || log_warn "Node.js user-local install failed, install manually from https://nodejs.org"
                 fi
             fi
 
