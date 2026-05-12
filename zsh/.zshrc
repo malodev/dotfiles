@@ -239,7 +239,9 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
     fi
     [ -n "$NVM_DEFAULT" ] && PATH="$NVM_DIR/versions/node/$NVM_DEFAULT/bin:$PATH"
   fi
-  # Lazy-load nvm itself — only runs when you first call nvm/node/npm/npx
+  # Only install lazy wrappers if node isn't already reachable from PATH.
+  # On constrained hosts sourcing nvm.sh may hang.
+  if ! command -v node &>/dev/null; then
   nvm() {
     unfunction nvm node npm npx 2>/dev/null
     \. "$NVM_DIR/nvm.sh"
@@ -260,6 +262,7 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
     \. "$NVM_DIR/nvm.sh"
     npx "$@"
   }
+  fi
 fi
 
 # deno
