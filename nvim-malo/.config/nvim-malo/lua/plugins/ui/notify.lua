@@ -143,7 +143,7 @@ return {
 					{
 						pane = 2,
 						section = "terminal",
-						cmd = "colorscript -e square",
+						cmd = vim.fn.expand("~/.local/bin/colorscript -e square"),
 						height = 5,
 						padding = 1,
 					},
