@@ -497,6 +497,8 @@ install_shell_color_scripts() {
     cd shell-color-scripts
     cp -rf colorscripts "$colorscript_share_dir/"
     install -m 0755 colorscript.sh "$colorscript_install_dir/colorscript"
+    # Patch the hardcoded /opt path to the user-local install location
+    sed -i "s|/opt/shell-color-scripts/colorscripts|$colorscript_share_dir/colorscripts|g" "$colorscript_install_dir/colorscript" 2>/dev/null || true
     mkdir -p "$HOME/.local/share/man/man1" 2>/dev/null || true
     cp colorscript.1 "$HOME/.local/share/man/man1/" 2>/dev/null || true
     mkdir -p ~/.zsh/completion 2>/dev/null || true
