@@ -155,6 +155,24 @@ install_cli_tools() {
     esac
 }
 
+install_hyprland_tools() {
+    if [[ "$(get_group_selection "hyprland")" != "1" ]]; then
+        return 0
+    fi
+    if [[ "$OS" == "Darwin" ]] || [[ "${WITH_BREW:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    show_banner "Installing Hyprland desktop tools (Linux)"
+
+    case "$DISTRO" in
+        arch) _linux_pkg_install "Hyprland wallpaper tools" variety swaybg ;;
+        debian) _linux_pkg_install "Hyprland wallpaper tools" variety swaybg ;;
+        fedora) _linux_pkg_install "Hyprland wallpaper tools" variety swaybg ;;
+        *) log_warn "Hyprland wallpaper tool installation not configured for $DISTRO" ;;
+    esac
+}
+
 install_web_cli_tools() {
     if [[ "$(get_group_selection "web-cli")" != "1" ]]; then
         return 0

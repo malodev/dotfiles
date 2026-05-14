@@ -13,6 +13,7 @@ declare -A INSTALL_GROUPS=(
     ["gui-terminal"]="kitty"
     ["desktop"]="sketchybar aerospace borders"
     ["linux"]="i3"
+    ["hyprland"]="hyprland"
     ["dev"]="git bat"
     ["system-info"]=""
 )
@@ -27,6 +28,7 @@ declare -A GROUP_DESC=(
     ["gui-terminal"]="GUI terminal emulator (Kitty)"
     ["desktop"]="Desktop environment (SketchyBar, AeroSpace, Borders)"
     ["linux"]="Linux window manager (i3)"
+    ["hyprland"]="Hyprland desktop configuration (Hyprland, Waybar, Variety wallpaper integration)"
     ["dev"]="Development tools (Git, Lazygit, Lazydocker, Delta, Bat, LLM)"
     ["system-info"]="System information tools (Fastfetch)"
 )
@@ -42,11 +44,12 @@ declare -A GROUP_PLATFORM=(
     ["gui-terminal"]="all"
     ["desktop"]="macos"
     ["linux"]="linux"
+    ["hyprland"]="linux"
     ["dev"]="all"
     ["system-info"]="all"
 )
 
-INSTALL_ORDER=("core" "shell" "terminal" "dev" "editor" "editor-alt" "web-cli" "gui-terminal" "desktop" "linux" "system-info")
+INSTALL_ORDER=("core" "shell" "terminal" "dev" "editor" "editor-alt" "web-cli" "gui-terminal" "desktop" "linux" "hyprland" "system-info")
 
 SHELL_CONFIG_PACKAGES=("bash" "zsh" "nushell" "fish")
 
@@ -96,6 +99,7 @@ declare -A DEFAULT_GROUPS_DARWIN=(
     ["gui-terminal"]=1
     ["desktop"]=1
     ["linux"]=0
+    ["hyprland"]=0
     ["system-info"]=0
 )
 
@@ -110,6 +114,7 @@ declare -A DEFAULT_GROUPS_LINUX=(
     ["gui-terminal"]=0
     ["desktop"]=0
     ["linux"]=0
+    ["hyprland"]=0
     ["system-info"]=1
 )
 
@@ -128,6 +133,7 @@ declare -A GROUP_DETAIL_LINE_1=(
     ["gui-terminal"]="Stow: kitty"
     ["desktop"]="Stow: sketchybar, aerospace, borders"
     ["linux"]="Stow: i3"
+    ["hyprland"]="Stow: hyprland"
     ["system-info"]="Install: fastfetch"
 )
 
@@ -142,6 +148,7 @@ declare -A GROUP_DETAIL_LINE_2=(
     ["gui-terminal"]="Installs: kitty GUI terminal where applicable via __PACKAGE_MODE__"
     ["desktop"]="Platform: macOS only; disabled on Linux"
     ["linux"]="Platform: Linux only; disabled on macOS"
+    ["hyprland"]="Installs: variety + swaybg where available; stows Hyprland/Waybar/Variety configs"
     ["system-info"]="Installs: fastfetch, preferring user-local fallback locations"
 )
 
@@ -156,6 +163,7 @@ declare -A GROUP_DETAIL_LINE_3=(
     ["gui-terminal"]="Remote note: only needed on local GUI workstations"
     ["desktop"]="Installs: macOS tools via Brewfile"
     ["linux"]=""
+    ["hyprland"]="Run with './install.sh hyprland' on Hyprland machines"
     ["system-info"]=""
 )
 
@@ -170,5 +178,6 @@ declare -A GROUP_DETAIL_LINE_4=(
     ["gui-terminal"]=""
     ["desktop"]=""
     ["linux"]=""
+    ["hyprland"]=""
     ["system-info"]=""
 )
