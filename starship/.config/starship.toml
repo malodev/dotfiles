@@ -253,7 +253,7 @@ format = "[$output]($style) "
 [custom.hostname_ssh]
 command = "echo $DOTFILES_HOSTNAME"
 when = '[ -n "$SSH_CONNECTION" ]' # Triggers if the variable is NOT empty
-style = "bold red"
+style = "bold #f38ba8"  # red from catppuccin_mocha
 format = "[$output]($style) "
 
 [java]
