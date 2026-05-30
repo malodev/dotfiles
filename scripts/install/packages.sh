@@ -702,24 +702,61 @@ install_tmux_user_local() {
     [[ "$DRY_RUN" == "1" ]] && return 0
 
     log_info "Installing tmux (user-local)..."
-    local arch
-    arch=$(uname -m)
-    case "$arch" in
-        x86_64)  arch="amd64" ;;
-        aarch64) arch="arm64" ;;
-        *)       log_warn "tmux: unsupported architecture $arch"; return 1 ;;
+
+    # Map uname arch to download asset names.
+    # tmux-builds uses: x86_64, arm64 (Linux) or arm64, x86_64 (macOS).
+    local kernel_arch download_arch os_label
+    kernel_arch=$(uname -m)
+    case "$kernel_arch" in
+        x86_64)  download_arch="x86_64" ;;
+        aarch64) download_arch="arm64"  ;;
+        *)       log_warn "tmux: unsupported architecture $kernel_arch"; return 1 ;;
+    esac
+    case "$OS" in
+        Darwin) os_label="macos" ;;
+        Linux)  os_label="linux" ;;
+        *)      os_label="linux" ;;
     esac
 
-    # Try static binary from GitHub releases (no API call, redirect-based URL).
-    # nelsonjchen/tmux-static-build provides pre-built static binaries.
-    local static_url="https://github.com/nelsonjchen/tmux-static-build/releases/latest/download/tmux.linux-${arch}"
-    log_info "Downloading tmux static build for linux-${arch}..."
-    if curl -fsSL "$static_url" -o /tmp/tmux 2>/dev/null && [[ -s /tmp/tmux ]]; then
-        ensure_user_local_bin
-        install -m 0755 /tmp/tmux "$HOME/.local/bin/tmux" && rm -f /tmp/tmux && log_success "tmux installed to $HOME/.local/bin/tmux" && return 0
-        rm -f /tmp/tmux
+    # Primary: official tmux project builds (github.com/tmux/tmux-builds)
+    # Get latest tag via HTTP redirect (no API call, no rate limit).
+    local latest_tag version
+    latest_tag=$(curl -sI -o /dev/null -w '%{redirect_url}' \
+        "https://github.com/tmux/tmux-builds/releases/latest" 2>/dev/null | sed 's|.*/tag/||')
+    if [[ -n "$latest_tag" ]]; then
+        version="${latest_tag#v}"  # v3.6b -> 3.6b
+        local official_url="https://github.com/tmux/tmux-builds/releases/download/${latest_tag}/tmux-${version}-${os_label}-${download_arch}.tar.gz"
+        log_info "Downloading tmux ${latest_tag} from official builds..."
+        if curl -fsSL "$official_url" -o /tmp/tmux.tar.gz 2>/dev/null && [[ -s /tmp/tmux.tar.gz ]]; then
+            if tar -xzf /tmp/tmux.tar.gz -C /tmp 2>/dev/null && [[ -f /tmp/tmux ]]; then
+                ensure_user_local_bin
+                install -m 0755 /tmp/tmux "$HOME/.local/bin/tmux" \
+                    && rm -f /tmp/tmux /tmp/tmux.tar.gz \
+                    && log_success "tmux ${latest_tag} installed to $HOME/.local/bin/tmux" \
+                    && return 0
+            fi
+            rm -f /tmp/tmux /tmp/tmux.tar.gz
+            log_info "Official build extraction failed, trying alternative..."
+        fi
     fi
-    log_info "Static binary not available, will build from source..."
+
+    # Fallback: nelsonjchen/tmux-static-build static binaries
+    if [[ "$os_label" == "linux" ]]; then
+        local nelson_arch
+        case "$download_arch" in
+            x86_64) nelson_arch="amd64" ;;
+            arm64)  nelson_arch="arm64" ;;
+        esac
+        local nelson_url="https://github.com/nelsonjchen/tmux-static-build/releases/latest/download/tmux.linux-${nelson_arch}"
+        log_info "Trying static build from nelsonjchen/tmux-static-build..."
+        if curl -fsSL "$nelson_url" -o /tmp/tmux 2>/dev/null && [[ -s /tmp/tmux ]]; then
+            ensure_user_local_bin
+            install -m 0755 /tmp/tmux "$HOME/.local/bin/tmux" && rm -f /tmp/tmux && log_success "tmux installed to $HOME/.local/bin/tmux" && return 0
+            rm -f /tmp/tmux
+        fi
+    fi
+
+    log_info "Pre-built binaries not available, will build from source..."
 
     # Source build fallback — check build dependencies before attempting.
     # Per https://github.com/tmux/tmux/wiki/Installing
