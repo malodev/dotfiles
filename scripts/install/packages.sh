@@ -844,11 +844,6 @@ install_kitty_terminfo_user_local() {
         return 0
     fi
 
-    if ! command_exists tic; then
-        log_warn "tic (ncurses) is required to compile kitty terminfo — skipping"
-        return 0
-    fi
-
     log_dry_run "Would install xterm-kitty terminfo user-locally"
     [[ "$DRY_RUN" == "1" ]] && return 0
 
@@ -856,14 +851,38 @@ install_kitty_terminfo_user_local() {
     local terminfo_dir="$HOME/.terminfo"
     mkdir -p "$terminfo_dir"
 
-    if curl -fsSL "https://raw.githubusercontent.com/kovidgoyal/kitty/master/terminfo/kitty.terminfo" -o /tmp/kitty.terminfo 2>/dev/null; then
-        TERMINFO="$terminfo_dir" tic -x /tmp/kitty.terminfo 2>/dev/null && \
-            rm -f /tmp/kitty.terminfo && \
-            log_success "kitty terminfo installed to $terminfo_dir"
+    # Method 1: compile from source with tic (preferred, handles terminal width).
+    if command_exists tic; then
+        if curl -fsSL "https://raw.githubusercontent.com/kovidgoyal/kitty/master/terminfo/kitty.terminfo" -o /tmp/kitty.terminfo 2>/dev/null; then
+            if TERMINFO="$terminfo_dir" tic -x /tmp/kitty.terminfo 2>/dev/null; then
+                rm -f /tmp/kitty.terminfo
+                log_success "kitty terminfo compiled and installed to $terminfo_dir"
+                return 0
+            fi
+            rm -f /tmp/kitty.terminfo
+            log_info "tic compilation failed, trying pre-compiled terminfo..."
+        fi
     else
-        log_warn "Failed to download kitty.terminfo"
+        log_info "tic not available, trying pre-compiled terminfo..."
     fi
-    warn_if_user_local_bin_not_in_path
+
+    # Method 2: download pre-compiled terminfo from kitty's repo.
+    # Kitty ships compiled terminfo in its source tree at terminfo/x/
+    local terminfo_url="https://raw.githubusercontent.com/kovidgoyal/kitty/master/terminfo/x/xterm-kitty"
+    mkdir -p "$terminfo_dir/x"
+    if curl -fsSL "$terminfo_url" -o "$terminfo_dir/x/xterm-kitty" 2>/dev/null \
+        && [[ -s "$terminfo_dir/x/xterm-kitty" ]]; then
+        log_success "kitty terminfo downloaded to $terminfo_dir"
+        return 0
+    fi
+
+    # Method 3: last resort — provide clear instructions.
+    log_warn "Could not install kitty terminfo automatically."
+    log_warn "tmux will fail if TERM=xterm-kitty is not in the terminfo database."
+    log_warn "Install manually:"
+    log_warn "  Debian/Ubuntu: apt install ncurses-term"
+    log_warn "  Arch:          pacman -S kitty-terminfo"
+    log_warn "  Or set TERM=xterm-256color before starting tmux."
 }
 
 setup_zoxide() {
