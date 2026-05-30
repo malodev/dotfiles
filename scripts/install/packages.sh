@@ -702,36 +702,56 @@ install_tmux_user_local() {
     [[ "$DRY_RUN" == "1" ]] && return 0
 
     log_info "Installing tmux (user-local)..."
-    local tmux_version tmux_url tmpdir
-    tmux_version=$(curl -s "https://api.github.com/repos/nelsonjchen/tmux-static-build/releases/latest" | grep -Po '"tag_name": "\K[^"]+' 2>/dev/null || echo "")
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64)  arch="amd64" ;;
+        aarch64) arch="arm64" ;;
+        *)       log_warn "tmux: unsupported architecture $arch"; return 1 ;;
+    esac
 
-    if [[ -n "$tmux_version" ]]; then
-        tmux_url="https://github.com/nelsonjchen/tmux-static-build/releases/download/${tmux_version}/tmux.linux-amd64"
-        log_info "Downloading tmux static build ${tmux_version}..."
-        if curl -fL "$tmux_url" -o /tmp/tmux 2>/dev/null && [[ -s /tmp/tmux ]]; then
-            ensure_user_local_bin
-            install -m 0755 /tmp/tmux "$HOME/.local/bin/tmux" && rm -f /tmp/tmux && log_success "tmux installed to $HOME/.local/bin/tmux" && return 0
-        fi
-        log_warn "tmux static download failed, falling back to source build..."
+    # Try static binary from GitHub releases (no API call, redirect-based URL).
+    # nelsonjchen/tmux-static-build provides pre-built static binaries.
+    local static_url="https://github.com/nelsonjchen/tmux-static-build/releases/latest/download/tmux.linux-${arch}"
+    log_info "Downloading tmux static build for linux-${arch}..."
+    if curl -fsSL "$static_url" -o /tmp/tmux 2>/dev/null && [[ -s /tmp/tmux ]]; then
+        ensure_user_local_bin
+        install -m 0755 /tmp/tmux "$HOME/.local/bin/tmux" && rm -f /tmp/tmux && log_success "tmux installed to $HOME/.local/bin/tmux" && return 0
+        rm -f /tmp/tmux
     fi
+    log_info "Static binary not available, will build from source..."
 
-    # Fallback: build from source
-    if ! command_exists make; then
-        log_warn "tmux requires 'make' to build from source — install 'make' first"
+    # Source build fallback — check build dependencies before attempting.
+    local missing_deps=()
+    for dep in make gcc pkg-config; do
+        command_exists "$dep" || missing_deps+=("$dep")
+    done
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        log_warn "tmux source build requires: ${missing_deps[*]} — install them first and re-run"
+        log_warn "Also needs: libevent-dev, ncurses-dev (or equivalent on your distro)"
+        return 1
+    fi
+    if ! pkg-config --exists libevent 2>/dev/null && ! ldconfig -p 2>/dev/null | grep -q libevent; then
+        log_warn "tmux: libevent development headers not found — install libevent-dev (or equivalent)"
+        return 1
+    fi
+    if ! pkg-config --exists ncurses 2>/dev/null && ! ldconfig -p 2>/dev/null | grep -q libncurses; then
+        log_warn "tmux: ncurses development headers not found — install ncurses-dev (or equivalent)"
         return 1
     fi
 
     local build_dir="$HOME/.local/src/tmux"
     rm -rf "$build_dir"
+    log_info "Building tmux from source..."
     if git clone --depth 1 https://github.com/tmux/tmux.git "$build_dir" 2>/dev/null; then
         (
             cd "$build_dir"
             sh autogen.sh 2>/dev/null || true
             ./configure --prefix="$HOME/.local" 2>/dev/null || { log_warn "tmux ./configure failed"; exit 1; }
-            make -j"$(nproc)" 2>/dev/null || { log_warn "tmux make failed"; exit 1; }
+            make -j"$(nproc 2>/dev/null || echo 1)" 2>/dev/null || { log_warn "tmux make failed"; exit 1; }
             ensure_user_local_bin
             install -m 0755 tmux "$HOME/.local/bin/tmux"
-        ) || { rm -rf "$build_dir"; return 1; }
+        ) || { rm -rf "$build_dir"; log_warn "tmux source build failed"; return 1; }
         rm -rf "$build_dir"
         log_success "tmux built and installed to $HOME/.local/bin/tmux"
     else
@@ -761,8 +781,9 @@ install_urlview_user_local() {
     if git clone --depth 1 https://github.com/sigpipe/urlview.git "$build_dir" 2>/dev/null; then
         (
             cd "$build_dir"
+            autoreconf -i 2>/dev/null || true
             ./configure --prefix="$HOME/.local" 2>/dev/null || { log_warn "urlview ./configure failed"; exit 1; }
-            make -j"$(nproc)" 2>/dev/null || { log_warn "urlview make failed"; exit 1; }
+            make -j"$(nproc 2>/dev/null || echo 1)" 2>/dev/null || { log_warn "urlview make failed"; exit 1; }
             ensure_user_local_bin
             install -m 0755 urlview "$HOME/.local/bin/urlview"
         ) || { rm -rf "$build_dir"; return 1; }
