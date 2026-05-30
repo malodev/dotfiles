@@ -722,13 +722,18 @@ install_tmux_user_local() {
     log_info "Static binary not available, will build from source..."
 
     # Source build fallback — check build dependencies before attempting.
+    # Per https://github.com/tmux/tmux/wiki/Installing
     local missing_deps=()
-    for dep in make gcc pkg-config; do
+    for dep in make gcc pkg-config autoconf automake; do
         command_exists "$dep" || missing_deps+=("$dep")
     done
+    # bison or yacc (byacc) — tmux needs a yacc-compatible parser generator
+    if ! command_exists bison && ! command_exists yacc && ! command_exists byacc; then
+        missing_deps+=("bison")
+    fi
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        log_warn "tmux source build requires: ${missing_deps[*]} — install them first and re-run"
-        log_warn "Also needs: libevent-dev, ncurses-dev (or equivalent on your distro)"
+        log_warn "tmux source build requires: ${missing_deps[*]}"
+        log_warn "Install them first (e.g. apt install ${missing_deps[*]} libevent-dev ncurses-dev) and re-run"
         return 1
     fi
     if ! pkg-config --exists libevent 2>/dev/null && ! ldconfig -p 2>/dev/null | grep -q libevent; then
