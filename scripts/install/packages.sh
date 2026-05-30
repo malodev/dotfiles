@@ -50,7 +50,7 @@ _aur_install_or_warn() {
 user_local_preferred_package() {
     local pkg="$1"
     case "$pkg" in
-        fzf|ripgrep|bat|fd|fd-find|git-delta|lazygit|lazydocker|go|golang|golang-go|starship|zoxide)
+        fzf|ripgrep|bat|fd|fd-find|git-delta|lazygit|lazydocker|go|golang|golang-go|starship|zoxide|tmux|urlview|kitty-terminfo)
             return 0
             ;;
         *)
@@ -195,6 +195,11 @@ install_kitty_terminfo() {
     if command_exists infocmp && infocmp xterm-kitty >/dev/null 2>&1; then
         log_success "kitty terminfo is already installed"
         return 0
+    fi
+
+    if [[ "${USER_LOCAL:-0}" == "1" ]]; then
+        install_kitty_terminfo_user_local
+        return
     fi
 
     case "$DISTRO" in
@@ -636,7 +641,7 @@ install_user_local_preferred_tools() {
     fi
 
     show_banner "Installing User-local Preferred Tools"
-    log_info "User-local mode: system package managers are avoided for fzf/rg/bat/fd/delta/lazygit/lazydocker/go/starship/zoxide when possible."
+    log_info "User-local mode: system package managers are avoided for fzf/rg/bat/fd/delta/lazygit/lazydocker/go/starship/zoxide/tmux/urlview/kitty-terminfo when possible."
 
     install_uv_tool
     install_bun_tool
@@ -680,6 +685,122 @@ install_user_local_preferred_tools() {
     else
         log_success "go is already installed"
     fi
+
+    # --- SSH-safe terminal tools (tmux, urlview, kitty-terminfo) ---
+    install_tmux_user_local
+    install_urlview_user_local
+    install_kitty_terminfo_user_local
+}
+
+install_tmux_user_local() {
+    if command_exists tmux; then
+        log_success "tmux is already installed"
+        return 0
+    fi
+
+    log_dry_run "Would install tmux to $HOME/.local/bin/tmux"
+    [[ "$DRY_RUN" == "1" ]] && return 0
+
+    log_info "Installing tmux (user-local)..."
+    local tmux_version tmux_url tmpdir
+    tmux_version=$(curl -s "https://api.github.com/repos/nelsonjchen/tmux-static-build/releases/latest" | grep -Po '"tag_name": "\K[^"]+' 2>/dev/null || echo "")
+
+    if [[ -n "$tmux_version" ]]; then
+        tmux_url="https://github.com/nelsonjchen/tmux-static-build/releases/download/${tmux_version}/tmux.linux-amd64"
+        log_info "Downloading tmux static build ${tmux_version}..."
+        if curl -fL "$tmux_url" -o /tmp/tmux 2>/dev/null && [[ -s /tmp/tmux ]]; then
+            ensure_user_local_bin
+            install -m 0755 /tmp/tmux "$HOME/.local/bin/tmux" && rm -f /tmp/tmux && log_success "tmux installed to $HOME/.local/bin/tmux" && return 0
+        fi
+        log_warn "tmux static download failed, falling back to source build..."
+    fi
+
+    # Fallback: build from source
+    if ! command_exists make; then
+        log_warn "tmux requires 'make' to build from source — install 'make' first"
+        return 1
+    fi
+
+    local build_dir="$HOME/.local/src/tmux"
+    rm -rf "$build_dir"
+    if git clone --depth 1 https://github.com/tmux/tmux.git "$build_dir" 2>/dev/null; then
+        (
+            cd "$build_dir"
+            sh autogen.sh 2>/dev/null || true
+            ./configure --prefix="$HOME/.local" 2>/dev/null || { log_warn "tmux ./configure failed"; exit 1; }
+            make -j"$(nproc)" 2>/dev/null || { log_warn "tmux make failed"; exit 1; }
+            ensure_user_local_bin
+            install -m 0755 tmux "$HOME/.local/bin/tmux"
+        ) || { rm -rf "$build_dir"; return 1; }
+        rm -rf "$build_dir"
+        log_success "tmux built and installed to $HOME/.local/bin/tmux"
+    else
+        log_warn "tmux clone failed — install manually"
+        return 1
+    fi
+    warn_if_user_local_bin_not_in_path
+}
+
+install_urlview_user_local() {
+    if command_exists urlview; then
+        log_success "urlview is already installed"
+        return 0
+    fi
+
+    log_dry_run "Would install urlview to $HOME/.local/bin/urlview"
+    [[ "$DRY_RUN" == "1" ]] && return 0
+
+    if ! command_exists make || ! command_exists gcc; then
+        log_warn "urlview requires 'make' and 'gcc' to build — skipping"
+        return 0
+    fi
+
+    log_info "Building urlview from source (user-local)..."
+    local build_dir="$HOME/.local/src/urlview"
+    rm -rf "$build_dir"
+    if git clone --depth 1 https://github.com/sigpipe/urlview.git "$build_dir" 2>/dev/null; then
+        (
+            cd "$build_dir"
+            ./configure --prefix="$HOME/.local" 2>/dev/null || { log_warn "urlview ./configure failed"; exit 1; }
+            make -j"$(nproc)" 2>/dev/null || { log_warn "urlview make failed"; exit 1; }
+            ensure_user_local_bin
+            install -m 0755 urlview "$HOME/.local/bin/urlview"
+        ) || { rm -rf "$build_dir"; return 1; }
+        rm -rf "$build_dir"
+        log_success "urlview installed to $HOME/.local/bin/urlview"
+    else
+        log_warn "urlview clone failed — install manually"
+        return 0
+    fi
+    warn_if_user_local_bin_not_in_path
+}
+
+install_kitty_terminfo_user_local() {
+    if command_exists infocmp && infocmp xterm-kitty >/dev/null 2>&1; then
+        log_success "kitty terminfo is already installed"
+        return 0
+    fi
+
+    if ! command_exists tic; then
+        log_warn "tic (ncurses) is required to compile kitty terminfo — skipping"
+        return 0
+    fi
+
+    log_dry_run "Would install xterm-kitty terminfo user-locally"
+    [[ "$DRY_RUN" == "1" ]] && return 0
+
+    log_info "Installing kitty terminfo (user-local)..."
+    local terminfo_dir="$HOME/.terminfo"
+    mkdir -p "$terminfo_dir"
+
+    if curl -fsSL "https://raw.githubusercontent.com/kovidgoyal/kitty/master/terminfo/kitty.terminfo" -o /tmp/kitty.terminfo 2>/dev/null; then
+        TERMINFO="$terminfo_dir" tic -x /tmp/kitty.terminfo 2>/dev/null && \
+            rm -f /tmp/kitty.terminfo && \
+            log_success "kitty terminfo installed to $terminfo_dir"
+    else
+        log_warn "Failed to download kitty.terminfo"
+    fi
+    warn_if_user_local_bin_not_in_path
 }
 
 setup_zoxide() {
