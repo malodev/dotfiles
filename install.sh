@@ -107,9 +107,11 @@ main() {
     show_selected_groups_summary
     show_pre_install_status_if_needed
     setup_stow
-    run_stow_preflight_for_selection
     setup_package_manager_for_mode
-    run_install_steps
+    # Install programs first — stow only handles dotfiles after
+    run_install_programs
+    run_stow_preflight_for_selection
+    run_stow_and_post_steps
     show_final_summary
 }
 

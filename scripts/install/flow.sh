@@ -143,7 +143,8 @@ run_stow_preflight_for_selection() {
     done < <(selected_stow_packages)
 
     if [[ $failed -ne 0 ]]; then
-        log_error "Stow preflight failed. No system packages were installed by this run."
+        log_error "Stow preflight found conflicts. Programs are already installed."
+        log_error "Dotfiles will not be stowed. Resolve conflicts and re-run to stow."
         exit 1
     fi
 
@@ -162,34 +163,36 @@ setup_package_manager_for_mode() {
     fi
 }
 
-run_install_steps() {
-    local group
-    local pkg
-    local key
-
-    setup_stow
-
+# Install programs (binaries, packages) before any stow/dotfile work.
+# This ensures tools like tmux are available even if stow fails later.
+run_install_programs() {
     if [[ "$PACKAGE_ONLY_MODE" == "1" ]]; then
         log_info "Package-only mode: skipping system package/tool installers"
-        # Neovim binary is still useful when only installing an nvim config
         if nvim_package_selected; then
             install_neovim_binary
         fi
-    else
-        if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
-            install_homebrew_packages
-        fi
-        install_cli_tools
-        install_user_local_preferred_tools
-        install_hyprland_tools
-        install_web_cli_tools
-        install_shell_tools
-        install_editor_tools
-        install_neovim_binary
-        install_dev_tools
-        setup_zoxide
-        setup_starship
+        return
     fi
+
+    if [[ "${LIGHTWEIGHT_INSTALL:-0}" == "0" ]]; then
+        install_homebrew_packages
+    fi
+    install_cli_tools
+    install_user_local_preferred_tools
+    install_hyprland_tools
+    install_web_cli_tools
+    install_shell_tools
+    install_editor_tools
+    install_neovim_binary
+    install_dev_tools
+    setup_zoxide
+    setup_starship
+}
+
+# Stow dotfiles and run post-install steps. Runs after programs are installed.
+run_stow_and_post_steps() {
+    local group
+    local pkg
 
     for group in "${INSTALL_ORDER[@]}"; do
         if [[ "$(get_group_selection "$group")" == "1" ]]; then
