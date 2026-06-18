@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+
+# Load the optional scripting addition only after SIP and sudoers are configured.
+if sudo -n yabai --load-sa >/dev/null 2>&1; then
+  yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
+fi
+
+# layout
+yabai -m config layout bsp
+
+# padding and gaps
+yabai -m config top_padding    10
+yabai -m config bottom_padding 10
+yabai -m config left_padding   10
+yabai -m config right_padding  10
+yabai -m config window_gap     10
+
+# mouse
+yabai -m config mouse_modifier  fn
+yabai -m config mouse_action1   move
+yabai -m config mouse_action2   resize
+yabai -m config mouse_drop_action swap
+
+# window appearance
+yabai -m config window_shadow float
+
+# rules — float system windows
+yabai -m rule --add app="^System Settings$"  manage=off
+yabai -m rule --add app="^System Preferences$" manage=off
+yabai -m rule --add app="^Archive Utility$"  manage=off
+yabai -m rule --add app="^Activity Monitor$" manage=off
+yabai -m rule --add app="^Calculator$"       manage=off
+yabai -m rule --add app="^Finder$"           manage=off
+yabai -m rule --add app="^App Store$"        manage=off
+
+echo "yabai config loaded"
