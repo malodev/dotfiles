@@ -688,6 +688,7 @@ install_user_local_preferred_tools() {
 
     # --- SSH-safe terminal tools (tmux, urlview, kitty-terminfo) ---
     install_tmux_user_local
+    install_tmux_terminfo_user_local
     install_urlview_user_local
     install_kitty_terminfo_user_local
 }
