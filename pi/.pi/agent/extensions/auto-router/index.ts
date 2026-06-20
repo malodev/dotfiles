@@ -63,7 +63,7 @@ function assertConfig(condition: unknown, message: string): asserts condition {
 }
 
 function normalizeMode(value: unknown): RouterMode {
-  return value === "off" ? "off" : "local";
+  return value === "local" ? "local" : "off";
 }
 
 function parseCandidate(path: string, value: unknown): Candidate {
@@ -409,7 +409,7 @@ export default function (pi: ExtensionAPI) {
   let configError: string | null = null;
 
   let state: RouterState = {
-    mode: "local",
+    mode: "off",
     profileName: "",
     pinnedRoute: null,
     lastAutoRoute: null,
