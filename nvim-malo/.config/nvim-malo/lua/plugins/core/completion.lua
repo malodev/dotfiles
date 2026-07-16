@@ -5,6 +5,11 @@ local useBlink = function()
   return ok_config and config.is_enabled.blink or false
 end
 
+local copilot_node_command = function()
+  local ok_config, config = pcall(require, "config")
+  return ok_config and config.copilot_node_command or "node"
+end
+
 return {
   -- ============================================================================
   -- Copilot.lua (required for both blink.cmp and standalone usage)
@@ -32,7 +37,7 @@ return {
             cvs = false,
             ["."] = false,
           },
-          copilot_node_command = "node",
+          copilot_node_command = copilot_node_command(),
           server_opts_overrides = {},
         }
       end
@@ -78,7 +83,7 @@ return {
           cvs = false,
           ["."] = false,
         },
-        copilot_node_command = "node",
+        copilot_node_command = copilot_node_command(),
         server_opts_overrides = {},
       }
     end,

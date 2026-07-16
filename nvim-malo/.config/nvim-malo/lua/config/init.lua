@@ -1,4 +1,16 @@
+local function find_copilot_node()
+  if vim.fn.executable("mise") == 1 then
+    local result = vim.system({ "mise", "which", "node" }, { text = true }):wait()
+    local node = vim.trim(result.stdout or "")
+    if result.code == 0 and vim.fn.executable(node) == 1 then
+      return node
+    end
+  end
+  return "node"
+end
+
 return {
+  copilot_node_command = find_copilot_node(),
   is_enabled = {
     chatgpt = false,
     codeium = true,

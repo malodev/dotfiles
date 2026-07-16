@@ -16,7 +16,7 @@ return {
     local inactive_colors = { fg = "#EB9A97", bg = "#393552" }
     lualine.setup({
       options = {
-        theme = "rose-pine",
+        theme = "auto",
         section_separators = { left = "", right = "" },
         component_separators = { left = "", right = "" },
         icons_enabled = true,
