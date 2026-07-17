@@ -50,7 +50,7 @@ return {
   {
     "rose-pine/neovim",
     name = "rose-pine",
-    lazy = true,
+    lazy = false,
     priority = 1000,
   },
   {
