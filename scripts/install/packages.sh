@@ -50,7 +50,7 @@ _aur_install_or_warn() {
 user_local_preferred_package() {
     local pkg="$1"
     case "$pkg" in
-        fzf|ripgrep|bat|fd|fd-find|git-delta|lazygit|lazydocker|go|golang|golang-go|starship|zoxide|tmux|urlview|kitty-terminfo)
+        fzf|ripgrep|bat|fd|fd-find|git-delta|lazygit|lazydocker|go|golang|golang-go|neovim|starship|zoxide|tmux|urlview|kitty-terminfo)
             return 0
             ;;
         *)

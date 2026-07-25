@@ -127,6 +127,18 @@ install_nvim_configs() {
     done
 }
 
+_nvim_version_from_bin() {
+    local bin="${1:-nvim}"
+    "$bin" --version 2>/dev/null | head -1 | sed -E 's/^NVIM v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/'
+}
+
+version_ge() {
+    local current="$1"
+    local required="$2"
+    [[ -n "$current" ]] || return 1
+    [[ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -1)" == "$required" ]]
+}
+
 install_neovim_binary() {
     if ! nvim_configs_selected; then
         return
@@ -134,14 +146,45 @@ install_neovim_binary() {
     if [[ "$OS" == "Darwin" ]]; then
         return 0
     fi
-    if command_exists nvim; then
-        log_success "Neovim already installed: $(nvim --version | head -1)"
-        return 0
-    fi
 
+    local min_version="0.11.0"
     local install_root="$HOME/.local/opt/nvim"
     local bin_dir="$HOME/.local/bin"
     local nvim_bin="$bin_dir/nvim"
+    local current_bin=""
+    local current_version=""
+
+    if [[ -x "$nvim_bin" ]]; then
+        current_bin="$nvim_bin"
+        current_version="$(_nvim_version_from_bin "$nvim_bin")"
+    elif command_exists nvim; then
+        current_bin="$(command -v nvim)"
+        current_version="$(_nvim_version_from_bin nvim)"
+    fi
+
+    if version_ge "$current_version" "$min_version"; then
+        log_success "Neovim already installed: $current_bin ($("$current_bin" --version | head -1))"
+        return 0
+    fi
+
+    if [[ -n "$current_bin" ]]; then
+        log_warn "Neovim $current_version at $current_bin is older than required $min_version; installing latest upstream Neovim for current user"
+    fi
+
+    local machine_arch asset_arch
+    machine_arch="$(uname -m)"
+    case "$machine_arch" in
+        x86_64|amd64) asset_arch="x86_64" ;;
+        aarch64|arm64) asset_arch="arm64" ;;
+        *)
+            log_warn "Unsupported Neovim binary architecture: $machine_arch"
+            log_warn "Install manually from https://github.com/neovim/neovim/releases"
+            return 1
+            ;;
+    esac
+
+    local archive="/tmp/nvim-linux-${asset_arch}.tar.gz"
+    local url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-${asset_arch}.tar.gz"
 
     log_dry_run "Would install latest Neovim binary for current user: $nvim_bin"
     [[ "$DRY_RUN" == "1" ]] && return 0
@@ -149,18 +192,19 @@ install_neovim_binary() {
     log_info "Installing latest Neovim from GitHub releases for current user..."
     mkdir -p "$install_root" "$bin_dir"
 
-    curl -Lo /tmp/nvim.tar.gz \
-        "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" \
-        2>/dev/null \
-        && tar -xzf /tmp/nvim.tar.gz -C "$install_root" --strip-components=1 \
-        && ln -sfn "$install_root/bin/nvim" "$nvim_bin" \
-        && rm -f /tmp/nvim.tar.gz \
-        || log_warn "Neovim installation failed, install manually from https://github.com/neovim/neovim/releases"
+    if curl -fL "$url" -o "$archive" 2>/dev/null \
+        && tar -xzf "$archive" -C "$install_root" --strip-components=1 \
+        && ln -sfn "$install_root/bin/nvim" "$nvim_bin"; then
+        rm "$archive" 2>/dev/null || true
+        export PATH="$bin_dir:$PATH"
+        log_success "Neovim installed: $nvim_bin ($($nvim_bin --version | head -1))"
+    else
+        rm "$archive" 2>/dev/null || true
+        log_warn "Neovim installation failed, install manually from https://github.com/neovim/neovim/releases"
+        return 1
+    fi
 
-    if [[ -x "$nvim_bin" ]]; then
-        log_success "Neovim installed: $nvim_bin"
-        if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
-            log_warn "$bin_dir is not in PATH. Add: export PATH=\"$bin_dir:\$PATH\""
-        fi
+    if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+        log_warn "$bin_dir is not in PATH. Add: export PATH=\"$bin_dir:\$PATH\""
     fi
 }
