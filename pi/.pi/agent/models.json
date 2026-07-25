@@ -1,5 +1,67 @@
 {
   "providers": {
+    "unsloth": {
+      "name": "Unsloth Studio local",
+      "baseUrl": "https://ai.malo.tn.it/v1",
+      "api": "openai-completions",
+      "apiKey": "!cat ~/.config/unsloth/pi-api-key",
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "supportsUsageInStreaming": true,
+        "maxTokensField": "max_tokens",
+        "supportsStrictMode": false
+      },
+      "models": [
+        {
+          "id": "unsloth/Qwen3.5-4B-MTP-GGUF:UD-Q4_K_XL",
+          "name": "Qwen3.5 4B MTP UD-Q4_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 262144,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q4_K_XL",
+          "name": "Qwen3.6 35B-A3B MTP UD-Q4_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 240000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q5_K_XL",
+          "name": "Qwen3.6 27B MTP UD-Q5_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 120000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL",
+          "name": "Qwen3 Coder 30B-A3B UD-Q4_K_XL",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 131072,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL",
+          "name": "Gemma 4 31B QAT UD-Q4_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 110000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    },
+
     "openrouter": {
       "baseUrl": "https://openrouter.ai/api/v1",
       "api": "openai-completions",
@@ -58,67 +120,6 @@
             "cacheRead": 0,
             "cacheWrite": 0
           }
-        }
-      ]
-    },
-    "unsloth": {
-      "name": "Unsloth Studio local",
-      "baseUrl": "http://127.0.0.1:8888/v1",
-      "api": "openai-completions",
-      "apiKey": "!cat /home/mauro/.config/unsloth/pi-api-key",
-      "compat": {
-        "supportsStore": false,
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": true,
-        "supportsUsageInStreaming": true,
-        "maxTokensField": "max_tokens",
-        "supportsStrictMode": false
-      },
-      "models": [
-        {
-          "id": "unsloth/Qwen3.5-4B-MTP-GGUF:UD-Q4_K_XL",
-          "name": "Qwen3.5 4B MTP UD-Q4_K_XL",
-          "reasoning": true,
-          "input": ["text", "image"],
-          "contextWindow": 262144,
-          "maxTokens": 16384,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-        },
-        {
-          "id": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q4_K_XL",
-          "name": "Qwen3.6 35B-A3B MTP UD-Q4_K_XL",
-          "reasoning": true,
-          "input": ["text", "image"],
-          "contextWindow": 240000,
-          "maxTokens": 16384,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-        },
-        {
-          "id": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q5_K_XL",
-          "name": "Qwen3.6 27B MTP UD-Q5_K_XL",
-          "reasoning": true,
-          "input": ["text", "image"],
-          "contextWindow": 120000,
-          "maxTokens": 16384,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-        },
-        {
-          "id": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL",
-          "name": "Qwen3 Coder 30B-A3B UD-Q4_K_XL",
-          "reasoning": false,
-          "input": ["text"],
-          "contextWindow": 131072,
-          "maxTokens": 16384,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-        },
-        {
-          "id": "unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL",
-          "name": "Gemma 4 31B QAT UD-Q4_K_XL",
-          "reasoning": true,
-          "input": ["text", "image"],
-          "contextWindow": 110000,
-          "maxTokens": 16384,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]
     },
