@@ -1,4 +1,6 @@
 -- AI chat: ClaudeCode, CopilotChat and CodeCompanion
+local has_nvim_011 = vim.fn.has("nvim-0.11") == 1
+
 return {
   -- CopilotChat: Chat interface for Copilot
   {
@@ -20,6 +22,7 @@ return {
   -- CodeCompanion: Universal AI chat interface
   {
     "olimorris/codecompanion.nvim",
+    enabled = has_nvim_011,
     dependencies = {
       "nvim-lua/plenary.nvim",
       "nvim-treesitter/nvim-treesitter",

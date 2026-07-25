@@ -15,7 +15,12 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 require("lazy").setup({
   {
-    import = "plugins",
+    name = "plugins",
+    import = function()
+      -- Load the curated plugin entrypoint instead of scanning every top-level file.
+      -- This avoids loading optional machine-local symlinks like plugins/theme.lua.
+      return require("plugins")
+    end,
     cond = function()
       return not vim.g.vscode
     end,
@@ -34,6 +39,11 @@ require("lazy").setup({
 }, {
   rocks = {
     hererocks = true, -- Enable Hererocks to manage Lua dependencies
+  },
+  git = {
+    -- Some plugins (notably copilot.lua) include large generated assets.
+    -- The default 120s timeout can kill checkout mid-way on slower networks/filesystems.
+    timeout = 300,
   },
   install = {
     colorscheme = { "catppuccin" },

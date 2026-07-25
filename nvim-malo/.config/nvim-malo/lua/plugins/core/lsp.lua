@@ -123,9 +123,32 @@ return {
         lineFoldingOnly = true,
       }
 
-      -- Configure servers using vim.lsp.config()
+      local ok_lspconfig, lspconfig = pcall(require, "lspconfig")
+      local lspconfig_util = ok_lspconfig and require("lspconfig.util") or nil
+
+      local function setup_lsp(server, server_opts)
+        if vim.lsp.config then
+          vim.lsp.config(server, server_opts)
+          return
+        end
+
+        if not ok_lspconfig or not lspconfig[server] then
+          return
+        end
+
+        -- Neovim 0.11 uses root_markers in vim.lsp.config(). nvim-lspconfig
+        -- on 0.10 expects a root_dir function instead.
+        if server_opts.root_markers and not server_opts.root_dir and lspconfig_util then
+          server_opts.root_dir = lspconfig_util.root_pattern(unpack(server_opts.root_markers))
+          server_opts.root_markers = nil
+        end
+
+        lspconfig[server].setup(server_opts)
+      end
+
+      -- Configure servers
       -- Lua LS
-      vim.lsp.config("lua_ls", {
+      setup_lsp("lua_ls", {
         cmd = { "lua-language-server" },
         filetypes = { "lua" },
         root_markers = {
@@ -158,13 +181,13 @@ return {
       })
 
       -- Stylua LSP - DISABLE
-      vim.lsp.config("stylua", {
+      setup_lsp("stylua", {
         cmd = { "echo", "stylua LSP is disabled" },
         filetypes = {},
       })
 
       -- TypeScript/JavaScript
-      vim.lsp.config("ts_ls", {
+      setup_lsp("ts_ls", {
         cmd = { "typescript-language-server", "--stdio" },
         filetypes = {
           "javascript",
@@ -206,7 +229,7 @@ return {
       })
 
       -- Basedpyright
-      vim.lsp.config("basedpyright", {
+      setup_lsp("basedpyright", {
         cmd = { "basedpyright-langserver", "--stdio" },
         filetypes = { "python" },
         capabilities = capabilities,
@@ -226,7 +249,7 @@ return {
       })
 
       -- Harper LS
-      vim.lsp.config("harper_ls", {
+      setup_lsp("harper_ls", {
         cmd = { "harper-ls", "--stdio" },
         filetypes = { "markdown", "gitcommit", "html", "text" },
         capabilities = capabilities,
@@ -257,7 +280,7 @@ return {
       })
 
       -- Deno
-      vim.lsp.config("denols", {
+      setup_lsp("denols", {
         cmd = { "deno", "lsp" },
         filetypes = {
           "javascript",
@@ -272,21 +295,21 @@ return {
       })
 
       -- Bash LS
-      vim.lsp.config("bashls", {
+      setup_lsp("bashls", {
         cmd = { "bash-language-server", "start" },
         filetypes = { "bash", "sh", "zsh" },
         capabilities = capabilities,
       })
 
       -- HTML
-      vim.lsp.config("html", {
+      setup_lsp("html", {
         cmd = { "vscode-html-language-server", "--stdio" },
         filetypes = { "html", "templ", "svg" },
         capabilities = capabilities,
       })
 
       -- TOML
-      vim.lsp.config("taplo", {
+      setup_lsp("taplo", {
         cmd = { "taplo", "lsp", "stdio" },
         filetypes = { "toml" },
         root_markers = { "Cargo.toml", ".git" },
@@ -294,7 +317,7 @@ return {
       })
 
       -- Tailwind CSS
-      vim.lsp.config("tailwindcss", {
+      setup_lsp("tailwindcss", {
         filetypes = {
           "html",
           "css",
@@ -311,7 +334,7 @@ return {
       })
 
       -- ESLint
-      vim.lsp.config("eslint", {
+      setup_lsp("eslint", {
         filetypes = {
           "javascript",
           "javascriptreact",
@@ -327,7 +350,7 @@ return {
       })
 
       -- Emmet
-      vim.lsp.config("emmet_language_server", {
+      setup_lsp("emmet_language_server", {
         filetypes = {
           "html",
           "css",
@@ -343,13 +366,13 @@ return {
       })
 
       -- JSON
-      vim.lsp.config("jsonls", {
+      setup_lsp("jsonls", {
         filetypes = { "json", "jsonc" },
         capabilities = capabilities,
       })
 
       -- Biome
-      vim.lsp.config("biome", {
+      setup_lsp("biome", {
         filetypes = {
           "javascript",
           "javascriptreact",
@@ -363,37 +386,37 @@ return {
       })
 
       -- Go
-      vim.lsp.config("gopls", {
+      setup_lsp("gopls", {
         filetypes = { "go", "gomod", "gowork", "gotmpl" },
         capabilities = capabilities,
       })
 
       -- Marksman (Markdown)
-      vim.lsp.config("marksman", {
+      setup_lsp("marksman", {
         filetypes = { "markdown", "markdown.mdx" },
         capabilities = capabilities,
       })
 
       -- Astro
-      vim.lsp.config("astro", {
+      setup_lsp("astro", {
         filetypes = { "astro" },
         capabilities = capabilities,
       })
 
       -- PHP (Intelephense)
-      vim.lsp.config("intelephense", {
+      setup_lsp("intelephense", {
         filetypes = { "php" },
         capabilities = capabilities,
       })
 
       -- SQL
-      vim.lsp.config("sqlls", {
+      setup_lsp("sqlls", {
         filetypes = { "sql", "mysql" },
         capabilities = capabilities,
       })
 
       -- YAML
-      vim.lsp.config("yamlls", {
+      setup_lsp("yamlls", {
         cmd = { "yaml-language-server", "--stdio" },
         filetypes = { "yaml", "yaml.docker-compose" },
         capabilities = capabilities,

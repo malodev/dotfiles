@@ -4,6 +4,11 @@ local useBlink = function()
   local ok_config, config = pcall(require, "config")
   return ok_config and config.is_enabled.blink or false
 end
+local has_nvim_011 = vim.fn.has("nvim-0.11") == 1
+local blink_sources = { "lsp", "path", "snippets", "buffer", "copilot" }
+if has_nvim_011 then
+  table.insert(blink_sources, "codecompanion")
+end
 
 local copilot_node_command = function()
   local ok_config, config = pcall(require, "config")
@@ -104,7 +109,7 @@ return {
         version = "v2.*",
         build = "make install_jsregexp",
       },
-      "olimorris/codecompanion.nvim",
+      { "olimorris/codecompanion.nvim", enabled = has_nvim_011 },
     },
     version = "*",
 
@@ -199,7 +204,7 @@ return {
         ghost_text = { enabled = false },
       },
       sources = {
-        default = { "lsp", "path", "snippets", "buffer", "copilot", "codecompanion" },
+        default = blink_sources,
         providers = {
           copilot = {
             name = "copilot",
