@@ -71,7 +71,10 @@
           "id": "qwen/qwen3.6-plus",
           "name": "Qwen 3.6 Plus",
           "reasoning": true,
-          "input": ["text", "image"],
+          "input": [
+            "text",
+            "image"
+          ],
           "contextWindow": 1000000,
           "maxTokens": 65536,
           "cost": {
@@ -111,7 +114,9 @@
             "high": "high",
             "xhigh": "xhigh"
           },
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 65536,
           "maxTokens": 16384,
           "cost": {
@@ -120,6 +125,104 @@
             "cacheRead": 0,
             "cacheWrite": 0
           }
+        }
+      ]
+    },
+    "unsloth": {
+      "name": "Unsloth Studio local",
+      "baseUrl": "http://127.0.0.1:8888/v1",
+      "api": "openai-completions",
+      "apiKey": "!cat /home/mauro/.config/unsloth/pi-api-key",
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "supportsUsageInStreaming": true,
+        "maxTokensField": "max_tokens",
+        "supportsStrictMode": false
+      },
+      "models": [
+        {
+          "id": "unsloth/Qwen3.5-4B-MTP-GGUF:UD-Q4_K_XL",
+          "name": "Qwen3.5 4B MTP UD-Q4_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 262144,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q4_K_XL",
+          "name": "Qwen3.6 35B-A3B MTP UD-Q4_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 240000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q5_K_XL",
+          "name": "Qwen3.6 27B MTP UD-Q5_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 120000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL",
+          "name": "Qwen3 Coder 30B-A3B UD-Q4_K_XL",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 131072,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL",
+          "name": "Gemma 4 31B QAT UD-Q4_K_XL",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 110000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    },
+    "pi-llama": {
+      "name": "Dedicated Pi llama.cpp router",
+      "baseUrl": "http://127.0.0.1:46757/v1",
+      "api": "openai-completions",
+      "apiKey": "!awk 'NF && $1 !~ /^#/ {print; exit}' /home/mauro/.local/share/pi-llama-router/api-keys",
+      "authHeader": true,
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": true,
+        "maxTokensField": "max_tokens",
+        "supportsStrictMode": false,
+        "requiresReasoningContentOnAssistantMessages": true,
+        "thinkingFormat": "qwen-chat-template"
+      },
+      "models": [
+        {
+          "id": "pi/Qwen3.6-27B-MTP-UD-Q5_K_XL",
+          "name": "Qwen3.6 27B Builder",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 160000,
+          "maxTokens": 32768,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "pi/gemma-4-31B-it-qat-UD-Q4_K_XL",
+          "name": "Gemma 4 31B Architect/Reviewer",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 160000,
+          "maxTokens": 32768,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]
     },
@@ -132,74 +235,100 @@
           "_launch": true,
           "contextWindow": 262144,
           "id": "qwen3-coder-next:cloud",
-          "input": ["text"]
+          "input": [
+            "text"
+          ]
         },
         {
           "_launch": true,
           "contextWindow": 202752,
           "id": "glm-5.1:cloud",
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 262144,
           "id": "gemma4:26b",
-          "input": ["text", "image"],
+          "input": [
+            "text",
+            "image"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 128000,
           "id": "lfm2.5-thinking:1.2b",
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 10485760,
           "id": "llama4:scout",
-          "input": ["text", "image"]
+          "input": [
+            "text",
+            "image"
+          ]
         },
         {
           "_launch": true,
           "contextWindow": 262144,
           "id": "qwen3.6:27b-nvfp4",
-          "input": ["text", "image"],
+          "input": [
+            "text",
+            "image"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 262144,
           "id": "gemma4:31b-nvfp4",
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 131072,
           "id": "deepseek-r1:32b",
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 262144,
           "id": "qwen3.6:35b-a3b-coding-nvfp4",
-          "input": ["text", "image"],
+          "input": [
+            "text",
+            "image"
+          ],
           "reasoning": true
         },
         {
           "_launch": true,
           "contextWindow": 262144,
           "id": "qwen3-coder-next-m3:latest",
-          "input": ["text"]
+          "input": [
+            "text"
+          ]
         },
         {
           "_launch": true,
           "contextWindow": 131072,
           "id": "gpt-oss:20b",
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "reasoning": true
         }
       ]
