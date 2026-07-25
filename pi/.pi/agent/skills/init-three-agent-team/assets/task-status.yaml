@@ -1,0 +1,19 @@
+task_id: REPLACE_ME
+state: DISCUSSING
+baseline_commit: REPLACE_ME
+execution_authorized_at: null
+continue_until_complete: true
+review_cycle: 0
+max_review_cycles: 5
+latest_build_report: null
+latest_review: null
+blocked_reason: null
+verified_at: null
+completed_at: null
+completion_policy:
+  commit_on_success: false
+  push_on_success: false
+  deploy_on_success: false
+commit_sha: null
+pushed_at: null
+deployed_at: null

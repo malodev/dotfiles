@@ -1,0 +1,139 @@
+# Workflow Reference
+
+## Purpose
+
+This initializer adapts the useful process layer from `russelleNVy/three-man-team` to Pi and local OpenAI-compatible models. It does not install or execute upstream Claude Code scripts.
+
+The workflow has one task-level authorization: owner and Architect agree on a validated Goal Contract, then the owner runs `/team-go <task-id>`. The global extension executes Builder, Reviewer, and verification autonomously until the objective success tests pass or a genuine blocker requires changing the contract. Plain `go` has no authority.
+
+## Roles
+
+### Architect
+
+- Runs interactively on the exact host-configured Architect model.
+- Diagnoses current behavior and discusses goal, approach, constraints, and success tests.
+- Records the Goal Contract and one `go` authorization.
+- Orchestrates all subsequent iterations without routine owner interruption.
+- Makes technical decisions inside the authorized contract.
+- Performs final verification and applies only the agreed completion policy.
+- Does not implement production code.
+
+### Builder
+
+- Runs as an isolated Pi child session using the exact host-configured Builder model and limits.
+- Implements the authorized Goal Contract.
+- Tests its work and writes a build report.
+- Handles Reviewer findings autonomously.
+- Never self-approves or exceeds the completion policy.
+
+### Reviewer
+
+- Runs as an isolated Pi child session using the exact host-configured Reviewer model and limits.
+- Has read-only repository tools.
+- Discovers the complete Git diff independently.
+- Verifies tests and success criteria.
+- Returns findings; Builder owns all fixes.
+
+## State transitions
+
+| Current | Event | Next |
+|---|---|---|
+| `DISCUSSING` | Owner says `go` to the Goal Contract | `EXECUTING` |
+| `EXECUTING` | Builder report is complete | `REVIEWING` |
+| `REVIEWING` | Reviewer requests in-contract changes | `EXECUTING` |
+| `REVIEWING` | Reviewer approves | `VERIFYING` |
+| `REVIEWING` | Resolution would change contract | `BLOCKED` |
+| `VERIFYING` | Implementation-related check fails | `EXECUTING` |
+| `VERIFYING` | Every success test passes | `COMPLETED` |
+| `EXECUTING` or `VERIFYING` | Genuine external/contract blocker | `BLOCKED` |
+| `BLOCKED` | Owner resolves blocker and reauthorizes | `EXECUTING` |
+
+Any other transition is invalid and must stop.
+
+## The one task gate
+
+Before execution, the owner sees a concise Goal Contract covering:
+
+- goal and current behavior;
+- agreed approach;
+- objective success tests;
+- non-goals and constraints;
+- baseline commit;
+- allowed repository operations;
+- commit, push, and deployment policy.
+
+The owner runs `/team-go <task-id>` once. The extension validates first, records authorization, and then owns implementation, review, fixes, routine technical decisions, and final verification within the contract.
+
+### Deterministic pre-go gate
+
+A Goal Contract is not eligible for `go` merely because it reads plausibly. Before asking, Architect must:
+
+1. use an existing baseline commit that equals `HEAD` and was not created by Builder;
+2. remove project-command placeholders from `AGENTS.md`;
+3. give every numbered success test an exact command, expected integer exit code, specific evidence, hardware/system-write declaration, and prerequisites;
+4. make every writing test depend on an offline non-writing test;
+5. resolve all open decisions and align completion policy with `status.yaml`;
+6. run `git add -N .` so no untracked file is omitted from the baseline diff;
+7. pass `python team/validate_goal_contract.py team/tasks/<task-id> --phase pre-go`.
+
+After `go`, Architect records the authorization and must pass the same validator with `--phase execution` before invoking Builder. Builder reruns it before mutation and before review; Reviewer reruns it independently. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
+
+## Autonomous review gate
+
+Reviewer checks the actual diff, not only Builder's report. Reviewer executes declared verification commands and records evidence. Findings inside the Goal Contract return directly to Builder without owner approval.
+
+## Completion policy
+
+The Goal Contract decides these before execution:
+
+```yaml
+commit_on_success: false
+push_on_success: false
+deploy_on_success: false
+```
+
+A `true` value is explicit advance authorization for that action after all success tests pass. A `false` value means leave the work ready and do not interrupt to ask again during the run. Authorization for one action does not imply another.
+
+## Genuine blockers
+
+Interrupt the owner only when:
+
+- required behavior, non-goals, architecture, or execution authority must change;
+- credentials or an external decision are unavailable;
+- a relevant baseline failure prevents trustworthy verification;
+- an unauthorized destructive or irreversible action is required;
+- five review cycles fail to achieve approval.
+
+Ask one focused question with evidence, options, and a recommendation.
+
+## Review loop limit
+
+Allow at most five review cycles by default. At the limit, report:
+
+- unresolved findings;
+- attempts and verification evidence;
+- suspected root cause;
+- whether the Goal Contract must change;
+- recommendation to continue, redesign, or abandon.
+
+This is a safety ceiling, not a routine approval point.
+
+## Single-GPU scheduling
+
+The configured large role models may not remain loaded together with useful runtime headroom on a single 32 GiB R9700. The extension enters the configured inference mode, invokes one exact-model child session at a time, snapshots role choices per authorized task, and never uses delegated or parallel routing.
+
+## Durable versus task-local knowledge
+
+- `AGENTS.md`: short commands, rules, and invariants loaded every turn.
+- `CONTEXT.md`: domain language and architecture.
+- `docs/adr/`: durable decisions and their rationale.
+- `team/tasks/<task-id>/`: Goal Contract, reports, and state for one unit of work.
+
+Do not copy conversation transcripts into `AGENTS.md`.
+
+## Upstream attribution
+
+Concept adapted from Three Man Team, MIT licensed:
+
+- Repository: https://github.com/russelleNVy/three-man-team
+- Assessed commit: fd9ab86c001e32fd3dce161e961110b3eeb00eb8
