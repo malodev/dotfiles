@@ -2,9 +2,9 @@
   "version": 2,
   "display": {
     "alignment": "split",
-    "barStyle": "both",
+    "barStyle": "percentage",
     "barType": "horizontal-bar",
-    "barWidth": "fill",
+    "barWidth": 20,
     "barCharacter": "heavy",
     "containBar": false,
     "brailleFillEmpty": false,
@@ -45,7 +45,7 @@
     "showBottomDivider": true,
     "paddingLeft": 1,
     "paddingRight": 1,
-    "widgetPlacement": "belowEditor",
+    "widgetPlacement": "status",
     "showContextBar": false,
     "errorThreshold": 25,
     "warningThreshold": 50,
@@ -76,6 +76,16 @@
         "showPro": true,
         "showFlash": true
       }
+    },
+    "antigravity": {
+      "showStatus": true,
+      "showCurrentModel": true,
+      "showScopedModels": true,
+      "windows": {
+        "showModels": true
+      },
+      "modelVisibility": {},
+      "modelOrder": []
     },
     "codex": {
       "showStatus": true,
