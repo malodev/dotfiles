@@ -288,5 +288,15 @@
 "custom/arrow10": {
 	"format": "",
 	"tooltip": false
+},
+
+"custom/voxtype": {
+	"return-type": "json",
+	"exec": "$HOME/.local/bin/voxtype-waybar-status",
+	"interval": 5,
+	"on-click": "$HOME/.local/bin/voxtype-translate-toggle",
+	"tooltip": true,
+	"format": "{}",
+	"escape": true
 }
 }
