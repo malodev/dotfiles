@@ -1,0 +1,10 @@
+[keys]
+prefix = "ctrl+space"
+switch_workspace = "prefix+1..9"
+switch_tab = "prefix+shift+1..9"
+
+[experimental]
+pane_history = true
+
+[ui]
+agent_panel_sort = "spaces"
