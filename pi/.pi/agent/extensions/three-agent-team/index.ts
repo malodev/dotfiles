@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { access, appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { constants, readdirSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isToolCallEventType, type ExtensionAPI, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -57,6 +57,16 @@ const CANONICAL_VALIDATOR = resolve(
 interface ActiveRun {
   taskId: string;
   abortController: AbortController;
+  leaseOwner?: string;
+  leaseAcquired?: boolean;
+  leaseHeartbeat?: ReturnType<typeof setInterval>;
+  leaseExpiryTimer?: ReturnType<typeof setTimeout>;
+  leaseRenewing?: boolean;
+  leaseFailure?: Error;
+  abortAgent?: () => void;
+  leaseRepo?: string;
+  leaseConfig?: TeamConfig;
+  legacyInferenceReady?: boolean;
 }
 
 interface PendingArchitectValidation {
@@ -76,9 +86,20 @@ interface CommandResult {
   stderr: string;
 }
 
-function shell(command: string, cwd: string, signal?: AbortSignal, timeoutMs = 30 * 60 * 1000): Promise<CommandResult> {
+function shell(
+  command: string,
+  cwd: string,
+  signal?: AbortSignal,
+  timeoutMs = 30 * 60 * 1000,
+  environment?: NodeJS.ProcessEnv,
+): Promise<CommandResult> {
   return new Promise((resolvePromise) => {
-    const child = spawn("bash", ["-lc", command], { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("bash", ["-lc", command], {
+      cwd,
+      env: environment ? { ...process.env, ...environment } : process.env,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -195,10 +216,99 @@ function roleFailure(result: RoleResult): string | undefined {
 }
 
 async function enterTeamMode(repo: string, config: TeamConfig, signal?: AbortSignal): Promise<void> {
-  const result = await shell(config.lifecycle.enterTeamCommand, repo, signal, 3 * 60 * 1000);
+  const result = await shell(config.lifecycle.enterTeamCommand, repo, signal, 210_000);
   if (result.code !== 0) {
     throw new Error(`Could not enter team inference mode: ${result.stderr || result.stdout}`);
   }
+}
+
+const LEASE_EXPIRY_MARGIN_SECONDS = 15;
+
+function failInferenceLease(run: ActiveRun, message: string): void {
+  if (run.leaseFailure) return;
+  run.leaseFailure = new Error(message);
+  run.leaseAcquired = false;
+  if (run.leaseHeartbeat) clearInterval(run.leaseHeartbeat);
+  run.leaseHeartbeat = undefined;
+  run.abortController.abort();
+  run.abortAgent?.();
+}
+
+function armInferenceLeaseDeadline(run: ActiveRun, config: TeamConfig): void {
+  if (run.leaseExpiryTimer) clearTimeout(run.leaseExpiryTimer);
+  const lifetimeSeconds = config.lifecycle.leaseTtlSeconds - LEASE_EXPIRY_MARGIN_SECONDS;
+  run.leaseExpiryTimer = setTimeout(() => {
+    failInferenceLease(run, "Global inference lease reached its local safety deadline before a confirmed renewal");
+  }, lifetimeSeconds * 1000);
+  run.leaseExpiryTimer.unref();
+}
+
+function leaseEnvironment(owner: string, config: TeamConfig): NodeJS.ProcessEnv {
+  return {
+    PI_INFERENCE_OWNER: owner,
+    PI_INFERENCE_TTL: String(config.lifecycle.leaseTtlSeconds),
+  };
+}
+
+async function acquireInferenceLease(run: ActiveRun, repo: string, config: TeamConfig): Promise<void> {
+  const { acquireTeamCommand, renewTeamCommand, releaseTeamCommand } = config.lifecycle;
+  if (!acquireTeamCommand || !renewTeamCommand || !releaseTeamCommand) {
+    await enterTeamMode(repo, config, run.abortController.signal);
+    run.legacyInferenceReady = true;
+    return;
+  }
+  const owner = `${hostname()}:${process.pid}:${run.taskId}:${randomUUID()}`;
+  run.leaseOwner = owner;
+  run.leaseRepo = repo;
+  run.leaseConfig = config;
+  const result = await shell(
+    acquireTeamCommand,
+    repo,
+    run.abortController.signal,
+    210_000,
+    leaseEnvironment(owner, config),
+  );
+  if (result.code !== 0) throw new Error(`Could not acquire the global inference lease: ${result.stderr || result.stdout}`);
+  run.leaseAcquired = true;
+  armInferenceLeaseDeadline(run, config);
+  run.leaseHeartbeat = setInterval(() => {
+    if (!run.leaseOwner || run.leaseRenewing) return;
+    run.leaseRenewing = true;
+    void shell(
+      renewTeamCommand,
+      repo,
+      undefined,
+      60_000,
+      leaseEnvironment(owner, config),
+    ).then((renewal) => {
+      if (run.leaseOwner !== owner || run.leaseFailure) return;
+      if (renewal.code !== 0) {
+        failInferenceLease(run, `Global inference lease renewal failed: ${renewal.stderr || renewal.stdout}`);
+      } else {
+        armInferenceLeaseDeadline(run, config);
+      }
+    }).finally(() => { run.leaseRenewing = false; });
+  }, config.lifecycle.leaseRenewIntervalSeconds * 1000);
+  run.leaseHeartbeat.unref();
+}
+
+async function releaseInferenceLease(run: ActiveRun, repo: string, config: TeamConfig): Promise<string | undefined> {
+  if (run.leaseHeartbeat) clearInterval(run.leaseHeartbeat);
+  if (run.leaseExpiryTimer) clearTimeout(run.leaseExpiryTimer);
+  run.leaseHeartbeat = undefined;
+  run.leaseExpiryTimer = undefined;
+  const owner = run.leaseOwner;
+  run.leaseOwner = undefined;
+  run.leaseAcquired = false;
+  if (!owner || !config.lifecycle.releaseTeamCommand) return undefined;
+  const result = await shell(
+    config.lifecycle.releaseTeamCommand,
+    repo,
+    undefined,
+    60_000,
+    leaseEnvironment(owner, config),
+  );
+  return result.code === 0 ? undefined : result.stderr || result.stdout || "unknown release failure";
 }
 
 async function blockTask(taskDir: string, reason: string): Promise<void> {
@@ -582,6 +692,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     completionCwd = ctx.cwd;
   });
   let activeRun: ActiveRun | undefined;
+  let interactiveInferenceLease: ActiveRun | undefined;
   let authorizedInteractiveTaskId: string | undefined;
   let pendingArchitectValidation: PendingArchitectValidation | undefined;
   let pendingUnblockRecovery: PendingUnblockRecovery | undefined;
@@ -617,6 +728,14 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     activeRun = releaseOwnedSlot(activeRun, run);
   };
 
+  const releaseInteractiveInferenceLease = async (ctx: ExtensionCommandContext): Promise<void> => {
+    const lease = interactiveInferenceLease;
+    interactiveInferenceLease = undefined;
+    if (!lease) return;
+    const releaseFailure = await releaseInferenceLease(lease, ctx.cwd, configuredTeam).catch((error) => String(error));
+    if (releaseFailure) ctx.ui.notify(`Interactive inference lease release failed; it will expire automatically: ${releaseFailure}`, "warning");
+  };
+
   async function selectArchitect(repo: string, ctx: ExtensionCommandContext): Promise<void> {
     await enterTeamMode(repo, configuredTeam);
     const profile = configuredTeam.roles.architect;
@@ -641,6 +760,8 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     const controller = run.abortController;
     const progress = (text: string) => setUi(ctx, `team ${taskId}: ${text}`);
     try {
+      progress("ACQUIRING global inference lease");
+      await acquireInferenceLease(run, repo, config);
       let { status } = await readStatus(taskDir);
       let latestReview = status.reviewCycle > 0
         ? resolve(taskDir, `review-${String(status.reviewCycle).padStart(2, "0")}.md`)
@@ -788,12 +909,14 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       }
       throw new Error(`Review ceiling reached (${status.maxReviewCycles})`);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = run.leaseFailure?.message ?? (error instanceof Error ? error.message : String(error));
       await blockTask(taskDir, reason);
       progress("BLOCKED");
       ctx.ui.notify(`Three-agent task blocked: ${reason}`, "error");
       throw error;
     } finally {
+      const releaseFailure = await releaseInferenceLease(run, repo, config).catch((error) => String(error));
+      if (releaseFailure) ctx.ui.notify(`Task ${taskId} ended, but its inference lease could not be released; it will expire automatically: ${releaseFailure}`, "warning");
       if (config.lifecycle.restoreStudioAfterRun && config.lifecycle.restoreStudioCommand) {
         await shell(config.lifecycle.restoreStudioCommand, repo, undefined, 3 * 60 * 1000).catch(() => undefined);
       }
@@ -1172,9 +1295,11 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       try {
         recoveryRun = reserveRun(recovery.taskId);
       } catch (error) {
+        await releaseInteractiveInferenceLease(ctx);
         ctx.ui.notify(`${recovery.taskId}: recovery finalization could not reserve the workflow slot: ${error instanceof Error ? error.message : String(error)}`, "error");
         return;
       }
+      await releaseInteractiveInferenceLease(ctx);
       let workflowOwnsRun = false;
       const stopReason = pendingArchitectStopReason;
       pendingArchitectStopReason = undefined;
@@ -1242,6 +1367,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       return;
     }
 
+    await releaseInteractiveInferenceLease(ctx);
     const pending = pendingArchitectValidation;
     if (!pending) return;
     const stopReason = pendingArchitectStopReason;
@@ -1299,6 +1425,15 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     }
   });
 
+  pi.on("before_provider_request", (_event, ctx) => {
+    if (!ctx.model || !configuredTeam.lifecycle.managedProviders.includes(ctx.model.provider)) return;
+    const workflowOwnsLease = Boolean((activeRun?.leaseAcquired || activeRun?.legacyInferenceReady) && !activeRun?.leaseFailure);
+    const interactiveOwnsLease = Boolean((interactiveInferenceLease?.leaseAcquired || interactiveInferenceLease?.legacyInferenceReady) && !interactiveInferenceLease?.leaseFailure);
+    if (workflowOwnsLease || interactiveOwnsLease) return;
+    ctx.abort();
+    throw new Error("Managed provider request blocked because no healthy global inference lease is active");
+  });
+
   pi.on("model_select", async (event, ctx) => {
     if (!configuredTeam.lifecycle.managedProviders.includes(event.model.provider)) return;
     try {
@@ -1311,6 +1446,23 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
+    if (ctx.model && configuredTeam.lifecycle.managedProviders.includes(ctx.model.provider) && !activeRun) {
+      if (interactiveInferenceLease) throw new Error("An interactive inference lease is already active");
+      const lease: ActiveRun = {
+        taskId: "interactive",
+        abortController: new AbortController(),
+        abortAgent: () => ctx.abort(),
+      };
+      try {
+        await acquireInferenceLease(lease, ctx.cwd, configuredTeam);
+        interactiveInferenceLease = lease;
+      } catch (error) {
+        ctx.abort();
+        await releaseInferenceLease(lease, ctx.cwd, configuredTeam).catch(() => undefined);
+        ctx.ui.notify(`Managed inference request stopped because the global lease could not be acquired: ${error instanceof Error ? error.message : String(error)}`, "error");
+        throw error;
+      }
+    }
     const unblockTask = /^<!-- three-agent-team-unblock-task: ([a-z0-9][a-z0-9._-]*) -->/m.exec(event.prompt)?.[1];
     const unblockDiscussionTask = /^<!-- three-agent-team-unblock-discussion-task: ([a-z0-9][a-z0-9._-]*) -->/m.exec(event.prompt)?.[1];
     const architectTask = /^<!-- three-agent-team-architect-task: ([a-z0-9][a-z0-9._-]*) -->/m.exec(event.prompt)?.[1]
@@ -1328,9 +1480,6 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       pendingArchitectValidation = { repo: ctx.cwd, taskId: architectTask, repairAttempts: 0 };
       pendingArchitectStopReason = undefined;
     }
-    if (ctx.model && configuredTeam.lifecycle.managedProviders.includes(ctx.model.provider)) {
-      await enterTeamMode(ctx.cwd, configuredTeam);
-    }
     if (!(await exists(resolve(ctx.cwd, "team/validate_goal_contract.py")))) return;
     const lifecycleConstraint = authorizedInteractiveTaskId
       ? `Task ${authorizedInteractiveTaskId} is already authorized. Direct interactive role work is prohibited; use only the extension lifecycle commands.`
@@ -1341,6 +1490,13 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
-    activeRun?.abortController.abort();
+    const workflow = activeRun;
+    workflow?.abortController.abort();
+    if (workflow?.leaseOwner && workflow.leaseRepo && workflow.leaseConfig) {
+      await releaseInferenceLease(workflow, workflow.leaseRepo, workflow.leaseConfig).catch(() => undefined);
+    }
+    const lease = interactiveInferenceLease;
+    interactiveInferenceLease = undefined;
+    if (lease) await releaseInferenceLease(lease, completionCwd, configuredTeam).catch(() => undefined);
   });
 }

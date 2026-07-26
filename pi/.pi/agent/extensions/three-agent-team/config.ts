@@ -36,6 +36,11 @@ export interface TeamLimits {
 export interface TeamLifecycle {
   managedProviders: string[];
   enterTeamCommand: string;
+  acquireTeamCommand?: string;
+  renewTeamCommand?: string;
+  releaseTeamCommand?: string;
+  leaseTtlSeconds: number;
+  leaseRenewIntervalSeconds: number;
   restoreStudioAfterRun: boolean;
   restoreStudioCommand?: string;
 }
@@ -136,6 +141,23 @@ export function parseTeamConfig(text: string, sourcePath = "<memory>"): TeamConf
     if (!providers[roles[role].provider]) throw new Error(`roles.${role} references unknown provider ${roles[role].provider}`);
   }
   const lifecycleRaw = object(raw.lifecycle, "lifecycle");
+  const leaseCommands = ["acquireTeamCommand", "renewTeamCommand", "releaseTeamCommand"] as const;
+  const configuredLeaseCommands = leaseCommands.filter((key) => typeof lifecycleRaw[key] === "string");
+  if (configuredLeaseCommands.length !== 0 && configuredLeaseCommands.length !== leaseCommands.length) {
+    throw new Error("lifecycle acquireTeamCommand, renewTeamCommand, and releaseTeamCommand must be configured together");
+  }
+  const leaseTtlSeconds = lifecycleRaw.leaseTtlSeconds === undefined
+    ? 300
+    : positiveInteger(lifecycleRaw.leaseTtlSeconds, "lifecycle.leaseTtlSeconds");
+  const leaseRenewIntervalSeconds = lifecycleRaw.leaseRenewIntervalSeconds === undefined
+    ? Math.max(10, Math.floor(leaseTtlSeconds / 3))
+    : positiveInteger(lifecycleRaw.leaseRenewIntervalSeconds, "lifecycle.leaseRenewIntervalSeconds");
+  if (leaseTtlSeconds < 120) {
+    throw new Error("lifecycle.leaseTtlSeconds must be at least 120 seconds");
+  }
+  if (leaseRenewIntervalSeconds + 90 > leaseTtlSeconds) {
+    throw new Error("lifecycle lease renewal must leave at least 90 seconds before expiry");
+  }
   const canonical = JSON.stringify(raw);
   return {
     version: 1,
@@ -147,6 +169,11 @@ export function parseTeamConfig(text: string, sourcePath = "<memory>"): TeamConf
         ? lifecycleRaw.managedProviders.map((value, index) => nonEmpty(value, `lifecycle.managedProviders[${index}]`))
         : [],
       enterTeamCommand: nonEmpty(lifecycleRaw.enterTeamCommand, "lifecycle.enterTeamCommand"),
+      acquireTeamCommand: configuredLeaseCommands.length ? nonEmpty(lifecycleRaw.acquireTeamCommand, "lifecycle.acquireTeamCommand") : undefined,
+      renewTeamCommand: configuredLeaseCommands.length ? nonEmpty(lifecycleRaw.renewTeamCommand, "lifecycle.renewTeamCommand") : undefined,
+      releaseTeamCommand: configuredLeaseCommands.length ? nonEmpty(lifecycleRaw.releaseTeamCommand, "lifecycle.releaseTeamCommand") : undefined,
+      leaseTtlSeconds,
+      leaseRenewIntervalSeconds,
       restoreStudioAfterRun: lifecycleRaw.restoreStudioAfterRun === true,
       restoreStudioCommand: typeof lifecycleRaw.restoreStudioCommand === "string" ? lifecycleRaw.restoreStudioCommand : undefined,
     },

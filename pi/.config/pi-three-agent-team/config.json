@@ -5,7 +5,7 @@
       "name": "Pi llama.cpp router",
       "baseUrl": "https://llm.malo.tn.it/v1",
       "api": "openai-completions",
-      "apiKey": "!awk 'NF && $1 !~ /^#/ {print; exit}' ~/.local/share/pi-llama-router/api-keys",
+      "apiKey": "!~/.local/bin/pi-inference credential model-api",
       "authHeader": true,
       "compat": {
         "supportsStore": false,
@@ -68,6 +68,11 @@
       "pi-llama"
     ],
     "enterTeamCommand": "~/.local/bin/pi-inference team",
+    "acquireTeamCommand": "~/.local/bin/pi-inference acquire --mode team",
+    "renewTeamCommand": "~/.local/bin/pi-inference renew",
+    "releaseTeamCommand": "~/.local/bin/pi-inference release",
+    "leaseTtlSeconds": 300,
+    "leaseRenewIntervalSeconds": 100,
     "restoreStudioAfterRun": false
   }
 }

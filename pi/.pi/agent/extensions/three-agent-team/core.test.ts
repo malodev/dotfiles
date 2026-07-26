@@ -28,7 +28,7 @@ import {
   releaseInteractiveGuard,
   releaseOwnedSlot,
 } from "./core.ts";
-import { archiveTask, completionReportMessage, taskArgumentCompletions } from "./index.ts";
+import threeAgentTeamExtension, { archiveTask, completionReportMessage, taskArgumentCompletions } from "./index.ts";
 import {
   loadOrCreateTaskConfig,
   parseTeamConfig,
@@ -68,7 +68,13 @@ const configText = JSON.stringify({
     },
   },
   limits: { builderAttempts: 16, reviewerAttempts: 4, roleTimeoutSeconds: 7200, idleTimeoutSeconds: 300 },
-  lifecycle: { managedProviders: ["pi-llama"], enterTeamCommand: "true", restoreStudioAfterRun: false },
+  lifecycle: {
+    managedProviders: ["pi-llama"],
+    enterTeamCommand: "true",
+    leaseTtlSeconds: 300,
+    leaseRenewIntervalSeconds: 100,
+    restoreStudioAfterRun: false,
+  },
 });
 const teamConfig = parseTeamConfig(configText, "/tmp/team-config.json");
 
@@ -332,6 +338,61 @@ test("centralizes active-run admission for Architect session commands", async ()
   }
 });
 
+test("wraps workflows and interactive turns in renewable inference leases", async () => {
+  const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(source, /await acquireInferenceLease\(run, repo, config\)/);
+  assert.match(source, /leaseRenewIntervalSeconds \* 1000/);
+  assert.match(source, /run\.leaseFailure = new Error/);
+  assert.match(source, /await releaseInferenceLease\(run, repo, config\)/);
+  assert.match(source, /await acquireInferenceLease\(lease, ctx\.cwd, configuredTeam\)/);
+  assert.match(source, /await releaseInteractiveInferenceLease\(ctx\)/);
+  assert.match(source, /abortAgent: \(\) => ctx\.abort\(\)/);
+  assert.match(source, /before_provider_request[\s\S]*?no healthy global inference lease/);
+  assert.match(source, /session_shutdown[\s\S]*?await releaseInferenceLease\(workflow/);
+});
+
+test("aborts and provider-gates an interactive turn when lease acquisition fails", async () => {
+  const raw = JSON.parse(configText);
+  raw.lifecycle.acquireTeamCommand = "false";
+  raw.lifecycle.renewTeamCommand = "true";
+  raw.lifecycle.releaseTeamCommand = "true";
+  const directory = await mkdtemp(join(tmpdir(), "three-agent-lease-gate-"));
+  const configPath = join(directory, "config.json");
+  await writeFile(configPath, JSON.stringify(raw));
+  const handlers = new Map<string, Function[]>();
+  const fakePi = {
+    on(name: string, handler: Function) {
+      handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+    },
+    registerCommand() {},
+  };
+  const previous = process.env.PI_THREE_AGENT_CONFIG;
+  process.env.PI_THREE_AGENT_CONFIG = configPath;
+  try {
+    await threeAgentTeamExtension(fakePi as any);
+  } finally {
+    if (previous === undefined) delete process.env.PI_THREE_AGENT_CONFIG;
+    else process.env.PI_THREE_AGENT_CONFIG = previous;
+  }
+  let aborts = 0;
+  const ctx = {
+    cwd: directory,
+    model: { provider: "pi-llama", id: "pi/gemma" },
+    abort() { aborts += 1; },
+    ui: { notify() {} },
+  };
+  await assert.rejects(
+    handlers.get("before_agent_start")![0]({ prompt: "hello", systemPrompt: "base" }, ctx),
+    /Could not acquire the global inference lease/,
+  );
+  assert.equal(aborts, 1);
+  assert.throws(
+    () => handlers.get("before_provider_request")![0]({ payload: {} }, ctx),
+    /no healthy global inference lease/,
+  );
+  assert.equal(aborts, 2);
+});
+
 test("documents every registered team command", async () => {
   const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
   const readme = await readFile(new URL("./README.md", import.meta.url), "utf8");
@@ -368,6 +429,19 @@ test("orders success tests by prerequisites", () => {
 test("requires exact review verdict heading", () => {
   assert.equal(parseReviewVerdict("# Review\n\n## Verdict\nAPPROVED\n"), "APPROVED");
   assert.throws(() => parseReviewVerdict("looks good"));
+});
+
+test("requires a complete renewable inference lease lifecycle", () => {
+  const raw = JSON.parse(configText);
+  raw.lifecycle.acquireTeamCommand = "pi-inference acquire";
+  assert.throws(() => parseTeamConfig(JSON.stringify(raw)), /must be configured together/);
+  raw.lifecycle.renewTeamCommand = "pi-inference renew";
+  raw.lifecycle.releaseTeamCommand = "pi-inference release";
+  raw.lifecycle.leaseRenewIntervalSeconds = raw.lifecycle.leaseTtlSeconds;
+  assert.throws(() => parseTeamConfig(JSON.stringify(raw)), /leave at least 90 seconds/);
+  raw.lifecycle.leaseRenewIntervalSeconds = 100;
+  const parsed = parseTeamConfig(JSON.stringify(raw));
+  assert.equal(parsed.lifecycle.acquireTeamCommand, "pi-inference acquire");
 });
 
 test("loads configurable roles and snapshots task runtime choices", async () => {

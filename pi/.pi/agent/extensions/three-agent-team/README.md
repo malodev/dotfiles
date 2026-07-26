@@ -29,7 +29,7 @@ The host-level configuration is:
 ~/.config/pi-three-agent-team/config.json
 ```
 
-`PI_THREE_AGENT_CONFIG` may point to another file. The configuration defines providers, all three role models, context/output limits, thinking levels, attempt ceilings, role/inactivity timeouts, and the command that enters team inference mode.
+`PI_THREE_AGENT_CONFIG` may point to another file. The stowed configuration is shared by local and remote clients. It defines providers, all three role models, context/output limits, thinking levels, attempt ceilings, role/inactivity timeouts, and the acquire/renew/release commands for the host-global inference lease.
 
 The current profile uses:
 
@@ -50,7 +50,7 @@ Builder children run inside Bubblewrap with a synthetic `/dev`, hidden DBus sock
 
 A confirmed exact-model, tool-productive inactivity timeout is also persisted and retried in the same session. Wrong provider/model identity, non-retryable transport/process errors, empty no-progress responses, validator failures, exhausted ceilings, and missing required artifacts remain fail-closed. Every attempt records requested/response identity, stop reason, tool count, stderr, and final output.
 
-Selecting a model from a lifecycle-managed provider such as `pi-llama` automatically runs the team-mode command before inference. The lifecycle command defaults to `pi-inference team`, which stops Studio before the dedicated router starts. `restoreStudioAfterRun` is false by default so the current Architect model and remote Pi clients do not lose their endpoint unexpectedly. Use `pi-inference studio` explicitly when returning to Studio.
+Selecting a model from a lifecycle-managed provider such as `pi-llama` asks the shared `pi-inference` client to make team mode ready. Interactive managed-model turns acquire an expiring lease. Acquisition failure calls Pi's real agent abort path, and a final `before_provider_request` gate refuses any managed-provider request without confirmed healthy ownership. An authorized workflow acquires one host-global lease before Builder execution, renews it for the full Builder → Reviewer lifecycle, aborts before its local safety deadline if renewal fails, and releases it after completion, block, cancellation, or shutdown. Local clients use the manager's mode-0600 Unix socket; remote clients use the separately authenticated HTTPS control endpoint. Legacy configurations without all three lease commands retain the old one-shot `enterTeamCommand` behavior. `restoreStudioAfterRun` remains false by default; use `pi-inference studio` explicitly when returning to Studio.
 
 ## Contract
 
