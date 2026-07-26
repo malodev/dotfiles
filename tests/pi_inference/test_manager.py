@@ -62,6 +62,18 @@ class ManagerTest(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         self.temp.cleanup()
 
+    def test_manager_refuses_reused_control_and_model_credentials(self):
+        configured = config(self.root)
+        configured.control_token_file.write_text("x" * 32 + "\n")
+        configured.router_api_key_file.write_text("x" * 32 + "\n")
+        configured.control_token_file.chmod(0o600)
+        configured.router_api_key_file.chmod(0o600)
+        with self.assertRaisesRegex(RuntimeError, "must be distinct"):
+            manager._load_distinct_service_tokens(configured)
+        configured.router_api_key_file.write_text("different-model-key\n")
+        control, model = manager._load_distinct_service_tokens(configured)
+        self.assertNotEqual(control, model)
+
     async def test_single_lease_renews_releases_and_never_persists_raw_id(self):
         acquired = await self.manager.acquire({"owner": "host:repo:task", "mode": "team", "ttl_seconds": 60})
         self.assertEqual(self.services.switches, ["team"])

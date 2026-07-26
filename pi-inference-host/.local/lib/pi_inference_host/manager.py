@@ -463,15 +463,29 @@ class HTTPServer:
         raise ManagerError(404, "Unknown endpoint")
 
 
-async def serve(config: ManagerConfig) -> None:
+def _read_private_token(path: Path, label: str, minimum_length: int = 1) -> str:
     try:
-        token = next(line.strip() for line in config.control_token_file.read_text().splitlines() if line.strip() and not line.startswith("#"))
-    except (OSError, StopIteration) as error:
-        raise RuntimeError(f"Cannot read control token: {error}") from error
-    if config.control_token_file.stat().st_mode & 0o077:
-        raise RuntimeError("Control token must not be accessible by group/other")
-    if len(token) < 32:
-        raise RuntimeError("Control token must contain at least 32 characters")
+        values = [line.strip() for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")]
+        mode = path.stat().st_mode
+    except OSError as error:
+        raise RuntimeError(f"Cannot read {label}: {error}") from error
+    if mode & 0o077:
+        raise RuntimeError(f"{label.capitalize()} must not be accessible by group/other")
+    if len(values) != 1 or len(values[0]) < minimum_length:
+        raise RuntimeError(f"{label.capitalize()} must contain one value of at least {minimum_length} characters")
+    return values[0]
+
+
+def _load_distinct_service_tokens(config: ManagerConfig) -> tuple[str, str]:
+    control_token = _read_private_token(config.control_token_file, "control token", 32)
+    model_token = _read_private_token(config.router_api_key_file, "model API key")
+    if secrets.compare_digest(control_token, model_token):
+        raise RuntimeError("Control token and model API key must be distinct")
+    return control_token, model_token
+
+
+async def serve(config: ManagerConfig) -> None:
+    token, _model_token = _load_distinct_service_tokens(config)
     config.unix_socket.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if config.unix_socket.exists():
         # A stale socket is safe to replace only after proving no manager listens.

@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""Install and verify the bearer-only Pi inference client on a remote machine."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import secrets
+import shutil
+import socket
+import ssl
+import stat
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+import uuid
+from pathlib import Path
+from typing import Any, Optional, Sequence
+
+
+CONTROL_STATUS_URL = "https://inference.malo.tn.it/v1/status"
+MODEL_URL = "https://llm.malo.tn.it/v1/chat/completions"
+DEFAULT_MODEL = "pi/gemma-4-31B-it-qat-UD-Q4_K_XL"
+
+
+class SetupError(RuntimeError):
+    pass
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+        return None
+
+
+def run(
+    argv: Sequence[str],
+    *,
+    input_text: Optional[str] = None,
+    capture: bool = False,
+    cwd: Optional[Path] = None,
+    env: Optional[dict[str, str]] = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            list(argv),
+            input=input_text,
+            text=True,
+            stdout=subprocess.PIPE if capture else None,
+            stderr=subprocess.PIPE if capture else None,
+            cwd=str(cwd) if cwd else None,
+            env=env,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise SetupError(f"Required command is unavailable: {argv[0]}") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = f": {exc.stderr.strip()}" if capture and exc.stderr else ""
+        raise SetupError(f"Command failed: {' '.join(argv)}{detail}") from exc
+
+
+def require_private_secret(path: Path, label: str) -> str:
+    try:
+        info = path.lstat()
+    except FileNotFoundError as exc:
+        raise SetupError(f"Missing {label}: {path}") from exc
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise SetupError(f"{label} must be a regular non-symlink file: {path}")
+    if stat.S_IMODE(info.st_mode) & 0o077:
+        raise SetupError(f"{label} must not be accessible by group or other users: {path}")
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if len(lines) != 1 or "\r" in lines[0] or "\n" in lines[0]:
+        raise SetupError(f"{label} must contain exactly one non-empty line")
+    return lines[0]
+
+
+def stow_client(dotfiles: Path, home: Path, apply: bool) -> None:
+    client_source = dotfiles / "pi" / ".local" / "bin" / "pi-inference"
+    if not client_source.is_file():
+        raise SetupError(f"The pi Stow package is missing from {dotfiles}")
+    print("Previewing shared Pi client deployment:")
+    run(["stow", "--simulate", "--verbose=2", "--target", str(home), "pi"], cwd=dotfiles)
+    if apply:
+        run(["stow", "--target", str(home), "pi"], cwd=dotfiles)
+
+
+def install_credential(client: Path, name: str, destination: Path, source: Optional[Path]) -> None:
+    if destination.exists():
+        require_private_secret(destination, f"installed {name} credential")
+        print(f"{name}: already installed")
+        return
+    if source is not None:
+        value = require_private_secret(source, f"{name} source")
+        run([str(client), "credential", "--install", name], input_text=value + "\n")
+        print(f"{name}: installed from private source file")
+        return
+    if not sys.stdin.isatty():
+        raise SetupError(
+            f"{name} is absent and no source file was provided; run interactively or pass its --*-file option"
+        )
+    # The shared client uses getpass when attached to a terminal, so the value is not echoed.
+    run([str(client), "credential", "--install", name])
+
+
+def http_json(
+    url: str,
+    *,
+    bearer: Optional[str] = None,
+    payload: Optional[dict[str, Any]] = None,
+    method: Optional[str] = None,
+    timeout: int = 30,
+) -> tuple[int, bytes]:
+    context = ssl.create_default_context()
+    headers = {"Accept": "application/json"}
+    if bearer is not None:
+        if not bearer or "\r" in bearer or "\n" in bearer:
+            raise SetupError("Bearer credential is empty or contains a line break")
+        headers["Authorization"] = f"Bearer {bearer}"
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=context))
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+
+def locate_pi(home: Path) -> Optional[Path]:
+    found = shutil.which("pi")
+    if found:
+        return Path(found)
+    candidates = sorted((home / ".nvm" / "versions" / "node").glob("*/bin/pi"), reverse=True)
+    return candidates[0] if candidates else None
+
+
+def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
+    credential_dir = home / ".pi-inference" / "credentials"
+    control_token = require_private_secret(credential_dir / "control-api-token", "control bearer")
+    model_key = require_private_secret(credential_dir / "model-api-key", "model API key")
+    if secrets.compare_digest(control_token, model_key):
+        raise SetupError("Control bearer and model API key must be distinct")
+
+    unauthenticated, _ = http_json(CONTROL_STATUS_URL)
+    authenticated_status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
+    print(f"Control authentication: without bearer={unauthenticated}, with bearer=200")
+    if unauthenticated != 401:
+        raise SetupError(f"Unauthenticated control request returned HTTP {unauthenticated}, expected 401")
+
+    owner = f"{socket.gethostname()}:client-setup:{uuid.uuid4().hex[:12]}"
+    lease_id = uuid.uuid4().hex
+    acquire_attempted = False
+    acquired = False
+    release_status: Optional[int] = None
+    try:
+        acquire_attempted = True
+        acquire_status, _ = http_json(
+            "https://inference.malo.tn.it/v1/leases",
+            bearer=control_token,
+            payload={"mode": "team", "owner": owner, "ttl_seconds": 300, "lease_id": lease_id},
+        )
+        if acquire_status != 201:
+            raise SetupError(f"Lease acquisition returned HTTP {acquire_status}")
+        acquired = True
+        model_status, model_body = http_json(
+            MODEL_URL,
+            bearer=model_key,
+            payload={
+                "model": args.model,
+                "messages": [{"role": "user", "content": "Reply with exactly REMOTE_MODEL_OK and nothing else."}],
+                "max_tokens": 256,
+                "temperature": 0,
+                "stream": False,
+            },
+            timeout=180,
+        )
+        if model_status != 200:
+            raise SetupError(f"Model smoke test returned HTTP {model_status}")
+        response = json.loads(model_body.decode("utf-8"))
+        reply = response["choices"][0]["message"]["content"].strip()
+        if reply != "REMOTE_MODEL_OK":
+            raise SetupError(f"Unexpected model reply: {reply!r}")
+        print("Model inference: REMOTE_MODEL_OK")
+    finally:
+        if acquire_attempted:
+            try:
+                release_status, _ = http_json(
+                    f"https://inference.malo.tn.it/v1/leases/{lease_id}",
+                    bearer=control_token,
+                    method="DELETE",
+                )
+            except Exception as release_error:
+                print(f"Warning: lease cleanup request failed: {release_error}", file=sys.stderr)
+        if acquired and release_status != 200:
+            raise SetupError(
+                f"Acquired lease cleanup failed (HTTP {release_status}); it remains fenced until TTL expiry"
+            )
+
+    if args.with_pi:
+        pi = locate_pi(home)
+        if pi is None:
+            raise SetupError("--with-pi was requested, but Pi was not found in PATH or ~/.nvm")
+        extension = home / ".pi" / "agent" / "extensions" / "three-agent-team" / "index.ts"
+        if not extension.is_file():
+            raise SetupError(f"Three-agent extension is missing: {extension}")
+        pi_env = {**os.environ, "PATH": str(pi.parent) + os.pathsep + os.environ.get("PATH", "")}
+        result = run(
+            [
+                str(pi),
+                "--print",
+                "--no-session",
+                "--no-tools",
+                "--no-skills",
+                "--no-prompt-templates",
+                "--no-context-files",
+                "--no-extensions",
+                "--extension",
+                str(extension),
+                "--provider",
+                "pi-llama",
+                "--model",
+                args.model,
+                "--thinking",
+                "off",
+                "Reply with exactly REMOTE_PI_OK and nothing else.",
+            ],
+            capture=True,
+            env=pi_env,
+        )
+        if result.stdout.strip() != "REMOTE_PI_OK":
+            raise SetupError(f"Unexpected Pi reply: {result.stdout.strip()!r}")
+        print("Pi managed-provider lifecycle: REMOTE_PI_OK")
+
+    final_status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
+    if final_status.get("lease") is not None:
+        raise SetupError("Verification left an inference lease active")
+    print(f"Manager mode={authenticated_status.get('mode')}, services={authenticated_status.get('services')}")
+    print("REMOTE_INFERENCE_CLIENT_VERIFIED")
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(
+        description="Stow, credential, and verify a remote bearer-only Pi inference client"
+    )
+    result.add_argument("--apply", action="store_true", help="Stow files and install missing credentials")
+    result.add_argument("--verify", action="store_true", help="run control, lease, and model smoke tests")
+    result.add_argument("--with-pi", action="store_true", help="also run a complete Pi managed-model turn")
+    result.add_argument("--control-token-file", type=Path, help="private mode-0600 source file")
+    result.add_argument("--model-key-file", type=Path, help="private mode-0600 source file")
+    result.add_argument("--model", default=DEFAULT_MODEL)
+    result.add_argument("--home", type=Path, default=Path.home())
+    result.add_argument("--dotfiles", type=Path, default=Path(__file__).resolve().parent.parent)
+    return result
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    try:
+        args = parser().parse_args(argv)
+        home = args.home.expanduser().absolute()
+        dotfiles = args.dotfiles.expanduser().absolute()
+        stow_client(dotfiles, home, args.apply)
+        if not args.apply:
+            print("Dry run only. Re-run with --apply to deploy and enter missing credentials.")
+            return 0
+        client = home / ".local" / "bin" / "pi-inference"
+        if not client.exists():
+            raise SetupError(f"Stow did not install the shared client: {client}")
+        credential_dir = home / ".pi-inference" / "credentials"
+        install_credential(
+            client,
+            "control-api",
+            credential_dir / "control-api-token",
+            args.control_token_file,
+        )
+        install_credential(
+            client,
+            "model-api",
+            credential_dir / "model-api-key",
+            args.model_key_file,
+        )
+        if args.verify:
+            verify(args, client, home)
+        else:
+            print("Setup complete. Run again with --apply --verify after checking connectivity.")
+        return 0
+    except SetupError as exc:
+        print(f"pi-inference-client-setup: {exc}", file=sys.stderr)
+        return 1
+    except (OSError, ssl.SSLError, urllib.error.URLError, json.JSONDecodeError, KeyError) as exc:
+        print(f"pi-inference-client-setup: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

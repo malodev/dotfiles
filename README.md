@@ -267,7 +267,7 @@ stow pi
 stow pi-inference-host
 ```
 
-`pi-inference-host` contains the R9700 service manager and must be selected explicitly only on that host. See `docs/PI_INFERENCE_CONTROL_PLANE.md`; do not include this host-only package in a blanket client deployment.
+`pi-inference-host` contains the R9700 service manager and must be selected explicitly only on that host. See `docs/PI_INFERENCE_CONTROL_PLANE.md`; do not include this host-only package in a blanket client deployment. New remote inference clients need outbound HTTPS only; use `scripts/pi-inference-client-setup` for dry-run-first Stow deployment, private bearer installation, and end-to-end verification.
 
 Run these from the `~/.dotfiles` directory. This **only creates symlinks** — no packages or binaries are installed.
 

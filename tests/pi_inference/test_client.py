@@ -55,12 +55,12 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(config.credentials["model-api"], self.model_key)
         self.assertEqual(client._read_secret(self.model_key), "model-secret")
 
-    def test_stowed_profile_requires_per_machine_mtls_identity(self):
+    def test_stowed_profile_uses_bearer_only_remote_authentication(self):
         shared = client.ClientConfig.load(Path(__file__).parents[2] / "pi/.config/pi-inference/client.json")
         self.assertEqual(shared.remote_url, "https://inference.malo.tn.it")
         self.assertEqual(shared.local_socket, Path(os.environ.get("XDG_RUNTIME_DIR", "${XDG_RUNTIME_DIR}")) / "pi-inference-manager/control.sock")
-        self.assertEqual(shared.client_certificate_file, Path.home() / ".pi-inference/credentials/control-client.crt")
-        self.assertEqual(shared.client_key_file, Path.home() / ".pi-inference/credentials/control-client.key")
+        self.assertIsNone(shared.client_certificate_file)
+        self.assertIsNone(shared.client_key_file)
 
     def test_mtls_paths_must_be_configured_together(self):
         raw = json.loads(self.config_path.read_text())
@@ -125,9 +125,31 @@ class ClientTest(unittest.TestCase):
         with_path = client.ClientConfig("https", config.local_socket, "https://example.test/control", config.control_token_file, None, None, config.credentials)
         with self.assertRaisesRegex(client.ClientError, "must not contain a path"):
             client.ControlClient(with_path).request("GET", "/v1/status")
-        no_identity = client.ClientConfig("https", config.local_socket, "https://example.test", config.control_token_file, None, None, config.credentials)
-        with self.assertRaisesRegex(client.ClientError, "requires an mTLS"):
-            client.ControlClient(no_identity).request("GET", "/v1/status")
+        bearer_only = client.ClientConfig("https", config.local_socket, "https://example.test", config.control_token_file, None, None, config.credentials)
+
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return b'{"version":1}'
+
+        class FakeOpener:
+            request = None
+
+            def open(self, request, timeout):
+                self.request = request
+                return FakeResponse()
+
+        opener = FakeOpener()
+        with patch.object(urllib.request, "build_opener", return_value=opener):
+            self.assertEqual(client.ControlClient(bearer_only).request("GET", "/v1/status"), {"version": 1})
+        self.assertEqual(opener.request.get_header("Authorization"), "Bearer control-secret")
         handler = client.NoRedirectHandler()
         request = urllib.request.Request("https://example.test/v1/status")
         self.assertIsNone(handler.redirect_request(request, None, 302, "Found", {}, "https://attacker.test/"))

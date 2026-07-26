@@ -3,9 +3,7 @@
     "transport": "auto",
     "local_socket": "${XDG_RUNTIME_DIR}/pi-inference-manager/control.sock",
     "remote_url": "https://inference.malo.tn.it",
-    "token_file": "~/.pi-inference/credentials/control-api-token",
-    "client_certificate_file": "~/.pi-inference/credentials/control-client.crt",
-    "client_key_file": "~/.pi-inference/credentials/control-client.key"
+    "token_file": "~/.pi-inference/credentials/control-api-token"
   },
   "inference": {
     "base_url": "https://llm.malo.tn.it/v1"

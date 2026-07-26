@@ -130,14 +130,13 @@ class ControlClient:
                 if remote.path not in {"", "/"} or remote.query or remote.fragment:
                     raise ClientError("Remote control URL must not contain a path, query, or fragment")
                 token = _read_secret(self.config.control_token_file)
-                if self.config.client_certificate_file is None or self.config.client_key_file is None:
-                    raise ClientError("Remote control requires an mTLS client certificate and private key")
-                _assert_private_file(self.config.client_key_file, "mTLS client private key")
                 context = ssl.create_default_context()
-                try:
-                    context.load_cert_chain(self.config.client_certificate_file, self.config.client_key_file)
-                except (OSError, ssl.SSLError) as error:
-                    raise ClientError(f"Cannot load mTLS client identity: {error}") from error
+                if self.config.client_certificate_file is not None and self.config.client_key_file is not None:
+                    _assert_private_file(self.config.client_key_file, "optional mTLS client private key")
+                    try:
+                        context.load_cert_chain(self.config.client_certificate_file, self.config.client_key_file)
+                    except (OSError, ssl.SSLError) as error:
+                        raise ClientError(f"Cannot load optional mTLS client identity: {error}") from error
                 request = urllib.request.Request(
                     f"{self.config.remote_url}{path}",
                     data=payload,
