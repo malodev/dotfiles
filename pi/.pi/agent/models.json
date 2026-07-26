@@ -170,7 +170,7 @@
       "name": "Dedicated Pi llama.cpp router",
       "baseUrl": "https://llm.malo.tn.it/v1",
       "api": "openai-completions",
-      "apiKey": "!awk 'NF && $1 !~ /^#/ {print; exit}' /home/mauro/.local/share/pi-llama-router/api-keys",
+      "apiKey": "!awk 'NF && $1 !~ /^#/ {print; exit}' ~/.local/share/pi-llama-router/api-keys",
       "authHeader": true,
       "compat": {
         "supportsStore": false,
