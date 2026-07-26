@@ -27,7 +27,7 @@ Confirm:
 
 - the target is the root of an existing Git repository;
 - `pi` is available;
-- the global `three-agent-team` extension exposes `/team-config`, `/team-new`, `/team-grill-me`, `/team-validate`, `/team-go`, `/team-resume`, `/team-status`, and `/team-cancel`;
+- the global `three-agent-team` extension exposes `/team-config`, `/team-new`, `/team-grill-me`, `/team-repair`, `/team-validate`, `/team-go`, `/team-resume`, `/team-unblock`, `/team-discard`, `/team-status`, `/team-report`, and `/team-cancel`;
 - `/team-config` resolves valid Architect, Builder, and Reviewer profiles from `~/.config/pi-three-agent-team/config.json`;
 - every configured provider/model ID is available exactly as configured.
 

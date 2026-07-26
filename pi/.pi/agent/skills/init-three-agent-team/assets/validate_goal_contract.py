@@ -8,6 +8,10 @@ it cannot prove that product requirements are semantically correct.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import os
+import pwd
 import re
 import subprocess
 import sys
@@ -32,6 +36,8 @@ REQUIRED_SECTIONS = (
 PLACEHOLDER_RE = re.compile(r"REPLACE_ME|\bTBD\b|\bTODO\b|\[PROJECT_[A-Z_]+\]|<[^>\n]+>", re.IGNORECASE)
 SUCCESS_HEADING_RE = re.compile(r"^###\s+(ST-\d{2,})\s*(?:[:—-])\s*(.+?)\s*$", re.MULTILINE)
 FULL_SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
+TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+STATE_ROOT = Path(pwd.getpwuid(os.getuid()).pw_dir) / ".local" / "state" / "pi-three-agent-team"
 
 
 @dataclass(frozen=True)
@@ -52,6 +58,13 @@ def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
+
+
+def authorization_record_path(repo: Path, task_id: str) -> Path:
+    if not TASK_ID_RE.fullmatch(task_id):
+        raise ValueError(f"Invalid task ID for authorization record: {task_id}")
+    repository_key = hashlib.sha256(str(repo.resolve()).encode("utf-8")).hexdigest()
+    return STATE_ROOT / "authorizations" / repository_key / f"{task_id}.json"
 
 
 def markdown_sections(text: str) -> dict[str, str]:
@@ -196,7 +209,8 @@ def validate(task_dir: Path, phase: str) -> list[str]:
     if expected_tasks_root not in task_dir.parents:
         errors.append(f"Task directory must be below {expected_tasks_root}.")
 
-    brief = brief_path.read_text(encoding="utf-8")
+    brief_bytes = brief_path.read_bytes()
+    brief = brief_bytes.decode("utf-8")
     status = status_path.read_text(encoding="utf-8")
     sections = markdown_sections(brief)
     for name in REQUIRED_SECTIONS:
@@ -227,12 +241,13 @@ def validate(task_dir: Path, phase: str) -> list[str]:
     if baseline and status_baseline != baseline:
         errors.append("status.yaml baseline_commit does not exactly match brief.md.")
     if baseline:
-        exists = run_git(repo, "cat-file", "-e", f"{baseline}^{{commit}}")
-        if exists.returncode != 0:
+        baseline_exists = run_git(repo, "cat-file", "-e", f"{baseline}^{{commit}}")
+        if baseline_exists.returncode != 0:
             errors.append(f"Baseline commit does not exist: {baseline}.")
-        head = run_git(repo, "rev-parse", "HEAD")
-        if head.returncode != 0 or head.stdout.strip() != baseline:
-            errors.append("HEAD must equal the baseline commit until final verified commit-on-success.")
+        else:
+            ancestor = run_git(repo, "merge-base", "--is-ancestor", baseline, "HEAD")
+            if ancestor.returncode != 0:
+                errors.append("Baseline commit must remain an ancestor of HEAD.")
 
     untracked = run_git(repo, "ls-files", "--others", "--exclude-standard")
     if untracked.returncode != 0:
@@ -293,18 +308,64 @@ def validate(task_dir: Path, phase: str) -> list[str]:
             errors.append(f"status.yaml {status_key} does not match brief.md ({brief_value}).")
 
     state = yaml_scalar(status, "state")
+    task_id = yaml_scalar(status, "task_id")
+    authorization_head = yaml_scalar(status, "authorization_head")
+    contract_digest = yaml_scalar(status, "contract_digest")
     authorized_at = yaml_scalar(status, "execution_authorized_at")
     authorization = sections["Execution authorization"].strip()
+    safe_record_task_id = task_id if task_id and TASK_ID_RE.fullmatch(task_id) else task_dir.name
+    if not TASK_ID_RE.fullmatch(safe_record_task_id):
+        safe_record_task_id = "invalid-task-id"
+    record_path = authorization_record_path(repo, safe_record_task_id)
     if phase == "pre-go":
         if state != "DISCUSSING":
             errors.append("Pre-go validation requires status state DISCUSSING.")
+        if authorization_head not in {None, "null", ""}:
+            errors.append("Pre-go validation requires authorization_head: null.")
+        if contract_digest not in {None, "null", ""}:
+            errors.append("Pre-go validation requires contract_digest: null.")
         if authorized_at not in {"null", ""}:
             errors.append("Pre-go validation requires execution_authorized_at: null.")
         if authorization != "PENDING":
             errors.append("Pre-go validation requires ## Execution authorization to be exactly PENDING.")
+        if record_path.exists():
+            errors.append(f"Pre-go validation found a stale external authorization record: {record_path}.")
     else:
+        record: dict[str, object] | None = None
+        try:
+            loaded = json.loads(record_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
+                raise ValueError("record is not an object")
+            record = loaded
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            errors.append(f"Execution validation requires a valid external authorization record at {record_path}: {error}.")
+        if record is not None:
+            expected_record = {
+                "version": 1,
+                "repository": str(repo),
+                "taskId": task_id,
+                "authorizationHead": authorization_head,
+                "contractDigest": contract_digest,
+                "authorizedAt": authorized_at,
+            }
+            for key, expected in expected_record.items():
+                if record.get(key) != expected:
+                    errors.append(f"External authorization record {key} does not match status.yaml.")
         if state not in {"EXECUTING", "REVIEWING", "VERIFYING"}:
             errors.append("Execution validation requires state EXECUTING, REVIEWING, or VERIFYING.")
+        if not authorization_head or not re.fullmatch(r"[0-9a-f]{40}", authorization_head):
+            errors.append("Execution validation requires a full authorization_head commit SHA.")
+        else:
+            snapshot_exists = run_git(repo, "cat-file", "-e", f"{authorization_head}^{{commit}}")
+            if snapshot_exists.returncode != 0:
+                errors.append(f"Authorization head does not exist: {authorization_head}.")
+            head = run_git(repo, "rev-parse", "HEAD")
+            if head.returncode != 0 or head.stdout.strip() != authorization_head:
+                errors.append("HEAD must equal the authorization head during execution.")
+        if not contract_digest or not re.fullmatch(r"[0-9a-f]{64}", contract_digest):
+            errors.append("Execution validation requires a SHA-256 contract_digest.")
+        elif hashlib.sha256(brief_bytes).hexdigest() != contract_digest:
+            errors.append("Goal Contract digest changed after owner authorization.")
         if authorized_at in {None, "null", ""}:
             errors.append("Execution validation requires a recorded execution_authorized_at timestamp.")
         if not re.fullmatch(r"AUTHORIZED at \S+ by owner message `go`", authorization):
@@ -312,9 +373,8 @@ def validate(task_dir: Path, phase: str) -> list[str]:
         elif authorized_at and f"AUTHORIZED at {authorized_at} " not in authorization:
             errors.append("brief.md authorization timestamp does not match status.yaml.")
 
-    task_id = yaml_scalar(status, "task_id")
-    if not task_id or task_id == "REPLACE_ME" or task_id != task_dir.name:
-        errors.append("status.yaml task_id must equal the task directory name.")
+    if not task_id or not TASK_ID_RE.fullmatch(task_id) or task_id == "REPLACE_ME" or task_id != task_dir.name:
+        errors.append("status.yaml task_id must be valid and equal the task directory name.")
 
     return errors
 

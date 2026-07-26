@@ -17,14 +17,14 @@ The task identifies one directory under `team/tasks/`. Read:
 3. `status.yaml`
 4. `AGENTS.md`, `CONTEXT.md`, and relevant ADRs
 
-Do not trust Builder's reported file list. Determine the actual change set from the baseline in the Goal Contract. Validator success is only a structural minimum; independently challenge vague evidence, disjunctive success outcomes, impossible guarantees, and undeclared external verification.
+Do not trust Builder's reported file list. Determine the actual change set from `authorization_head` in `status.yaml`. Validator success is only a structural minimum; independently challenge vague evidence, disjunctive success outcomes, impossible guarantees, and undeclared external verification.
 
 ## Required process
 
 1. Run `python team/validate_goal_contract.py team/tasks/<task-id> --phase execution`; return `ESCALATE` if it fails.
 2. Verify state is `REVIEWING` and execution authorization is recorded.
-3. Verify the baseline commit exists, was not created by Builder, and the worktree is understandable.
-4. Require `git ls-files --others --exclude-standard` to print nothing, then run `git diff --name-status <baseline>`, `git diff --stat <baseline>`, and inspect the complete diff.
+3. Verify the discussion baseline exists and is an ancestor of `HEAD`, `authorization_head` equals `HEAD`, and the worktree is understandable.
+4. Require `git ls-files --others --exclude-standard` to print nothing, then run `git diff --name-status <authorization_head>`, `git diff --stat <authorization_head>`, and inspect the complete diff.
 5. Reconcile actual changes with `build-report.md`.
 6. Check every success test independently, including exact command, expected exit code, expected evidence, write declaration, and prerequisites.
 7. Reject criteria that can pass through mutually exclusive outcomes or claim unbounded correctness/reliability.

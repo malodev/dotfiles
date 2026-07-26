@@ -4,8 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  archiveAuthorizationRecord,
+  createAuthorizationRecord,
+  defaultAuthorizationStateRoot,
+  readAuthorizationRecord,
+  writeAuthorizationRecord,
+} from "./authorization.ts";
+import {
   assertDraftContractShape,
+  activeRunDenial,
   assertTeamGrillable,
+  authorizationSnapshotKind,
   buildTeamGrillPrompt,
   completeTeamNewTaskId,
   localTaskDatePrefix,
@@ -16,6 +25,8 @@ import {
   parseTeamNewArgs,
   parseTeamTaskId,
   recoveryReviewCeiling,
+  releaseInteractiveGuard,
+  releaseOwnedSlot,
 } from "./core.ts";
 import { archiveTask, completionReportMessage, taskArgumentCompletions } from "./index.ts";
 import {
@@ -64,6 +75,8 @@ const teamConfig = parseTeamConfig(configText, "/tmp/team-config.json");
 const status = `task_id: sample
 state: DISCUSSING
 baseline_commit: 0123456789012345678901234567890123456789
+authorization_head: null
+contract_digest: null
 execution_authorized_at: null
 review_cycle: 0
 max_review_cycles: 5
@@ -98,6 +111,8 @@ test("parses strict status", () => {
   const parsed = parseStatus(status);
   assert.equal(parsed.taskId, "sample");
   assert.equal(parsed.state, "DISCUSSING");
+  assert.equal(parsed.authorizationHead, null);
+  assert.equal(parsed.contractDigest, null);
   assert.equal(parsed.completionPolicy.commitOnSuccess, false);
 });
 
@@ -238,6 +253,91 @@ test("approved recovery guarantees exactly one available review cycle at the cei
   assert.equal(recoveryReviewCeiling(5, 5), 6);
   assert.equal(recoveryReviewCeiling(3, 5), 5);
   assert.throws(() => recoveryReviewCeiling(-1, 5), /Invalid review-cycle values/);
+});
+
+test("classifies complete, legacy, and partial authorization snapshots", () => {
+  assert.equal(authorizationSnapshotKind(null, null), "legacy");
+  assert.equal(authorizationSnapshotKind("1".repeat(40), "2".repeat(64)), "complete");
+  assert.throws(() => authorizationSnapshotKind("1".repeat(40), null), /Partial authorization snapshot/);
+  assert.throws(() => authorizationSnapshotKind(null, "2".repeat(64)), /Partial authorization snapshot/);
+});
+
+test("releases only the matching task's interactive guard and run ownership", () => {
+  assert.equal(releaseInteractiveGuard("task-a", "task-a"), undefined);
+  assert.equal(releaseInteractiveGuard("task-a", "task-b"), "task-a");
+  assert.equal(releaseInteractiveGuard(undefined, "task-a"), undefined);
+  const first = { taskId: "first" };
+  const second = { taskId: "second" };
+  assert.equal(releaseOwnedSlot(first, first), undefined);
+  assert.equal(releaseOwnedSlot(second, first), second);
+});
+
+test("does not let Builder-controlled environment redirect the authorization root", () => {
+  const expected = defaultAuthorizationStateRoot();
+  const previous = { HOME: process.env.HOME, XDG_STATE_HOME: process.env.XDG_STATE_HOME, PI_THREE_AGENT_STATE_DIR: process.env.PI_THREE_AGENT_STATE_DIR };
+  process.env.HOME = "/tmp/attacker-home";
+  process.env.XDG_STATE_HOME = "/tmp/attacker-state";
+  process.env.PI_THREE_AGENT_STATE_DIR = "/tmp/attacker-override";
+  try {
+    assert.equal(defaultAuthorizationStateRoot(), expected);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("persists authorization outside the repository and archives it without deletion", async () => {
+  const stateDir = await mkdtemp(join(tmpdir(), "three-agent-state-test-"));
+  const repo = await mkdtemp(join(tmpdir(), "three-agent-auth-repo-"));
+  const record = await createAuthorizationRecord(
+    repo,
+    "sample",
+    "1".repeat(40),
+    "2".repeat(64),
+    "2026-07-26T00:00:00.000Z",
+  );
+  await writeAuthorizationRecord(repo, record, stateDir);
+  assert.deepEqual(await readAuthorizationRecord(repo, "sample", stateDir), record);
+  await assert.rejects(writeAuthorizationRecord(repo, record, stateDir), /EEXIST/);
+  await assert.rejects(createAuthorizationRecord(repo, "../escape", "1".repeat(40), "2".repeat(64), record.authorizedAt), /Invalid task ID/);
+  assert.ok(await archiveAuthorizationRecord(repo, "sample", "2026-07-26T00-00-00-000Z", stateDir));
+  await assert.rejects(readAuthorizationRecord(repo, "sample", stateDir), /ENOENT/);
+});
+
+test("centralizes active-run admission for Architect session commands", async () => {
+  assert.equal(activeRunDenial(undefined, "team-new"), undefined);
+  assert.match(activeRunDenial("running-task", "team-new") ?? "", /running-task.*team-new/);
+  assert.match(activeRunDenial("running-task", "team-repair") ?? "", /running-task.*team-repair/);
+
+  const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(source, /python \$\{JSON\.stringify\(CANONICAL_VALIDATOR\)\}/, "runtime validation must use the trusted bundled validator");
+  const idleCommands = ["team-new", "team-grill-me", "team-unblock", "team-repair", "team-go", "team-resume"];
+  assert.match(source, /const recoveryTask = pendingUnblockRecovery\?\.taskId \?\? activeUnblockDiscussion\?\.taskId/);
+  const settledRecovery = source.slice(source.indexOf('pi.on("agent_settled"'));
+  assert.ok(settledRecovery.indexOf("reserveRun(recovery.taskId)") < settledRecovery.indexOf("await "), "recovery must reserve its run before awaiting");
+  for (const command of idleCommands) {
+    const start = source.indexOf(`pi.registerCommand("${command}"`);
+    const end = source.indexOf("pi.registerCommand(\"", start + 1);
+    const handler = source.slice(start, end < 0 ? undefined : end);
+    assert.match(handler, new RegExp(`requireIdle\\(ctx, ["']${command}["']\\)`), `${command} must enforce idle admission`);
+    if (["team-go", "team-resume"].includes(command)) {
+      assert.ok(handler.indexOf("reserveRun(taskId)") < handler.indexOf("await "), `${command} must reserve its run before awaiting`);
+    }
+    if (["team-resume", "team-discard"].includes(command)) {
+      assert.match(handler, /activeUnblockDiscussion/);
+      assert.match(handler, /pendingUnblockRecovery/);
+    }
+  }
+});
+
+test("documents every registered team command", async () => {
+  const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const readme = await readFile(new URL("./README.md", import.meta.url), "utf8");
+  const commands = [...source.matchAll(/pi\.registerCommand\("(team-[^"]+)"/g)].map((match) => match[1]);
+  assert.ok(commands.length > 0);
+  for (const command of commands) assert.ok(readme.includes(`/${command}`), `README must document /${command}`);
 });
 
 test("builds a persistent completion message with canonical report content", () => {

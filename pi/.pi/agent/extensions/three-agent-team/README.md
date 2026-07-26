@@ -7,9 +7,12 @@ Deterministic runtime orchestration for a configurable Architect → Builder →
 - `/team-config` — show the resolved role models, output limits, attempt ceilings, and timeouts.
 - `/team-new <task-id> -- <request>` — select the configured Architect, create strict task templates, and begin contract discussion.
 - `/team-grill-me <task-id>` — select the configured Architect and stress-test an unauthorized `DISCUSSING` contract.
+- `/team-repair <task-id>` — start a fresh Architect session to repair an invalid unauthorized contract.
 - `/team-validate <task-id>` — deterministically test pre-go eligibility.
 - `/team-go <task-id>` — snapshot runtime choices, validate, authorize, enter team inference mode, and start sequential execution.
-- `/team-resume <task-id>` — resume an authorized blocked task using its task-local runtime snapshot.
+- `/team-resume <task-id>` — resume an authorized `BLOCKED` or crash-interrupted `EXECUTING` task using its task-local runtime snapshot. Invoking it on a legacy authorized task explicitly approves one-time migration of the current `HEAD` and authorized brief into the external authorization record.
+- `/team-unblock <task-id> [notes]` — discuss owner-led recovery and finalize it only after the exact `finalize recovery` message.
+- `/team-discard <task-id>` — archive an inactive task without deleting its evidence.
 - `/team-status <task-id>` — show persisted state.
 - `/team-report <task-id>` — publish the durable completion report into the current session without invoking an agent.
 - `/team-cancel` — cancel the active child role and block the task.
@@ -43,7 +46,7 @@ The extension bypasses adaptive routing and starts isolated Pi child sessions wi
 
 Children run sequentially with extensions and skills disabled. Each Builder or Reviewer cycle uses one persistent Pi session. A provider/model-verified `length` stop after measurable progress is persisted and automatically continued in that same session. It consumes one bounded attempt rather than blocking immediately. Repeated output-limit stops still fail closed when the configured cumulative attempt ceiling is exhausted.
 
-Builder children run inside Bubblewrap with a synthetic `/dev`, hidden DBus sockets, a read-only host filesystem, and only the repository plus `/tmp` writable. Reviewer children remain read-only through their tool allowlist. Dedicated npm, UV, and XDG caches live under `/tmp`.
+Builder children run inside Bubblewrap with a synthetic `/dev`, hidden DBus sockets, a read-only host filesystem, and only the repository plus `/tmp` writable. Reviewer children receive no direct `edit` or `write` tools, but their `bash` restriction remains prompt-enforced rather than a technical read-only boundary. Dedicated npm, UV, and XDG caches live under `/tmp`.
 
 A confirmed exact-model, tool-productive inactivity timeout is also persisted and retried in the same session. Wrong provider/model identity, non-retryable transport/process errors, empty no-progress responses, validator failures, exhausted ceilings, and missing required artifacts remain fail-closed. Every attempt records requested/response identity, stop reason, tool count, stderr, and final output.
 
@@ -53,17 +56,18 @@ Selecting a model from a lifecycle-managed provider such as `pi-llama` automatic
 
 Repositories must contain:
 
-- `team/validate_goal_contract.py`
+- `team/validate_goal_contract.py` (an agent-facing convenience copy; extension runtime gates use the trusted bundled validator)
 - `team/agents/team-builder.md`
 - `team/agents/team-reviewer.md`
 - a strict task under `team/tasks/<task-id>/`
 
-The extension executes success tests in prerequisite order. V1 supports commit-on-success but deliberately refuses push or deployment.
+Runtime authorization and execution gates always invoke the bundled validator from the global installation, never a Builder-writable repository copy. The discussion baseline may remain an ancestor while Goal Contract and reference commits advance `HEAD`. At `/team-go`, the extension records the exact `authorization_head` and a SHA-256 digest of the authorized brief in both task metadata and an extension-owned record under the OS account's fixed `~/.local/state/pi-three-agent-team` directory (resolved from the passwd database, not Builder-controlled environment variables). The external record is outside the Builder-writable repository. Execution fails closed if `HEAD`, the brief, or the task metadata later drifts. The extension executes success tests in prerequisite order. V1 supports commit-on-success but deliberately refuses push or deployment.
 
 ## Development
 
 ```bash
 node --test core.test.ts
+python -m unittest discover -s ../../skills/init-three-agent-team/tests -v
 pi -e ./index.ts --list-models
 ```
 

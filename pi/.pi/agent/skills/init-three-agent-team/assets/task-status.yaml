@@ -1,6 +1,8 @@
 task_id: REPLACE_ME
 state: DISCUSSING
 baseline_commit: REPLACE_ME
+authorization_head: null
+contract_digest: null
 execution_authorized_at: null
 continue_until_complete: true
 review_cycle: 0

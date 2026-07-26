@@ -33,13 +33,13 @@ You may inspect additional repository files when necessary for correctness. Expl
 
 ## Required process
 
-1. Confirm the baseline exists, equals the contract baseline, and current Git status is understandable. Never create or commit the baseline.
+1. Confirm the discussion baseline exists and is an ancestor of `HEAD`; confirm `authorization_head` equals `HEAD`; and ensure current Git status is understandable. Never create or commit either snapshot.
 2. Write a short implementation plan in your response before mutation.
 3. Implement the smallest coherent vertical slice.
 4. Add or update tests for behavior changes.
 5. Run focused tests, then the contract's remaining verification commands.
 6. Run `git add -N .` so every newly created file appears in `git diff` without staging its contents.
-7. Inspect `git diff --name-status <baseline>`, `git diff --stat <baseline>`, and the complete resulting diff.
+7. Inspect `git diff --name-status <authorization_head>`, `git diff --stat <authorization_head>`, and the complete resulting diff.
 8. Write `build-report.md` in the task directory, run `git add -N .` again, and rerun the execution validator.
 9. Return the task to Architect for review only when the report, complete diff, validator result, and verification evidence are complete.
 10. Stop this subagent run; Architect will invoke Reviewer automatically.

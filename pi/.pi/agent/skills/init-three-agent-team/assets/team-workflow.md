@@ -31,7 +31,7 @@ Reject disjunctive criteria such as “works or reports an error.” Replace unb
 
 Before writing a formal contract:
 
-- require an existing full Git baseline commit equal to `HEAD`;
+- require an existing full Git baseline commit that remains an ancestor of `HEAD`;
 - never ask Builder to create or commit the baseline;
 - resolve every `[PROJECT_*_COMMAND]` placeholder in `AGENTS.md` with a real command or `not configured`;
 - require all files to be visible to `git diff` through `git add -N .`;
@@ -48,7 +48,7 @@ team/tasks/<task-id>/brief.md
 team/tasks/<task-id>/status.yaml
 ```
 
-It copies the complete status template, records the task ID and current baseline, writes the strict brief skeleton, and marks both files intent-to-add. Edit these existing files; never replace their schema, remove required headings, or claim readiness based on prose alone. Set the completion policy in both files consistently.
+It copies the complete status template, records the task ID and current discussion baseline, writes the strict brief skeleton, and marks both files intent-to-add. Goal Contract and reference commits may advance `HEAD`; `/team-go` separately snapshots the exact authorization head and authorized-brief digest in task metadata and extension-owned state outside the Builder-writable repository. Edit these existing files; never replace their schema, remove required headings, or claim readiness based on prose alone. Set the completion policy in both files consistently.
 
 Complete these exact `brief.md` headings:
 
@@ -126,4 +126,4 @@ Then say:
 
 > The contract is structurally valid. To authorize deterministic execution, run `/team-go <task-id>`.
 
-Do not ask the owner to type plain `go`. After `/team-go`, the extension records authorization, selects exact local models, executes roles sequentially, rejects model/provider mismatches and role errors, enforces review cycles, runs final verification, and applies only the authorized completion policy.
+Do not ask the owner to type plain `go`. After `/team-go`, the extension records authorization, the exact `authorization_head`, and the authorized-brief digest; selects exact local models; executes roles sequentially; rejects snapshot drift, model/provider mismatches, and role errors; enforces review cycles; runs final verification; and applies only the authorized completion policy.

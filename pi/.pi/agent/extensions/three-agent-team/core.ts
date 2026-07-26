@@ -22,6 +22,8 @@ export interface TaskStatus {
   taskId: string;
   state: TeamState;
   baselineCommit: string;
+  authorizationHead: string | null;
+  contractDigest: string | null;
   executionAuthorizedAt: string | null;
   reviewCycle: number;
   maxReviewCycles: number;
@@ -31,6 +33,29 @@ export interface TaskStatus {
 export interface TeamNewArgs {
   taskId: string;
   request: string;
+}
+
+export function activeRunDenial(activeTaskId: string | undefined, commandName: string): string | undefined {
+  if (!activeTaskId) return undefined;
+  return `Task ${activeTaskId} is actively running; /${commandName} requires the single-GPU workflow to be idle.`;
+}
+
+export function releaseInteractiveGuard(currentTaskId: string | undefined, terminalTaskId: string): string | undefined {
+  return currentTaskId === terminalTaskId ? undefined : currentTaskId;
+}
+
+export function releaseOwnedSlot<T>(current: T | undefined, owner: T): T | undefined {
+  return current === owner ? undefined : current;
+}
+
+export function authorizationSnapshotKind(
+  authorizationHead: string | null,
+  contractDigest: string | null,
+): "legacy" | "complete" {
+  if (Boolean(authorizationHead) !== Boolean(contractDigest)) {
+    throw new Error("Partial authorization snapshot is invalid; both authorization_head and contract_digest are required");
+  }
+  return authorizationHead && contractDigest ? "complete" : "legacy";
 }
 
 export function recoveryReviewCeiling(reviewCycle: number, maxReviewCycles: number): number {
@@ -164,11 +189,15 @@ export function parseStatus(text: string): TaskStatus {
   if (!Number.isInteger(reviewCycle) || !Number.isInteger(maxReviewCycles) || maxReviewCycles < 1) {
     throw new Error("status.yaml has invalid review-cycle values");
   }
+  const authorizationHead = scalar(text, "authorization_head");
+  const contractDigest = scalar(text, "contract_digest");
   const authorization = scalar(text, "execution_authorized_at");
   return {
     taskId,
     state,
     baselineCommit,
+    authorizationHead: !authorizationHead || authorizationHead === "null" ? null : authorizationHead,
+    contractDigest: !contractDigest || contractDigest === "null" ? null : contractDigest,
     executionAuthorizedAt: !authorization || authorization === "null" ? null : authorization,
     reviewCycle,
     maxReviewCycles,
@@ -184,6 +213,16 @@ export function setYamlScalar(text: string, key: string, value: string, indent =
   const expression = new RegExp(`^${" ".repeat(indent)}${key}:.*$`, "m");
   if (!expression.test(text)) throw new Error(`Cannot update missing status field: ${key}`);
   return text.replace(expression, `${" ".repeat(indent)}${key}: ${value}`);
+}
+
+export function upsertYamlScalar(text: string, key: string, value: string, beforeKey?: string): string {
+  const expression = new RegExp(`^${key}:.*$`, "m");
+  if (expression.test(text)) return text.replace(expression, `${key}: ${value}`);
+  if (beforeKey) {
+    const before = new RegExp(`^${beforeKey}:`, "m");
+    if (before.test(text)) return text.replace(before, `${key}: ${value}\n${beforeKey}:`);
+  }
+  return `${text.trimEnd()}\n${key}: ${value}\n`;
 }
 
 export async function readStatus(taskDir: string): Promise<{ text: string; status: TaskStatus }> {

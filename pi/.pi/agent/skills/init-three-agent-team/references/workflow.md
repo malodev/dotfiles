@@ -29,7 +29,7 @@ The workflow has one task-level authorization: owner and Architect agree on a va
 ### Reviewer
 
 - Runs as an isolated Pi child session using the exact host-configured Reviewer model and limits.
-- Has read-only repository tools.
+- Receives no direct `edit` or `write` tools; its `bash` non-mutation rule is prompt-enforced.
 - Discovers the complete Git diff independently.
 - Verifies tests and success criteria.
 - Returns findings; Builder owns all fixes.
@@ -68,7 +68,7 @@ The owner runs `/team-go <task-id>` once. The extension validates first, records
 
 A Goal Contract is not eligible for `go` merely because it reads plausibly. Before asking, Architect must:
 
-1. use an existing baseline commit that equals `HEAD` and was not created by Builder;
+1. use an existing baseline commit that remains an ancestor of `HEAD` and was not created by Builder;
 2. remove project-command placeholders from `AGENTS.md`;
 3. give every numbered success test an exact command, expected integer exit code, specific evidence, hardware/system-write declaration, and prerequisites;
 4. make every writing test depend on an offline non-writing test;
@@ -76,7 +76,7 @@ A Goal Contract is not eligible for `go` merely because it reads plausibly. Befo
 6. run `git add -N .` so no untracked file is omitted from the baseline diff;
 7. pass `python team/validate_goal_contract.py team/tasks/<task-id> --phase pre-go`.
 
-After `go`, Architect records the authorization and must pass the same validator with `--phase execution` before invoking Builder. Builder reruns it before mutation and before review; Reviewer reruns it independently. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
+At `go`, the extension records the current `HEAD` as `authorization_head` plus a SHA-256 digest of the authorized brief in task metadata and in an extension-owned state record outside the Builder-writable repository. For tasks authorized by an older extension, an explicit owner `/team-resume` or finalized recovery performs a one-time migration and reports the exact adopted head and digest; partial snapshots fail closed. After `go`, Architect must pass the same validator with `--phase execution` before invoking Builder; execution fails closed if `HEAD` or the brief drifts from that snapshot. Agents use the repository copy for immediate feedback, while extension runtime gates invoke the trusted bundled validator so Builder edits cannot weaken enforcement. Builder reruns it before mutation and before review; Reviewer reruns it independently. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
 
 ## Autonomous review gate
 

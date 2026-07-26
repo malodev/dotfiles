@@ -3,10 +3,19 @@ import { createHash } from "node:crypto";
 import { access, appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { constants, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isToolCallEventType, type ExtensionAPI, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
+  archiveAuthorizationRecord,
+  createAuthorizationRecord,
+  readAuthorizationRecord,
+  writeAuthorizationRecord,
+} from "./authorization.ts";
+import {
+  activeRunDenial,
   assertDraftContractShape,
+  authorizationSnapshotKind,
   assertTeamGrillable,
   buildTeamGrillPrompt,
   completeTeamNewTaskId,
@@ -18,9 +27,12 @@ import {
   parseTeamTaskId,
   readStatus,
   recoveryReviewCeiling,
+  releaseInteractiveGuard,
+  releaseOwnedSlot,
   setYamlScalar,
   taskPath,
   updateStatus,
+  upsertYamlScalar,
 } from "./core.ts";
 import {
   isContinuableLengthRoleResult,
@@ -37,6 +49,10 @@ import {
 
 const STATUS_KEY = "three-agent-team";
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
+const CANONICAL_VALIDATOR = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../skills/init-three-agent-team/assets/validate_goal_contract.py",
+);
 
 interface ActiveRun {
   taskId: string;
@@ -89,6 +105,17 @@ async function exists(path: string): Promise<boolean> {
   try { await access(path, constants.F_OK); return true; } catch { return false; }
 }
 
+async function currentHead(repo: string): Promise<string> {
+  const result = await shell("git rev-parse HEAD", repo, undefined, 60_000);
+  const head = result.stdout.trim();
+  if (result.code !== 0 || !/^[0-9a-f]{40}$/.test(head)) throw new Error("Repository has no valid HEAD commit");
+  return head;
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
 function stableSessionId(repo: string, taskId: string, role: string, cycle: number): string {
   const hex = createHash("sha256").update(`${repo}\0${taskId}\0${role}\0${cycle}`).digest("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
@@ -122,7 +149,7 @@ async function setState(taskDir: string, state: string, extra: Record<string, st
 }
 
 async function validate(repo: string, taskDir: string, phase: "pre-go" | "execution", signal?: AbortSignal): Promise<void> {
-  const result = await shell(`python team/validate_goal_contract.py ${JSON.stringify(taskDir)} --phase ${phase}`, repo, signal, 60_000);
+  const result = await shell(`python ${JSON.stringify(CANONICAL_VALIDATOR)} ${JSON.stringify(taskDir)} --phase ${phase}`, repo, signal, 60_000);
   if (result.code !== 0) throw new Error(`Goal Contract validation failed (${phase}):\n${result.stderr || result.stdout}`);
 }
 
@@ -358,18 +385,51 @@ async function createTaskDraft(repo: string, taskId: string, request: string): P
   return taskDir;
 }
 
-async function authorize(taskDir: string): Promise<string> {
+async function ensureAuthorizationSnapshot(
+  repo: string,
+  taskDir: string,
+  allowLegacyMigration: boolean,
+): Promise<{ migrated: boolean; authorizationHead: string; contractDigest: string }> {
+  const statusPath = resolve(taskDir, "status.yaml");
+  let statusText = await readFile(statusPath, "utf8");
+  const status = parseStatus(statusText);
+  if (status.taskId !== basename(taskDir)) throw new Error("Task status ID does not match its directory");
+  if (!status.executionAuthorizedAt) throw new Error("Cannot snapshot an unauthorized task");
+  const snapshotKind = authorizationSnapshotKind(status.authorizationHead, status.contractDigest);
+  if (snapshotKind === "complete" && status.authorizationHead && status.contractDigest) {
+    await readAuthorizationRecord(repo, status.taskId);
+    return { migrated: false, authorizationHead: status.authorizationHead, contractDigest: status.contractDigest };
+  }
+  if (!allowLegacyMigration) throw new Error("Legacy task requires explicit owner-approved authorization migration");
+  const brief = await readFile(resolve(taskDir, "brief.md"), "utf8");
+  const head = await currentHead(repo);
+  const digest = sha256(brief);
+  const record = await createAuthorizationRecord(repo, status.taskId, head, digest, status.executionAuthorizedAt);
+  await writeAuthorizationRecord(repo, record);
+  statusText = upsertYamlScalar(statusText, "authorization_head", head, "execution_authorized_at");
+  statusText = upsertYamlScalar(statusText, "contract_digest", digest, "execution_authorized_at");
+  await writeFile(statusPath, statusText, "utf8");
+  return { migrated: true, authorizationHead: head, contractDigest: digest };
+}
+
+async function authorize(repo: string, taskDir: string): Promise<string> {
   const stamp = new Date().toISOString();
+  const authorizationHead = await currentHead(repo);
   const briefPath = resolve(taskDir, "brief.md");
   const brief = await readFile(briefPath, "utf8");
   const marker = "## Execution authorization\nPENDING";
   if (!brief.includes(marker)) throw new Error("brief.md is not awaiting authorization");
-  await writeFile(briefPath, brief.replace(marker, `## Execution authorization\nAUTHORIZED at ${stamp} by owner message \`go\``), "utf8");
+  const authorizedBrief = brief.replace(marker, `## Execution authorization\nAUTHORIZED at ${stamp} by owner message \`go\``);
+  await writeFile(briefPath, authorizedBrief, "utf8");
   const statusPath = resolve(taskDir, "status.yaml");
   let statusText = await readFile(statusPath, "utf8");
   statusText = setYamlScalar(statusText, "state", "EXECUTING");
+  statusText = upsertYamlScalar(statusText, "authorization_head", authorizationHead, "execution_authorized_at");
+  statusText = upsertYamlScalar(statusText, "contract_digest", sha256(authorizedBrief), "execution_authorized_at");
   statusText = setYamlScalar(statusText, "execution_authorized_at", stamp);
   await writeFile(statusPath, statusText, "utf8");
+  const record = await createAuthorizationRecord(repo, parseStatus(statusText).taskId, authorizationHead, sha256(authorizedBrief), stamp);
+  await writeAuthorizationRecord(repo, record);
   return stamp;
 }
 
@@ -457,7 +517,8 @@ async function writeCompletionReport(repo: string, taskId: string, completedAt: 
   const brief = await readFile(resolve(taskDir, "brief.md"), "utf8");
   const { status } = await readStatus(taskDir);
   const tests = orderSuccessTests(parseSuccessTests(brief));
-  const changed = await shell(`git diff --name-status ${status.baselineCommit} -- . ':(exclude)team/tasks'`, repo, undefined, 60_000);
+  const implementationBase = status.authorizationHead ?? status.baselineCommit;
+  const changed = await shell(`git diff --name-status ${implementationBase} -- . ':(exclude)team/tasks'`, repo, undefined, 60_000);
   if (changed.code !== 0) throw new Error(`Could not collect completed-task changed files: ${changed.stderr}`);
   const testLines = tests.map((test) => [
     `### ${test.id}`,
@@ -478,8 +539,9 @@ async function writeCompletionReport(repo: string, taskId: string, completedAt: 
     briefSection(brief, "Goal"),
     "",
     "## Scope delivered",
-    `- Baseline commit: \`${status.baselineCommit}\``,
-    "- Changed implementation/documentation files relative to the baseline:",
+    `- Discussion baseline: \`${status.baselineCommit}\``,
+    `- Authorization head: \`${implementationBase}\``,
+    "- Changed implementation/documentation files relative to the authorization head:",
     "```text",
     changed.stdout.trim() || "No non-task files changed.",
     "```",
@@ -531,6 +593,30 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     ctx.ui.setWidget(STATUS_KEY, text ? [text] : undefined, { placement: "belowEditor" });
   };
 
+  const requireIdle = (ctx: ExtensionCommandContext, commandName: string): boolean => {
+    const recoveryTask = pendingUnblockRecovery?.taskId ?? activeUnblockDiscussion?.taskId;
+    if (recoveryTask) {
+      ctx.ui.notify(`Task ${recoveryTask} has an active recovery discussion or finalization; /${commandName} must wait.`, "warning");
+      return false;
+    }
+    const denial = activeRunDenial(activeRun?.taskId, commandName);
+    if (!denial) return true;
+    ctx.ui.notify(denial, "warning");
+    return false;
+  };
+
+  const reserveRun = (taskId: string): ActiveRun => {
+    const denial = activeRunDenial(activeRun?.taskId, "team workflow launch");
+    if (denial) throw new Error(denial);
+    const run = { taskId, abortController: new AbortController() };
+    activeRun = run;
+    return run;
+  };
+
+  const releaseRun = (run: ActiveRun): void => {
+    activeRun = releaseOwnedSlot(activeRun, run);
+  };
+
   async function selectArchitect(repo: string, ctx: ExtensionCommandContext): Promise<void> {
     await enterTeamMode(repo, configuredTeam);
     const profile = configuredTeam.roles.architect;
@@ -540,7 +626,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     pi.setThinkingLevel(profile.thinking);
   }
 
-  async function executeWorkflow(repo: string, taskId: string, ctx: ExtensionCommandContext, config: TeamConfig): Promise<void> {
+  async function executeWorkflow(repo: string, taskId: string, ctx: ExtensionCommandContext, config: TeamConfig, run: ActiveRun): Promise<void> {
     const taskDir = taskPath(repo, taskId);
     const ownerCorrectionPath = resolve(taskDir, "owner-correction.md");
     const recoveryPlanPath = resolve(taskDir, "recovery-plan.md");
@@ -552,8 +638,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ? `Mandatory Architect recovery plan: before any other action, read ${recoveryPlanPath} and follow its bounded Builder instructions and verification strategy.`
         : "",
     ].filter(Boolean).join(" ");
-    const controller = new AbortController();
-    activeRun = { taskId, abortController: controller };
+    const controller = run.abortController;
     const progress = (text: string) => setUi(ctx, `team ${taskId}: ${text}`);
     try {
       let { status } = await readStatus(taskDir);
@@ -631,8 +716,8 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             cwd: repo,
             promptPath: resolve(repo, "team/agents/team-reviewer.md"),
             task: reviewerAttempt > 1
-              ? `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\n${ownerCorrectionDirective}Continuation attempt ${reviewerAttempt}/${config.limits.reviewerAttempts} in the same read-only Reviewer session. Your previous response did not contain the exact complete review verdict. Continue inspecting the complete baseline diff as needed, then return the full required review report with an exact ## Verdict heading. Do not promise future tool calls.`
-              : `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\n${ownerCorrectionDirective}Follow the Reviewer role contract exactly, inspect the complete baseline diff independently, and return the complete review report with an exact ## Verdict heading.`, 
+              ? `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\n${ownerCorrectionDirective}Continuation attempt ${reviewerAttempt}/${config.limits.reviewerAttempts} in the same read-only Reviewer session. Your previous response did not contain the exact complete review verdict. Continue inspecting the complete authorization-head diff as needed, then return the full required review report with an exact ## Verdict heading. Do not promise future tool calls.`
+              : `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\n${ownerCorrectionDirective}Follow the Reviewer role contract exactly, inspect the complete authorization-head diff independently, and return the complete review report with an exact ## Verdict heading.`,
             signal: controller.signal,
             onProgress: progress,
             ...reviewerSession,
@@ -693,6 +778,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             ctx.ui.notify(`Task completed, but its persistent report message could not be published: ${error instanceof Error ? error.message : String(error)}`, "warning");
           }
           ctx.ui.notify(`Three-agent task ${taskId} completed. Report: ${completionReport}`, "info");
+          authorizedInteractiveTaskId = releaseInteractiveGuard(authorizedInteractiveTaskId, taskId);
           return;
         }
         if (verdict === "ESCALATE") throw new Error(`Reviewer escalated. See ${reviewPath}`);
@@ -711,7 +797,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       if (config.lifecycle.restoreStudioAfterRun && config.lifecycle.restoreStudioCommand) {
         await shell(config.lifecycle.restoreStudioCommand, repo, undefined, 3 * 60 * 1000).catch(() => undefined);
       }
-      activeRun = undefined;
+      releaseRun(run);
     }
   }
 
@@ -745,6 +831,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "warning");
         return;
       }
+      if (!requireIdle(ctx, "team-new")) return;
       if (!(await exists(resolve(ctx.cwd, "team/validate_goal_contract.py")))) {
         ctx.ui.notify("Repository is not initialized for the extension.", "error"); return;
       }
@@ -777,10 +864,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "warning");
         return;
       }
-      if (activeRun) {
-        ctx.ui.notify(`Cannot start Architect grilling while task ${activeRun.taskId} is actively running.`, "warning");
-        return;
-      }
+      if (!requireIdle(ctx, "team-grill-me")) return;
       if (!(await exists(resolve(ctx.cwd, "team/validate_goal_contract.py")))) {
         ctx.ui.notify("Repository is not initialized for the extension.", "error");
         return;
@@ -819,11 +903,11 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     description: "Open an owner-led Architect discussion for a BLOCKED task; type 'finalize recovery' when ready",
     getArgumentCompletions: completeTaskArgument,
     handler: async (args, ctx) => {
+      if (!requireIdle(ctx, "team-unblock")) return;
       let taskId: string;
       try {
         const parsed = parseTeamUnblockArgs(args);
         taskId = parsed.taskId;
-        if (activeRun) throw new Error(`Task ${activeRun.taskId} is actively running; cancel or wait before strategy discussion.`);
         if (activeUnblockDiscussion) throw new Error(`Architect recovery discussion is already open for ${activeUnblockDiscussion.taskId}; continue it or finalize recovery before starting another.`);
         const repo = ctx.cwd;
         const taskDir = taskPath(repo, taskId);
@@ -855,6 +939,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     description: "Start a clean Architect session to repair an invalid unauthorized Goal Contract",
     getArgumentCompletions: completeTaskArgument,
     handler: async (args, ctx) => {
+      if (!requireIdle(ctx, "team-repair")) return;
       let taskId: string;
       try {
         taskId = parseTeamTaskId(args, "team-repair");
@@ -898,8 +983,9 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const taskId = args.trim();
       if (!taskId) { ctx.ui.notify("Usage: /team-go <task-id>", "warning"); return; }
-      if (activeRun) { ctx.ui.notify(`Task ${activeRun.taskId} is already active.`, "warning"); return; }
+      if (!requireIdle(ctx, "team-go")) return;
       const taskDir = taskPath(ctx.cwd, taskId);
+      const run = reserveRun(taskId);
       let authorized = false;
       try {
         const { status } = await readStatus(taskDir);
@@ -909,16 +995,17 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         await validate(ctx.cwd, taskDir, "pre-go");
         const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
         await enterTeamMode(ctx.cwd, taskConfig);
-        await authorize(taskDir);
         authorized = true;
         authorizedInteractiveTaskId = taskId;
+        await authorize(ctx.cwd, taskDir);
         await shell("git add -N .", ctx.cwd, undefined, 60_000);
         await validate(ctx.cwd, taskDir, "execution");
-        void executeWorkflow(ctx.cwd, taskId, ctx, taskConfig).catch(() => undefined);
+        void executeWorkflow(ctx.cwd, taskId, ctx, taskConfig, run).catch(() => undefined);
         ctx.ui.notify(`Started deterministic team run for ${taskId}. Use /team-status or /team-cancel.`, "info");
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         if (authorized) await blockTask(taskDir, reason);
+        releaseRun(run);
         ctx.ui.notify(reason, "error");
       }
     },
@@ -930,22 +1017,37 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const taskId = args.trim();
       if (!taskId) { ctx.ui.notify("Usage: /team-resume <task-id>", "warning"); return; }
-      if (activeRun) { ctx.ui.notify(`Task ${activeRun.taskId} is already active.`, "warning"); return; }
+      if (!requireIdle(ctx, "team-resume")) return;
+      if (activeUnblockDiscussion?.taskId === taskId || pendingUnblockRecovery?.taskId === taskId) {
+        ctx.ui.notify(`Task ${taskId} already has an active recovery discussion or finalization.`, "warning");
+        return;
+      }
       const taskDir = taskPath(ctx.cwd, taskId);
+      const run = reserveRun(taskId);
+      let resumeEligible = false;
       try {
         const { status } = await readStatus(taskDir);
         if (!status.executionAuthorizedAt) throw new Error("Task has no recorded owner authorization");
+        if (!new Set(["BLOCKED", "EXECUTING"]).has(status.state)) {
+          throw new Error(`Task ${taskId} cannot resume from ${status.state}; expected BLOCKED or EXECUTING.`);
+        }
+        resumeEligible = true;
         const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
         await enterTeamMode(ctx.cwd, taskConfig);
+        const snapshot = await ensureAuthorizationSnapshot(ctx.cwd, taskDir, true);
+        if (snapshot.migrated) {
+          ctx.ui.notify(`Legacy authorization migrated by explicit /team-resume: HEAD ${snapshot.authorizationHead}, contract SHA-256 ${snapshot.contractDigest}.`, "warning");
+        }
         await setState(taskDir, "EXECUTING", { blocked_reason: "null" });
         authorizedInteractiveTaskId = taskId;
         await shell("git add -N .", ctx.cwd, undefined, 60_000);
         await validate(ctx.cwd, taskDir, "execution");
-        void executeWorkflow(ctx.cwd, taskId, ctx, taskConfig).catch(() => undefined);
+        void executeWorkflow(ctx.cwd, taskId, ctx, taskConfig, run).catch(() => undefined);
         ctx.ui.notify(`Resumed deterministic team run for ${taskId}. Use /team-status or /team-cancel.`, "info");
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        await blockTask(taskDir, reason);
+        if (resumeEligible) await blockTask(taskDir, reason);
+        releaseRun(run);
         ctx.ui.notify(reason, "error");
       }
     },
@@ -970,8 +1072,20 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ctx.ui.notify(`Cannot discard ${taskId} while Architect is still settling. Wait for automatic validation to finish.`, "warning");
         return;
       }
+      if (activeUnblockDiscussion?.taskId === taskId || pendingUnblockRecovery?.taskId === taskId) {
+        ctx.ui.notify(`Cannot discard ${taskId} while its recovery discussion or finalization is active.`, "warning");
+        return;
+      }
       try {
-        const archived = await archiveTask(ctx.cwd, taskId);
+        const archiveDate = new Date();
+        const archived = await archiveTask(ctx.cwd, taskId, archiveDate);
+        const stamp = archiveDate.toISOString().replace(/[:.]/g, "-");
+        try {
+          await archiveAuthorizationRecord(ctx.cwd, taskId, stamp);
+        } catch (error) {
+          ctx.ui.notify(`Task artifacts were archived, but the external authorization record could not be archived: ${error instanceof Error ? error.message : String(error)}`, "warning");
+        }
+        authorizedInteractiveTaskId = releaseInteractiveGuard(authorizedInteractiveTaskId, taskId);
         ctx.ui.notify(`Archived ${taskId} at ${archived}`, "info");
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
@@ -1054,16 +1168,27 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) => {
     const recovery = pendingUnblockRecovery;
     if (recovery) {
-      pendingUnblockRecovery = undefined;
+      let recoveryRun: ActiveRun;
+      try {
+        recoveryRun = reserveRun(recovery.taskId);
+      } catch (error) {
+        ctx.ui.notify(`${recovery.taskId}: recovery finalization could not reserve the workflow slot: ${error instanceof Error ? error.message : String(error)}`, "error");
+        return;
+      }
+      let workflowOwnsRun = false;
       const stopReason = pendingArchitectStopReason;
       pendingArchitectStopReason = undefined;
       if (stopReason && stopReason !== "stop") {
+        releaseRun(recoveryRun);
+        if (pendingUnblockRecovery === recovery) pendingUnblockRecovery = undefined;
         await appendRecoveryDiscussion(taskPath(recovery.repo, recovery.taskId), recovery.taskId, "FINALIZATION_FAILED", `- Architect ended with stop reason: ${stopReason}.`);
         ctx.ui.notify(`${recovery.taskId}: Architect recovery ended with ${stopReason}; task remains BLOCKED.`, "warning");
         return;
       }
+      let recoveryEligible = false;
+      const recoveryTaskDir = taskPath(recovery.repo, recovery.taskId);
       try {
-        const taskDir = taskPath(recovery.repo, recovery.taskId);
+        const taskDir = recoveryTaskDir;
         const plan = await readFile(resolve(taskDir, "recovery-plan.md"), "utf8");
         const disposition = recoveryDisposition(plan);
         if (!disposition) throw new Error("recovery-plan.md must contain an exact ## Disposition of RESUME or ESCALATE");
@@ -1078,8 +1203,13 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         if (status.state !== "BLOCKED" || !status.executionAuthorizedAt) {
           throw new Error(`cannot resume: expected an authorized BLOCKED task, found ${status.state}`);
         }
+        recoveryEligible = true;
         const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
         await enterTeamMode(recovery.repo, taskConfig);
+        const snapshot = await ensureAuthorizationSnapshot(recovery.repo, taskDir, true);
+        if (snapshot.migrated) {
+          ctx.ui.notify(`Legacy authorization migrated after owner-finalized recovery: HEAD ${snapshot.authorizationHead}, contract SHA-256 ${snapshot.contractDigest}.`, "warning");
+        }
         const recoveryCeiling = recoveryReviewCeiling(status.reviewCycle, status.maxReviewCycles);
         await setState(taskDir, "EXECUTING", {
           blocked_reason: "null",
@@ -1094,12 +1224,20 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
           `- Architect finalized recovery-plan.md with disposition RESUME.\n- Review capacity: ${status.reviewCycle}/${status.maxReviewCycles} → ${status.reviewCycle}/${recoveryCeiling}.\n- Builder → Reviewer restart authorized within the existing Goal Contract.`,
         );
         authorizedInteractiveTaskId = recovery.taskId;
-        void executeWorkflow(recovery.repo, recovery.taskId, ctx as ExtensionCommandContext, taskConfig).catch(() => undefined);
+        void executeWorkflow(recovery.repo, recovery.taskId, ctx as ExtensionCommandContext, taskConfig, recoveryRun).catch(() => undefined);
+        workflowOwnsRun = true;
         ctx.ui.notify(`${recovery.taskId}: Architect recovery approved an in-contract resume. Builder → Reviewer restarted.`, "info");
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        await appendRecoveryDiscussion(taskPath(recovery.repo, recovery.taskId), recovery.taskId, "FINALIZATION_FAILED", `- Recovery plan could not be applied: ${detail}`);
+        if (recoveryEligible) {
+          const current = await readStatus(recoveryTaskDir).catch(() => undefined);
+          if (current?.status.state !== "COMPLETED") await blockTask(recoveryTaskDir, detail);
+        }
+        await appendRecoveryDiscussion(recoveryTaskDir, recovery.taskId, "FINALIZATION_FAILED", `- Recovery plan could not be applied: ${detail}`);
         ctx.ui.notify(`${recovery.taskId}: recovery plan did not resume the task: ${detail}`, "error");
+      } finally {
+        if (!workflowOwnsRun) releaseRun(recoveryRun);
+        if (pendingUnblockRecovery === recovery) pendingUnblockRecovery = undefined;
       }
       return;
     }
