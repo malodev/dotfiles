@@ -1,6 +1,6 @@
 # GPU-host-only inference manager configuration.
 [server]
-unix_socket = "${XDG_RUNTIME_DIR}/pi-inference-manager.sock"
+unix_socket = "${RUNTIME_DIRECTORY}/control.sock"
 tcp_host = "127.0.0.1"
 tcp_port = 46758
 control_token_file = "~/.pi-inference/credentials/control-api-token"

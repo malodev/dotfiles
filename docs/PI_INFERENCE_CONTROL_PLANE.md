@@ -78,7 +78,7 @@ Manual mode switching is refused while a lease is active. The three-agent extens
 
 `~/.config/pi-inference/client.json` uses `transport = "auto"`. The shared client intentionally uses JSON and Python 3.9-compatible syntax so it does not depend on Python 3.11's `tomllib`:
 
-1. If `${XDG_RUNTIME_DIR}/pi-inference-manager.sock` exists, use the mode-0600 Unix socket.
+1. If `${XDG_RUNTIME_DIR}/pi-inference-manager/control.sock` exists, use the mode-0600 Unix socket.
 2. Otherwise call the HTTPS control endpoint with the control bearer token.
 
 The manager itself binds plain HTTP only to loopback. It refuses a non-loopback `tcp_host`; nginx terminates TLS.

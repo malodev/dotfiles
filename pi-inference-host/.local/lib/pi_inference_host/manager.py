@@ -34,7 +34,10 @@ class ManagerError(RuntimeError):
 
 def _expand(value: str) -> str:
     state_directory = os.environ.get("STATE_DIRECTORY", str(Path.home() / ".local/state/pi-inference-manager"))
-    return os.path.expandvars(os.path.expanduser(value.replace("${STATE_DIRECTORY}", state_directory)))
+    runtime_root = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    runtime_directory = os.environ.get("RUNTIME_DIRECTORY", str(Path(runtime_root) / "pi-inference-manager"))
+    expanded = value.replace("${STATE_DIRECTORY}", state_directory).replace("${RUNTIME_DIRECTORY}", runtime_directory)
+    return os.path.expandvars(os.path.expanduser(expanded))
 
 
 def _config_home() -> Path:

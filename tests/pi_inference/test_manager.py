@@ -124,12 +124,19 @@ class ManagerTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "must be loopback"):
             manager.ManagerConfig.load(path)
 
-    async def test_state_directory_environment_is_used_for_systemd_persistence(self):
+    async def test_systemd_state_and_runtime_directories_are_used(self):
         path = self.root / "manager.toml"
-        path.write_text('[server]\nstate_file = "${STATE_DIRECTORY}/state.json"\n')
-        with patch.dict("os.environ", {"STATE_DIRECTORY": str(self.root / "systemd-state")}):
+        path.write_text(
+            '[server]\nstate_file = "${STATE_DIRECTORY}/state.json"\n'
+            'unix_socket = "${RUNTIME_DIRECTORY}/control.sock"\n'
+        )
+        with patch.dict("os.environ", {
+            "STATE_DIRECTORY": str(self.root / "systemd-state"),
+            "RUNTIME_DIRECTORY": str(self.root / "systemd-runtime"),
+        }):
             loaded = manager.ManagerConfig.load(path)
         self.assertEqual(loaded.state_file, self.root / "systemd-state/state.json")
+        self.assertEqual(loaded.unix_socket, self.root / "systemd-runtime/control.sock")
 
     async def test_rejects_invalid_ttl_and_owner(self):
         with self.assertRaises(manager.ManagerError):

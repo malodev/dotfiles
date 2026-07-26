@@ -58,6 +58,7 @@ class ClientTest(unittest.TestCase):
     def test_stowed_profile_requires_per_machine_mtls_identity(self):
         shared = client.ClientConfig.load(Path(__file__).parents[2] / "pi/.config/pi-inference/client.json")
         self.assertEqual(shared.remote_url, "https://inference.malo.tn.it")
+        self.assertEqual(shared.local_socket, Path(os.environ.get("XDG_RUNTIME_DIR", "${XDG_RUNTIME_DIR}")) / "pi-inference-manager/control.sock")
         self.assertEqual(shared.client_certificate_file, Path.home() / ".pi-inference/credentials/control-client.crt")
         self.assertEqual(shared.client_key_file, Path.home() / ".pi-inference/credentials/control-client.key")
 

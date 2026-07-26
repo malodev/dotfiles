@@ -1,7 +1,7 @@
 {
   "control": {
     "transport": "auto",
-    "local_socket": "${XDG_RUNTIME_DIR}/pi-inference-manager.sock",
+    "local_socket": "${XDG_RUNTIME_DIR}/pi-inference-manager/control.sock",
     "remote_url": "https://inference.malo.tn.it",
     "token_file": "~/.pi-inference/credentials/control-api-token",
     "client_certificate_file": "~/.pi-inference/credentials/control-client.crt",
