@@ -4,6 +4,7 @@
   "description": "Multi-machine dotfiles managed with GNU Stow",
   "scripts": {
     "commitlint": "commitlint --edit",
+    "test:pi-inference": "PYTHONPYCACHEPREFIX=/tmp/pi-inference-pycache python3 -m unittest discover -s tests/pi_inference -v",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {

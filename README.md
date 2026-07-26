@@ -251,15 +251,23 @@ The following are only available via the Brewfile (macOS or `--with-brew`):
 If you already have the required tools installed and just want to symlink the config files, you can use [GNU Stow](https://www.gnu.org/software/stow/) directly:
 
 ```sh
-# Symlink all configs
-stow */
+# Symlink selected packages (recommended; review host-specific packages first)
+stow bash git pi
 
-# Symlink a specific package's config
+# Symlink another specific package's config
 stow <package_name>
 
 # Example: symlink just the Neovim config
 stow nvim-malo
+
+# Shared Pi client configuration (local or remote machine)
+stow pi
+
+# GPU host only — never stow this package on ordinary clients
+stow pi-inference-host
 ```
+
+`pi-inference-host` contains the R9700 service manager and must be selected explicitly only on that host. See `docs/PI_INFERENCE_CONTROL_PLANE.md`; do not include this host-only package in a blanket client deployment.
 
 Run these from the `~/.dotfiles` directory. This **only creates symlinks** — no packages or binaries are installed.
 

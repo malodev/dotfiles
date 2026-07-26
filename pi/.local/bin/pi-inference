@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+library = Path(__file__).resolve().parents[1] / "lib"
+sys.path.insert(0, str(library))
+
+from pi_inference.client import main
+
+raise SystemExit(main())
