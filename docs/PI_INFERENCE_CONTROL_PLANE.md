@@ -276,7 +276,7 @@ Client lease records are mode `0600` beneath:
 ~/.pi-inference/state/client-leases/
 ```
 
-The manager stores only a SHA-256 hash of each opaque lease ID. On restart, an unexpired lease restores team mode before requests are served. A hard client crash is fenced until TTL expiry; a new process does not adopt an unrelated previous owner.
+The manager stores only a SHA-256 hash of each opaque lease ID. On restart, an unexpired team lease restores team mode before requests are served. A local-only maintenance lease instead restores maintenance mode, keeping both Studio and the router stopped while host runtime work is in progress. Remote HTTPS clients cannot acquire maintenance leases. A hard client crash is fenced until TTL expiry; a new process does not adopt an unrelated previous owner.
 
 ## Migration and rollback
 

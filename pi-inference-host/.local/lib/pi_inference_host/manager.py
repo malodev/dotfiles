@@ -113,7 +113,7 @@ class StateStore:
             return {"version": 1, "mode": "unknown", "lease": None, "updated_at": _utc()}
         except (OSError, json.JSONDecodeError) as error:
             raise RuntimeError(f"Cannot read manager state {self.path}: {error}") from error
-        if value.get("version") != 1 or value.get("mode") not in {"unknown", "team", "studio", "stop"}:
+        if value.get("version") != 1 or value.get("mode") not in {"unknown", "team", "studio", "stop", "maintenance"}:
             raise RuntimeError("Manager state has an unsupported schema")
         lease = value.get("lease")
         if lease is not None:
@@ -226,11 +226,11 @@ class ServiceController:
             await self._start(self.config.studio_unit)
             if await self.active(self.config.router_unit) != "inactive" or await self.active(self.config.studio_unit) != "active":
                 raise ManagerError(503, "Studio transition did not reach router=inactive and studio=active")
-        elif mode == "stop":
+        elif mode in {"stop", "maintenance"}:
             await self._stop(self.config.router_unit)
             await self._stop(self.config.studio_unit)
             if await self.active(self.config.router_unit) != "inactive" or await self.active(self.config.studio_unit) != "inactive":
-                raise ManagerError(503, "Stop transition did not leave both services inactive")
+                raise ManagerError(503, f"{mode.capitalize()} transition did not leave both services inactive")
         else:
             raise ManagerError(400, f"Unsupported mode: {mode}")
 
@@ -281,8 +281,13 @@ class InferenceManager:
         mode = body.get("mode", "team")
         if not isinstance(owner, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:@/+\-]{0,239}", owner):
             raise ManagerError(400, "owner must use only audit-safe letters, digits, and ._:@/+- characters")
-        if mode != "team":
-            raise ManagerError(400, "Only team leases are supported")
+        if mode not in {"team", "maintenance"}:
+            raise ManagerError(400, "Lease mode must be team or maintenance")
+        expected_restore_mode = body.get("expected_restore_mode")
+        if mode == "maintenance" and expected_restore_mode not in {"team", "studio", "stop"}:
+            raise ManagerError(400, "Maintenance leases require expected_restore_mode=team, studio, or stop")
+        if mode == "team" and expected_restore_mode is not None:
+            raise ManagerError(400, "expected_restore_mode is valid only for maintenance leases")
         ttl = self._ttl(body.get("ttl_seconds"))
         raw_id = body.get("lease_id") or secrets.token_urlsafe(32)
         if not isinstance(raw_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", raw_id):
@@ -293,36 +298,61 @@ class InferenceManager:
             self._expire(state)
             if state.get("lease"):
                 lease = state["lease"]
-                if lease["owner"] == owner and secrets.compare_digest(lease["id_hash"], id_hash):
+                if (
+                    lease["owner"] == owner
+                    and lease["mode"] == mode
+                    and lease.get("restore_mode") == expected_restore_mode
+                    and secrets.compare_digest(lease["id_hash"], id_hash)
+                ):
                     now = self.clock()
                     lease["expires_at"] = now + ttl
                     state["updated_at"] = _utc(now)
                     self.store.save(state)
                     LOG.info("lease_acquire_idempotent owner=%r expires_at=%s", owner, _utc(now + ttl))
-                    return {"message": "Team inference lease already acquired", "lease_id": raw_id, "owner": owner, "expires_at": _utc(now + ttl)}
+                    return {
+                        "message": f"{mode.capitalize()} inference lease already acquired",
+                        "lease_id": raw_id,
+                        "owner": owner,
+                        "mode": mode,
+                        "restore_mode": lease.get("restore_mode"),
+                        "expires_at": _utc(now + ttl),
+                    }
                 LOG.warning("lease_acquire_conflict requested_owner=%r active_owner=%r", owner, lease["owner"])
                 raise ManagerError(409, f"GPU lease is held by {lease['owner']} until {_utc(float(lease['expires_at']))}")
+            if mode == "maintenance" and state["mode"] != expected_restore_mode:
+                raise ManagerError(
+                    409,
+                    f"Inference mode changed before maintenance acquisition: expected {expected_restore_mode}, found {state['mode']}",
+                )
             try:
-                await self.services.switch("team")
+                await self.services.switch(mode)
             except Exception:
                 state.update({"mode": "unknown", "lease": None, "updated_at": _utc(self.clock())})
                 self.store.save(state)
                 raise
             now = self.clock()
             state.update({
-                "mode": "team",
+                "mode": mode,
                 "lease": {
                     "id_hash": id_hash,
                     "owner": owner,
-                    "mode": "team",
+                    "mode": mode,
+                    "restore_mode": expected_restore_mode,
                     "acquired_at": _utc(now),
                     "expires_at": now + ttl,
                 },
                 "updated_at": _utc(now),
             })
             self.store.save(state)
-            LOG.info("lease_acquired owner=%r expires_at=%s", owner, _utc(now + ttl))
-            return {"message": "Team inference lease acquired", "lease_id": raw_id, "owner": owner, "expires_at": _utc(now + ttl)}
+            LOG.info("lease_acquired owner=%r mode=%s expires_at=%s", owner, mode, _utc(now + ttl))
+            return {
+                "message": f"{mode.capitalize()} inference lease acquired",
+                "lease_id": raw_id,
+                "owner": owner,
+                "mode": mode,
+                "restore_mode": expected_restore_mode,
+                "expires_at": _utc(now + ttl),
+            }
 
     async def renew(self, raw_id: str, body: dict[str, Any]) -> dict[str, Any]:
         ttl = self._ttl(body.get("ttl_seconds"))
@@ -341,22 +371,44 @@ class InferenceManager:
             LOG.info("lease_renewed owner=%r expires_at=%s", lease["owner"], _utc(now + ttl))
             return {"message": "Inference lease renewed", "owner": lease["owner"], "expires_at": _utc(now + ttl)}
 
-    async def release(self, raw_id: str) -> dict[str, Any]:
+    async def release(self, raw_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        requested_restore_mode = (body or {}).get("restore_mode")
+        if requested_restore_mode is not None and requested_restore_mode not in {"team", "studio", "stop"}:
+            raise ManagerError(400, "restore_mode must be team, studio, or stop")
         async with self.lock:
             state = self.store.load()
             self._expire(state)
             lease = state.get("lease")
             if not lease:
                 self.store.save(state)
+                if requested_restore_mode is not None:
+                    raise ManagerError(409, "Lease expired or disappeared before atomic mode restoration")
                 return {"message": "Inference lease was already absent"}
             if not secrets.compare_digest(lease["id_hash"], hashlib.sha256(raw_id.encode()).hexdigest()):
                 raise ManagerError(404, "Lease does not exist or belongs to another owner")
+            restore_mode = requested_restore_mode
+            if lease["mode"] == "maintenance":
+                captured_restore_mode = lease.get("restore_mode")
+                if captured_restore_mode not in {"team", "studio", "stop"}:
+                    raise ManagerError(409, "Maintenance lease lacks a captured restore mode")
+                if requested_restore_mode is not None and requested_restore_mode != captured_restore_mode:
+                    raise ManagerError(409, "Requested restore mode does not match the atomically captured mode")
+                restore_mode = captured_restore_mode
             owner = lease["owner"]
+            if restore_mode is not None:
+                try:
+                    await self.services.switch(restore_mode)
+                except Exception:
+                    state.update({"mode": "unknown", "updated_at": _utc(self.clock())})
+                    self.store.save(state)
+                    raise
             state["lease"] = None
+            if restore_mode is not None:
+                state["mode"] = restore_mode
             state["updated_at"] = _utc(self.clock())
             self.store.save(state)
-            LOG.info("lease_released owner=%r", owner)
-            return {"message": "Inference lease released", "owner": owner}
+            LOG.info("lease_released owner=%r restore_mode=%r", owner, restore_mode)
+            return {"message": "Inference lease released", "owner": owner, "mode": state["mode"]}
 
     async def startup(self) -> None:
         async with self.lock:
@@ -364,7 +416,7 @@ class InferenceManager:
             if self._expire(state):
                 self.store.save(state)
             elif state.get("lease"):
-                await self.services.switch("team")
+                await self.services.switch(state["lease"]["mode"])
 
     async def set_mode(self, body: dict[str, Any]) -> dict[str, Any]:
         mode = body.get("mode")
@@ -429,7 +481,7 @@ class HTTPServer:
                 raise ManagerError(400, "Request body is not valid JSON") from error
             if not isinstance(body, dict):
                 raise ManagerError(400, "Request body must be a JSON object")
-            status, response = await self.route(method, path, body)
+            status, response = await self.route(method, path, body, trusted_local)
         except ManagerError as error:
             status, response = error.status, {"error": {"message": str(error)}}
         except (ValueError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, TimeoutError) as error:
@@ -438,16 +490,18 @@ class HTTPServer:
             LOG.exception("request_failed peer=%r", writer.get_extra_info("peername"))
             status, response = 500, {"error": {"message": "Internal server error"}}
         payload = json.dumps(response, separators=(",", ":")).encode()
-        reason = {200: "OK", 201: "Created", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found", 409: "Conflict", 413: "Payload Too Large", 500: "Internal Server Error", 503: "Service Unavailable"}.get(status, "Error")
+        reason = {200: "OK", 201: "Created", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 409: "Conflict", 413: "Payload Too Large", 500: "Internal Server Error", 503: "Service Unavailable"}.get(status, "Error")
         writer.write(f"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {len(payload)}\r\nConnection: close\r\n\r\n".encode() + payload)
         await writer.drain()
         writer.close()
         await writer.wait_closed()
 
-    async def route(self, method: str, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    async def route(self, method: str, path: str, body: dict[str, Any], trusted_local: bool) -> tuple[int, dict[str, Any]]:
         if method == "GET" and path == "/v1/status":
             return 200, await self.manager.status()
         if method == "POST" and path == "/v1/leases":
+            if body.get("mode") == "maintenance" and not trusted_local:
+                raise ManagerError(403, "Maintenance leases are available only through the local Unix socket")
             return 201, await self.manager.acquire(body)
         if method == "POST" and path == "/v1/mode":
             return 200, await self.manager.set_mode(body)
@@ -459,7 +513,9 @@ class HTTPServer:
             if method == "PUT":
                 return 200, await self.manager.renew(lease_id, body)
             if method == "DELETE":
-                return 200, await self.manager.release(lease_id)
+                if body.get("restore_mode") is not None and not trusted_local:
+                    raise ManagerError(403, "Atomic mode restoration is available only through the local Unix socket")
+                return 200, await self.manager.release(lease_id, body)
         raise ManagerError(404, "Unknown endpoint")
 
 
