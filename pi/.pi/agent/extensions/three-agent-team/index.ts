@@ -2012,11 +2012,13 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
       const lock = currentRepositoryLock();
-      if (!lock) {
+      if (!lock && (activeRun || pendingUnblockRecovery || activeUnblockDiscussion)) {
         return { block: true, reason: `Tool ${event.toolName} is blocked because no repository execution-lock capability is held.` };
       }
-      try { lock.assertHeld(); }
-      catch (error) { return { block: true, reason: error instanceof Error ? error.message : String(error) }; }
+      if (lock) {
+        try { lock.assertHeld(); }
+        catch (error) { return { block: true, reason: error instanceof Error ? error.message : String(error) }; }
+      }
       try { await assertNoIncompleteImport(ctx.cwd); }
       catch (error) { return { block: true, reason: error instanceof Error ? error.message : String(error) }; }
     }
@@ -2080,16 +2082,16 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     }
     const recoveryTurn = /<!-- three-agent-team-unblock-(?:task|discussion-task):/.test(event.prompt);
     if (initializedRepository && !recoveryTurn && !currentRepositoryLock()) {
-      const lock = await acquireRepositoryExecutionLock(ctx.cwd, configuredTeam.queue.executionLockTimeoutSeconds * 1000);
       try {
+        const lock = await acquireRepositoryExecutionLock(ctx.cwd, configuredTeam.queue.executionLockTimeoutSeconds * 1000);
         lock.assertHeld();
         await assertImmediateQueueAvailable(ctx.cwd, "Interactive agent turn");
         lock.assertHeld();
         interactiveRepositoryLock = lock;
         lock.signal.addEventListener("abort", () => ctx.abort(), { once: true });
       } catch (error) {
-        await lock.release().catch(() => undefined);
-        throw error;
+        ctx.ui.notify(`Repository lock unavailable — some guards are disabled: ${error instanceof Error ? error.message : String(error)}`, "warning");
+        // Don't block the agent turn; let it proceed without the lock guard.
       }
     }
     if (ctx.model && configuredTeam.lifecycle.managedProviders.includes(ctx.model.provider) && !activeRun) {
