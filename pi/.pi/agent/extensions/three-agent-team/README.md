@@ -25,6 +25,7 @@ Companion skills instruct the AI agent how to use these extension commands:
 | Skill | Purpose | Key commands used |
 |---|---|---|
 | `init-three-agent-team` | Set up repo scaffolding (team/ dir, validator, prompts, AGENTS.md) — run once per repo | `/team-new`, `/team-go`, `/team-enqueue` |
+| `three-agent-team` | Architect role prompt — discuss goals, write goal contracts, validate, offer `/team-go` or `/team-enqueue` (bundled inside `init-three-agent-team/assets/`, copied to `team/agents/team-workflow.md`) | `/team-new`, `/team-grill-me`, `/team-validate`, `/team-go`, `/team-enqueue` |
 | `team-from-plan` | Read a plan/PRD, decompose into task manifest, and import via the durable queue | `/team-import` |
 
 Skills provide **agent-facing workflow instructions** ("read this plan, produce a YAML manifest, then call `/team-import`"). The extension provides the **runtime implementation** (journaled transaction, contract rendering, validation, commit creation, queue enrollment). Both layers are required: the skill instructs, the extension executes.
