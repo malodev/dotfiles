@@ -2047,8 +2047,9 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
 
   pi.on("before_provider_request", async (_event, ctx) => {
     if (!ctx.model || !configuredTeam.lifecycle.managedProviders.includes(ctx.model.provider)) return;
-    // Only enforce the inference lease in team-initialized repositories.
-    if (!(await exists(resolve(ctx.cwd, "team/validate_goal_contract.py")))) return;
+    // Only gate when a team workflow is active or an interactive lease is held.
+    // Don't block model discovery/listing at startup in team-initialized repos.
+    if (!activeRun && !interactiveInferenceLease) return;
     const workflowOwnsLease = Boolean((activeRun?.leaseAcquired || activeRun?.legacyInferenceReady) && !activeRun?.leaseFailure);
     const interactiveOwnsLease = Boolean((interactiveInferenceLease?.leaseAcquired || interactiveInferenceLease?.legacyInferenceReady) && !interactiveInferenceLease?.leaseFailure);
     if (workflowOwnsLease || interactiveOwnsLease) return;
