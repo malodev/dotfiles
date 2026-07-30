@@ -18,6 +18,17 @@ cd ~/.pi/agent/extensions/three-agent-team && npm install --omit=dev
 
 The only runtime dependency is `yaml`. The extension loads when Pi starts — no additional configuration needed.
 
+## Skills
+
+Companion skills instruct the AI agent how to use these extension commands:
+
+| Skill | Purpose | Key commands used |
+|---|---|---|
+| `init-three-agent-team` | Set up repo scaffolding (team/ dir, validator, prompts, AGENTS.md) — run once per repo | `/team-new`, `/team-go`, `/team-enqueue` |
+| `team-from-plan` | Read a plan/PRD, decompose into task manifest, and import via the durable queue | `/team-import` |
+
+Skills provide **agent-facing workflow instructions** ("read this plan, produce a YAML manifest, then call `/team-import`"). The extension provides the **runtime implementation** (journaled transaction, contract rendering, validation, commit creation, queue enrollment). Both layers are required: the skill instructs, the extension executes.
+
 ## Commands
 
 - `/team-config` — show the resolved role models, output limits, attempt ceilings, and timeouts.
