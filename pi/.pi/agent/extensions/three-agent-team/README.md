@@ -4,17 +4,15 @@ Deterministic runtime orchestration for a configurable Architect → Builder →
 
 ## Installation
 
-The extension ships as part of the dotfiles repository under `pi/.pi/agent/extensions/three-agent-team/`.
+The extension is part of the `pi` Stow package in the dotfiles repository.
 
 ```bash
-# 1. Clone and install dotfiles (includes Stow for the extension files)
-./install.sh
-
-# 2. Install runtime dependencies (yaml)
+# Prerequisite: dotfiles cloned and stowed (./install.sh handles this)
+# Run this from the dotfiles repo root to install runtime dependencies:
 npm ci
 ```
 
-`install.sh` runs `npm ci` automatically after Stow if npm is available; run it manually if you see a warning. The extension loads when Pi starts — no additional configuration needed.
+`install.sh` runs `npm ci` automatically after Stow if npm is available. The only runtime dependency is `yaml`. The extension loads when Pi starts — no additional configuration needed.
 
 ## Commands
 
