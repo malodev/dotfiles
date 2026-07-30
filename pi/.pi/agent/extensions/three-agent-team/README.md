@@ -2,6 +2,20 @@
 
 Deterministic runtime orchestration for a configurable Architect → Builder → Reviewer workflow.
 
+## Installation
+
+The extension ships as part of the dotfiles repository under `pi/.pi/agent/extensions/three-agent-team/`.
+
+```bash
+# 1. Clone and install dotfiles (includes Stow for the extension files)
+./install.sh
+
+# 2. Install runtime dependencies (yaml)
+npm ci
+```
+
+`install.sh` runs `npm ci` automatically after Stow if npm is available; run it manually if you see a warning. The extension loads when Pi starts — no additional configuration needed.
+
 ## Commands
 
 - `/team-config` — show the resolved role models, output limits, attempt ceilings, and timeouts.
