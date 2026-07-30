@@ -15,6 +15,7 @@ declare -A INSTALL_GROUPS=(
     ["linux"]="i3"
     ["hyprland"]="hyprland"
     ["dev"]="git bat"
+    ["pi-agent"]="pi"
     ["system-info"]=""
 )
 
@@ -30,6 +31,7 @@ declare -A GROUP_DESC=(
     ["linux"]="Linux window manager (i3)"
     ["hyprland"]="Hyprland desktop configuration (Hyprland, Waybar, Variety wallpaper integration)"
     ["dev"]="Development tools (Git, Lazygit, Lazydocker, Delta, Bat, LLM)"
+    ["pi-agent"]="Pi coding agent extension (three-agent-team)"
     ["system-info"]="System information tools (Fastfetch)"
 )
 
@@ -46,10 +48,11 @@ declare -A GROUP_PLATFORM=(
     ["linux"]="linux"
     ["hyprland"]="linux"
     ["dev"]="all"
+    ["pi-agent"]="all"
     ["system-info"]="all"
 )
 
-INSTALL_ORDER=("core" "shell" "terminal" "dev" "editor" "editor-alt" "web-cli" "gui-terminal" "desktop" "linux" "hyprland" "system-info")
+INSTALL_ORDER=("core" "shell" "terminal" "dev" "editor" "editor-alt" "web-cli" "gui-terminal" "desktop" "linux" "hyprland" "pi-agent" "system-info")
 
 SHELL_CONFIG_PACKAGES=("bash" "zsh" "nushell" "fish")
 
@@ -100,6 +103,7 @@ declare -A DEFAULT_GROUPS_DARWIN=(
     ["desktop"]=1
     ["linux"]=0
     ["hyprland"]=0
+    ["pi-agent"]=0
     ["system-info"]=0
 )
 
@@ -115,6 +119,7 @@ declare -A DEFAULT_GROUPS_LINUX=(
     ["desktop"]=0
     ["linux"]=0
     ["hyprland"]=0
+    ["pi-agent"]=0
     ["system-info"]=1
 )
 

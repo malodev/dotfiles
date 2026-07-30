@@ -90,6 +90,11 @@ source "$SCRIPT_DIR/scripts/install/dev-tools.sh"
 # INSTALL NODE DEPENDENCIES
 #=============================================================================
 install_node_dependencies() {
+    # Only run npm ci if the pi-agent group was selected
+    if [[ "$(get_group_selection pi-agent 2>/dev/null || echo 0)" != "1" ]]; then
+        return
+    fi
+
     if [[ "$DRY_RUN" == "1" ]]; then
         log_dry_run "npm ci (in $SCRIPT_DIR)"
         return

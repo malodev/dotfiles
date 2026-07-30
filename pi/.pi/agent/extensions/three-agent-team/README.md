@@ -2,6 +2,22 @@
 
 Deterministic runtime orchestration for a configurable Architect → Builder → Reviewer workflow.
 
+## Installation
+
+**With dotfiles:** `./install.sh pi-agent` installs the `pi` Stow package and runs `npm ci`.
+
+**Standalone:**
+
+```bash
+# Copy or symlink the extension into Pi's extension directory
+ln -s "$(pwd)" ~/.pi/agent/extensions/three-agent-team
+
+# Install the one runtime dependency
+cd ~/.pi/agent/extensions/three-agent-team && npm install --omit=dev
+```
+
+The only runtime dependency is `yaml`. The extension loads when Pi starts — no additional configuration needed.
+
 ## Commands
 
 - `/team-config` — show the resolved role models, output limits, attempt ceilings, and timeouts.
