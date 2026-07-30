@@ -120,13 +120,18 @@ deployed_at: null
         self.git(repo, "commit", "-qm", "chore: record goal contract")
         return repo, task_dir, baseline
 
-    def authorize(self, repo: Path, task_dir: Path) -> str:
+    def authorize(
+        self,
+        repo: Path,
+        task_dir: Path,
+        owner_source: str = "message `go`",
+    ) -> str:
         authorization_head = self.git(repo, "rev-parse", "HEAD")
         stamp = "2026-07-26T00:00:00.000Z"
         brief_path = task_dir / "brief.md"
         brief = brief_path.read_text(encoding="utf-8").replace(
             "## Execution authorization\nPENDING",
-            f"## Execution authorization\nAUTHORIZED at {stamp} by owner message `go`",
+            f"## Execution authorization\nAUTHORIZED at {stamp} by owner {owner_source}",
         )
         brief_path.write_text(brief, encoding="utf-8")
         digest = hashlib.sha256(brief_path.read_bytes()).hexdigest()
@@ -187,6 +192,97 @@ deployed_at: null
                 errors = VALIDATOR.validate(task_dir, "pre-go")
                 self.assertTrue(any("task_id" in error for error in errors))
                 self.assertFalse((state_root / "escape.json").exists())
+
+    def test_pre_go_rejects_stale_external_authorization_record(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                repo, task_dir, _baseline = self.create_repository(Path(directory))
+                record_path = VALIDATOR.authorization_record_path(repo.resolve(), "sample")
+                record_path.parent.mkdir(parents=True, exist_ok=True)
+                record_path.write_text("{}\n", encoding="utf-8")
+
+                errors = VALIDATOR.validate(task_dir, "pre-go")
+                self.assertTrue(any("stale external authorization record" in error for error in errors))
+
+    def test_execution_accepts_immediate_go_authorization_marker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                repo, task_dir, _baseline = self.create_repository(Path(directory))
+                self.authorize(repo, task_dir)
+                self.assertEqual(VALIDATOR.validate(task_dir, "execution"), [])
+
+    def test_execution_accepts_exact_team_enqueue_authorization_marker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                repo, task_dir, _baseline = self.create_repository(Path(directory))
+                self.authorize(repo, task_dir, "command `/team-enqueue`")
+                self.assertEqual(VALIDATOR.validate(task_dir, "execution"), [])
+
+    def test_execution_accepts_authorized_queue_blocker_without_executing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                repo, task_dir, _baseline = self.create_repository(Path(directory))
+                self.authorize(repo, task_dir, "command `/team-enqueue`")
+                status_path = task_dir / "status.yaml"
+                status_path.write_text(
+                    status_path.read_text(encoding="utf-8").replace("state: EXECUTING", "state: BLOCKED"),
+                    encoding="utf-8",
+                )
+                self.assertEqual(VALIDATOR.validate(task_dir, "execution"), [])
+
+    def test_execution_rejects_near_miss_team_enqueue_markers(self) -> None:
+        invalid_sources = (
+            "message `/team-enqueue`",
+            "command `team-enqueue`",
+            "command `/team-enqueue sample`",
+            "command `/team-enqueue` extra",
+        )
+        for invalid_source in invalid_sources:
+            with self.subTest(invalid_source=invalid_source):
+                with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+                    with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                        repo, task_dir, _baseline = self.create_repository(Path(directory))
+                        self.authorize(repo, task_dir, invalid_source)
+                        errors = VALIDATOR.validate(task_dir, "execution")
+                        self.assertTrue(any("must be exactly" in error for error in errors))
+
+    def test_execution_rejects_partial_queued_authorization(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                repo, task_dir, _baseline = self.create_repository(Path(directory))
+                stamp = "2026-07-26T00:00:00.000Z"
+                brief_path = task_dir / "brief.md"
+                brief_path.write_text(
+                    brief_path.read_text(encoding="utf-8").replace(
+                        "## Execution authorization\nPENDING",
+                        f"## Execution authorization\nAUTHORIZED at {stamp} by owner command `/team-enqueue`",
+                    ),
+                    encoding="utf-8",
+                )
+
+                errors = VALIDATOR.validate(task_dir, "execution")
+                self.assertTrue(any("external authorization record" in error.lower() for error in errors))
+                self.assertTrue(any("Execution validation requires state" in error for error in errors))
+                self.assertTrue(any("authorization_head" in error for error in errors))
+                self.assertTrue(any("contract_digest" in error for error in errors))
+                self.assertTrue(any("execution_authorized_at" in error for error in errors))
+
+    def test_execution_rejects_missing_or_conflicting_external_record(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                repo, task_dir, _baseline = self.create_repository(Path(directory))
+                self.authorize(repo, task_dir, "command `/team-enqueue`")
+                record_path = VALIDATOR.authorization_record_path(repo.resolve(), "sample")
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+
+                record_path.unlink()
+                errors = VALIDATOR.validate(task_dir, "execution")
+                self.assertTrue(any("requires a valid external authorization record" in error for error in errors))
+
+                record["contractDigest"] = "f" * 64
+                record_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+                errors = VALIDATOR.validate(task_dir, "execution")
+                self.assertTrue(any("contractDigest does not match" in error for error in errors))
 
     def test_execution_snapshot_rejects_contract_and_head_drift(self) -> None:
         with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:

@@ -35,6 +35,11 @@ export interface TeamNewArgs {
   request: string;
 }
 
+export interface TeamEnqueueArgs {
+  taskId: string;
+  dependsOn: string[];
+}
+
 export function activeRunDenial(activeTaskId: string | undefined, commandName: string): string | undefined {
   if (!activeTaskId) return undefined;
   return `Task ${activeTaskId} is actively running; /${commandName} requires the single-GPU workflow to be idle.`;
@@ -111,6 +116,30 @@ export function parseTeamTaskId(args: string, commandName: string): string {
   if (/\s/.test(taskId)) throw new Error(`Expected exactly one task ID. ${usage}`);
   assertValidTaskId(taskId);
   return taskId;
+}
+
+const TEAM_ENQUEUE_USAGE = "Usage: /team-enqueue <task-id> [--after <task-id>[,<task-id>...]]";
+
+export function parseTeamEnqueueArgs(args: string): TeamEnqueueArgs {
+  const input = args.trim();
+  if (!input) throw new Error(`Missing task ID. ${TEAM_ENQUEUE_USAGE}`);
+
+  const match = /^(\S+)(?:\s+--after\s+(\S+))?$/.exec(input);
+  if (!match) throw new Error(`Malformed queue arguments. ${TEAM_ENQUEUE_USAGE}`);
+
+  const taskId = match[1];
+  assertValidTaskId(taskId);
+  const dependencyList = match[2];
+  if (!dependencyList) return { taskId, dependsOn: [] };
+
+  const dependsOn = dependencyList.split(",");
+  if (dependsOn.some((dependency) => !dependency)) {
+    throw new Error(`Queue dependencies must be a comma-separated list of task IDs. ${TEAM_ENQUEUE_USAGE}`);
+  }
+  for (const dependency of dependsOn) assertValidTaskId(dependency);
+  if (dependsOn.includes(taskId)) throw new Error("A queued task cannot depend on itself");
+  if (new Set(dependsOn).size !== dependsOn.length) throw new Error("Queue dependencies must be unique");
+  return { taskId, dependsOn };
 }
 
 export function parseTeamNewArgs(args: string): TeamNewArgs {
@@ -225,17 +254,15 @@ export function upsertYamlScalar(text: string, key: string, value: string, befor
   return `${text.trimEnd()}\n${key}: ${value}\n`;
 }
 
+export function completionParent(status: Pick<TaskStatus, "authorizationHead">, queuedExpectedParent?: string): string {
+  const parent = queuedExpectedParent ?? status.authorizationHead;
+  if (!parent) throw new Error("Completion requires an immutable authorization head");
+  return parent;
+}
+
 export async function readStatus(taskDir: string): Promise<{ text: string; status: TaskStatus }> {
   const text = await readFile(resolve(taskDir, "status.yaml"), "utf8");
   return { text, status: parseStatus(text) };
-}
-
-export async function updateStatus(taskDir: string, updates: Record<string, string>): Promise<TaskStatus> {
-  const path = resolve(taskDir, "status.yaml");
-  let text = await readFile(path, "utf8");
-  for (const [key, value] of Object.entries(updates)) text = setYamlScalar(text, key, value);
-  await writeFile(path, text, "utf8");
-  return parseStatus(text);
 }
 
 function field(block: string, label: string): string | undefined {

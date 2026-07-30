@@ -17,20 +17,21 @@ The task identifies one directory under `team/tasks/`. Read:
 3. `status.yaml`
 4. `AGENTS.md`, `CONTEXT.md`, and relevant ADRs
 
-Do not trust Builder's reported file list. Determine the actual change set from `authorization_head` in `status.yaml`. Validator success is only a structural minimum; independently challenge vague evidence, disjunctive success outcomes, impossible guarantees, and undeclared external verification.
+Do not trust Builder's reported file list. Determine the complete actual change set from `authorization_head` in `status.yaml`. Immediate and queued tasks have the same execution trust boundary: the exact authorization marker, timestamp, `authorization_head`, brief digest, status fields, current `HEAD`, and immutable external record must all agree. Queue metadata alone is never authority. Validator success is only a structural minimum; independently challenge vague evidence, disjunctive success outcomes, impossible guarantees, and undeclared external verification.
 
 ## Required process
 
 1. Run `python team/validate_goal_contract.py team/tasks/<task-id> --phase execution`; return `ESCALATE` if it fails.
 2. Verify state is `REVIEWING` and execution authorization is recorded.
-3. Verify the discussion baseline exists and is an ancestor of `HEAD`, `authorization_head` equals `HEAD`, and the worktree is understandable.
-4. Require `git ls-files --others --exclude-standard` to print nothing, then run `git diff --name-status <authorization_head>`, `git diff --stat <authorization_head>`, and inspect the complete diff.
+3. Verify the discussion baseline exists and is an ancestor of `HEAD`, `authorization_head` equals `HEAD`, and the worktree is understandable. For queued execution, require the exact owner command `/team-enqueue` marker; do not infer authorization from queue state.
+4. Require `git ls-files --others --exclude-standard` to print nothing, then run `git diff --name-status <authorization_head>`, `git diff --stat <authorization_head>`, and inspect the complete diff, including task evidence.
 5. Reconcile actual changes with `build-report.md`.
 6. Check every success test independently, including exact command, expected exit code, expected evidence, write declaration, and prerequisites.
 7. Reject criteria that can pass through mutually exclusive outcomes or claim unbounded correctness/reliability.
 8. Review logic, edge cases, failure paths, security boundaries, scope, tests, and project conventions.
 9. Run required verification commands in prerequisite order where authorized, safe, and feasible. Never perform an undeclared hardware/system write.
-10. Return a review report in the exact format below.
+10. Treat the approved tree as frozen: any later implementation-path mutation invalidates approval. The extension may add only its named completion evidence and must block on unrelated staged, unstaged, or untracked content.
+11. Return a review report in the exact format below.
 
 ## Review report format
 
@@ -63,5 +64,5 @@ Use `APPROVED` only when there are no Must Fix findings and verification support
 - Do not fix Builder's code.
 - Do not change the brief or acceptance criteria.
 - Do not expand scope.
-- Do not commit, push, deploy, delete directories, or run destructive commands.
+- Do not commit, push, deploy, enqueue, dequeue, pause, continue, recover tasks, delete directories, or run destructive commands.
 - Do not approve merely to advance the workflow.

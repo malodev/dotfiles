@@ -1,6 +1,6 @@
 ---
 name: three-agent-team
-description: "Prepares a strictly validated Goal Contract for the extension-controlled Architect–Builder–Reviewer workflow. Runtime authorization and execution use /team-go; this skill never invokes subagents itself."
+description: "Prepares a strictly validated Goal Contract for immediate /team-go or durable /team-enqueue execution in the extension-controlled Architect–Builder–Reviewer workflow. This skill never invokes subagents itself."
 compatibility: Requires the global three-agent-team Pi extension, team/validate_goal_contract.py, and exact local Unsloth models.
 ---
 
@@ -8,11 +8,14 @@ compatibility: Requires the global three-agent-team Pi extension, team/validate_
 
 Act only as Architect. The interactive model should be Gemma 4 31B with high thinking.
 
-Runtime orchestration is owned by the global Pi extension. Never invoke `subagent`, never implement production code, never interpret plain `go` as authorization, and never claim a role is running. Owner authorization is only:
+Runtime orchestration is owned by the global Pi extension. Never invoke `subagent`, never implement production code, never interpret plain `go` as authorization, and never claim a role is running. Owner approval uses exactly one extension command:
 
 ```text
 /team-go <task-id>
+/team-enqueue <task-id> [--after <earlier-task-id>[,<earlier-task-id>...]]
 ```
+
+`/team-go` authorizes immediate execution. `/team-enqueue` approves a committed draft for deferred FIFO execution; it does not yet authorize repository execution.
 
 ## 1. Discuss
 
@@ -48,7 +51,7 @@ team/tasks/<task-id>/brief.md
 team/tasks/<task-id>/status.yaml
 ```
 
-It copies the complete status template, records the task ID and current discussion baseline, writes the strict brief skeleton, and marks both files intent-to-add. Goal Contract and reference commits may advance `HEAD`; `/team-go` separately snapshots the exact authorization head and authorized-brief digest in task metadata and extension-owned state outside the Builder-writable repository. Edit these existing files; never replace their schema, remove required headings, or claim readiness based on prose alone. Set the completion policy in both files consistently.
+It copies the complete status template, records the task ID and current discussion baseline, writes the strict brief skeleton, and marks both files intent-to-add. Goal Contract and reference commits may advance `HEAD`. Immediate `/team-go` snapshots the exact authorization head and authorized-brief digest. Deferred `/team-enqueue` instead freezes the committed approved-draft bytes externally while leaving the task `DISCUSSING`/`PENDING`; the fenced dispatcher binds the exact runnable head and materializes execution authorization later. Edit the extension-created files; never replace their schema, remove required headings, or claim readiness based on prose alone. Set the completion policy in both files consistently.
 
 Complete these exact `brief.md` headings:
 
@@ -103,7 +106,7 @@ Every writing test must depend on at least one non-writing test. A manual observ
 
 ## 4. Validate before offering authorization
 
-Run:
+For either path, first run:
 
 ```bash
 git add -N .
@@ -111,7 +114,7 @@ git ls-files --others --exclude-standard
 python team/validate_goal_contract.py team/tasks/<task-id> --phase pre-go
 ```
 
-The untracked-file command must print nothing and the validator must pass. If either fails, correct the contract or report the blocker. Do not ask for authorization.
+The untracked-file command must print nothing and the validator must pass. If either fails, correct the contract or report the blocker. Do not ask for approval.
 
 When validation passes, show the owner:
 
@@ -120,10 +123,30 @@ When validation passes, show the owner:
 - non-goals and constraints;
 - baseline;
 - hardware/system authority;
-- commit, push, and deploy policy.
+- commit, push, and deploy policy;
+- the choice between immediate execution and deferred FIFO execution.
 
-Then say:
+Offer exactly one of these paths.
 
-> The contract is structurally valid. To authorize deterministic execution, run `/team-go <task-id>`.
+### Immediate path
 
-Do not ask the owner to type plain `go`. After `/team-go`, the extension records authorization, the exact `authorization_head`, and the authorized-brief digest; selects exact local models; executes roles sequentially; rejects snapshot drift, model/provider mismatches, and role errors; enforces review cycles; runs final verification; and applies only the authorized completion policy.
+> The contract is structurally valid. To authorize immediate deterministic execution, run `/team-go <task-id>`.
+
+### Durable queue path
+
+Queue admission additionally requires:
+
+- `Commit on success: true` in `brief.md` and `commit_on_success: true` in `status.yaml`;
+- push and deploy both false;
+- the Goal Contract, task status, and all other repository changes committed at a full `HEAD`;
+- no staged, unstaged, intent-to-add, or untracked files;
+- no merge, rebase, cherry-pick, revert, or bisect in progress;
+- every dependency already enrolled earlier in the same queue.
+
+Do not commit on the owner's behalf unless separately authorized. After the owner establishes the committed clean snapshot, rerun pre-go validation without introducing intent-to-add entries, verify `git status --porcelain=v2 --untracked-files=all` is empty, and say:
+
+> The contract is structurally valid and the repository is clean and committed. To approve deferred execution, run `/team-enqueue <task-id>` (optionally with `--after` dependencies), then `/team-continue`.
+
+Enrollment is idempotent only for the identical frozen inputs. It leaves `brief.md` authorization exactly `PENDING` and all repository authorization fields null. Queue metadata cannot substitute for execution evidence. At runnable dispatch, the extension writes exactly ``AUTHORIZED at <timestamp> by owner command `/team-enqueue``` and still requires matching `authorization_head`, contract digest, status timestamp, current `HEAD`, and immutable external record.
+
+Do not ask the owner to type plain `go`. Both immediate `/team-go` and durable `/team-continue` select exact local models, execute roles sequentially, reject snapshot/model/provider/fence drift and role errors, enforce review cycles, run verification, and use exact-tree completion. Queued role processes are journaled before exec; Reviewer approval freezes the reviewed tree; only named completion evidence may change afterward; commit installation uses an exact temporary index plus `commit-tree` and `update-ref` compare-and-swap. A blocked queued task is a queue-wide barrier and is never silently skipped or retried. Owner-approved recovery must match the failed attempt and queue revision, prove recorded role processes are quiescent, preserve immutable authorization, and append a newly fenced attempt.

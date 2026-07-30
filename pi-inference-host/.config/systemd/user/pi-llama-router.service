@@ -1,0 +1,34 @@
+[Unit]
+Description=Dedicated llama.cpp router for Pi
+Documentation=https://github.com/ggml-org/llama.cpp/tree/master/tools/server
+Documentation=file:%h/.config/pi-inference/README.md
+After=network-online.target
+Wants=network-online.target
+Conflicts=unsloth.service
+
+[Service]
+Type=simple
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/bin"
+Environment="LD_LIBRARY_PATH=%h/.local/opt/pi-llama-server/current/bin"
+Environment="HIP_VISIBLE_DEVICES=0"
+Environment="LLAMA_CACHE=%C/pi-llama-router"
+ExecStartPre=/usr/bin/test -x %h/.local/opt/pi-llama-server/current/bin/llama-server
+ExecStartPre=/usr/bin/test -r %h/.local/share/pi-llama-router/models.ini
+ExecStartPre=/usr/bin/test -s %h/.pi-inference/credentials/model-api-key
+ExecStart=%h/.local/opt/pi-llama-server/current/bin/llama-server --host 127.0.0.1 --port 46757 --models-preset %h/.local/share/pi-llama-router/models.ini --models-max 1 --models-autoload --parallel 1 --api-key-file %h/.pi-inference/credentials/model-api-key --no-webui --no-agent --sse-ping-interval 15 --timeout 3600
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=120
+UMask=0077
+CacheDirectory=pi-llama-router
+CacheDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true

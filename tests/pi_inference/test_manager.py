@@ -74,6 +74,82 @@ class ManagerTest(unittest.IsolatedAsyncioTestCase):
         control, model = manager._load_distinct_service_tokens(configured)
         self.assertNotEqual(control, model)
 
+    async def test_maintenance_lease_stops_services_and_releases_with_atomic_restore(self):
+        await self.manager.set_mode({"mode": "stop"})
+        acquired = await self.manager.acquire({"owner": "updater", "mode": "maintenance", "expected_restore_mode": "stop", "ttl_seconds": 60})
+        self.assertEqual(acquired["mode"], "maintenance")
+        self.assertEqual(self.services.switches, ["stop", "maintenance"])
+        state = json.loads((self.root / "state.json").read_text())
+        self.assertEqual(state["mode"], "maintenance")
+        self.assertEqual(state["lease"]["mode"], "maintenance")
+
+        released = await self.manager.release(acquired["lease_id"], {"restore_mode": "stop"})
+        self.assertEqual(released["mode"], "stop")
+        self.assertEqual(self.services.switches, ["stop", "maintenance", "stop"])
+        self.assertIsNone((await self.manager.status())["lease"])
+
+    async def test_maintenance_acquire_retry_is_idempotent_after_mode_changes_to_maintenance(self):
+        await self.manager.set_mode({"mode": "stop"})
+        body = {
+            "owner": "updater",
+            "mode": "maintenance",
+            "expected_restore_mode": "stop",
+            "ttl_seconds": 60,
+            "lease_id": "maintenance-retry-lease-id-000000000001",
+        }
+        first = await self.manager.acquire(body)
+        self.now += 10
+        second = await self.manager.acquire({**body, "ttl_seconds": 120})
+        self.assertEqual(first["lease_id"], second["lease_id"])
+        self.assertEqual(second["restore_mode"], "stop")
+        self.assertEqual(self.services.switches, ["stop", "maintenance"])
+
+    async def test_failed_atomic_restore_retains_maintenance_lease(self):
+        await self.manager.set_mode({"mode": "stop"})
+        acquired = await self.manager.acquire({"owner": "updater", "mode": "maintenance", "expected_restore_mode": "stop", "ttl_seconds": 60})
+        self.services.failure = manager.ManagerError(503, "restore failed")
+        with self.assertRaisesRegex(manager.ManagerError, "restore failed"):
+            await self.manager.release(acquired["lease_id"], {"restore_mode": "stop"})
+        state = json.loads((self.root / "state.json").read_text())
+        self.assertEqual(state["mode"], "unknown")
+        self.assertIsNotNone(state["lease"])
+
+    async def test_maintenance_acquire_rejects_stale_expected_restore_mode(self):
+        await self.manager.set_mode({"mode": "team"})
+        with self.assertRaisesRegex(manager.ManagerError, "mode changed") as conflict:
+            await self.manager.acquire(
+                {"owner": "updater", "mode": "maintenance", "expected_restore_mode": "stop"}
+            )
+        self.assertEqual(conflict.exception.status, 409)
+        self.assertEqual(self.services.switches, ["team"])
+
+    async def test_expired_maintenance_release_cannot_claim_mode_restoration(self):
+        await self.manager.set_mode({"mode": "stop"})
+        acquired = await self.manager.acquire(
+            {"owner": "updater", "mode": "maintenance", "expected_restore_mode": "stop", "ttl_seconds": 30}
+        )
+        self.now += 31
+        with self.assertRaisesRegex(manager.ManagerError, "expired or disappeared") as conflict:
+            await self.manager.release(acquired["lease_id"], {"restore_mode": "stop"})
+        self.assertEqual(conflict.exception.status, 409)
+        state = json.loads((self.root / "state.json").read_text())
+        self.assertIsNone(state["lease"])
+        self.assertEqual(state["mode"], "maintenance")
+
+    async def test_remote_transport_cannot_acquire_maintenance_lease(self):
+        server = manager.HTTPServer(self.manager, "token")
+        with self.assertRaisesRegex(manager.ManagerError, "local Unix socket") as forbidden:
+            await server.route("POST", "/v1/leases", {"owner": "remote", "mode": "maintenance"}, False)
+        self.assertEqual(forbidden.exception.status, 403)
+
+    async def test_manager_restart_restores_maintenance_as_stopped_not_team(self):
+        await self.manager.set_mode({"mode": "stop"})
+        await self.manager.acquire({"owner": "updater", "mode": "maintenance", "expected_restore_mode": "stop", "ttl_seconds": 60})
+        restored_services = FakeServices()
+        restarted = manager.InferenceManager(config(self.root), restored_services, lambda: self.now)
+        await restarted.startup()
+        self.assertEqual(restored_services.switches, ["maintenance"])
+
     async def test_single_lease_renews_releases_and_never_persists_raw_id(self):
         acquired = await self.manager.acquire({"owner": "host:repo:task", "mode": "team", "ttl_seconds": 60})
         self.assertEqual(self.services.switches, ["team"])

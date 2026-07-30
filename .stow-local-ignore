@@ -9,4 +9,6 @@ package\.json
 package-lock\.json
 commitlint\.config\.js
 node_modules
+(^|.*/)__pycache__($|/.*)
+.*\.py[co]$
 pi/mattpocock-skills

@@ -45,12 +45,20 @@ export interface TeamLifecycle {
   restoreStudioCommand?: string;
 }
 
+export interface TeamQueueTiming {
+  leaseTtlSeconds: number;
+  heartbeatIntervalSeconds: number;
+  executionLockTimeoutSeconds: number;
+  localExpiryMarginSeconds: number;
+}
+
 export interface TeamConfig {
   version: 1;
   providers: Record<string, ProviderProfile>;
   roles: Record<TeamRole, RoleProfile>;
   limits: TeamLimits;
   lifecycle: TeamLifecycle;
+  queue: TeamQueueTiming;
   sourcePath: string;
   configHash: string;
 }
@@ -119,6 +127,35 @@ function parseRoles(value: unknown): Record<TeamRole, RoleProfile> {
   return Object.fromEntries(ROLE_NAMES.map((role) => [role, parseRole(roles[role], `roles.${role}`)])) as Record<TeamRole, RoleProfile>;
 }
 
+function optionalPositiveInteger(value: unknown, fallback: number, label: string): number {
+  return value === undefined ? fallback : positiveInteger(value, label);
+}
+
+function parseQueueTiming(value: unknown): TeamQueueTiming {
+  const queue = value === undefined ? {} : object(value, "queue");
+  const leaseTtlSeconds = optionalPositiveInteger(queue.leaseTtlSeconds, 120, "queue.leaseTtlSeconds");
+  const heartbeatIntervalSeconds = optionalPositiveInteger(
+    queue.heartbeatIntervalSeconds,
+    30,
+    "queue.heartbeatIntervalSeconds",
+  );
+  const executionLockTimeoutSeconds = optionalPositiveInteger(
+    queue.executionLockTimeoutSeconds,
+    30,
+    "queue.executionLockTimeoutSeconds",
+  );
+  const localExpiryMarginSeconds = optionalPositiveInteger(
+    queue.localExpiryMarginSeconds,
+    15,
+    "queue.localExpiryMarginSeconds",
+  );
+  if (leaseTtlSeconds < 30) throw new Error("queue.leaseTtlSeconds must be at least 30 seconds");
+  if (heartbeatIntervalSeconds + localExpiryMarginSeconds >= leaseTtlSeconds) {
+    throw new Error("queue heartbeat and local expiry margin must leave time before lease expiry");
+  }
+  return { leaseTtlSeconds, heartbeatIntervalSeconds, executionLockTimeoutSeconds, localExpiryMarginSeconds };
+}
+
 export function parseTeamConfig(text: string, sourcePath = "<memory>"): TeamConfig {
   const raw = object(JSON.parse(text), "configuration");
   if (raw.version !== 1) throw new Error("configuration.version must be 1");
@@ -177,6 +214,7 @@ export function parseTeamConfig(text: string, sourcePath = "<memory>"): TeamConf
       restoreStudioAfterRun: lifecycleRaw.restoreStudioAfterRun === true,
       restoreStudioCommand: typeof lifecycleRaw.restoreStudioCommand === "string" ? lifecycleRaw.restoreStudioCommand : undefined,
     },
+    queue: parseQueueTiming(raw.queue),
     sourcePath,
     configHash: createHash("sha256").update(canonical).digest("hex"),
   };

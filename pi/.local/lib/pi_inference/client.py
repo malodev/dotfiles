@@ -310,14 +310,16 @@ def build_parser() -> argparse.ArgumentParser:
     credential.add_argument("--replace", action="store_true", help="replace an existing credential (requires --install)")
     credential.add_argument("name", choices=["model-api", "control-api"])
     acquire = sub.add_parser("acquire")
-    acquire.add_argument("--mode", choices=["team"], default="team")
+    acquire.add_argument("--mode", choices=["team", "maintenance"], default="team")
     acquire.add_argument("--owner")
+    acquire.add_argument("--expected-restore-mode", choices=["team", "studio", "stop"])
     acquire.add_argument("--ttl", type=int, default=None)
     renew = sub.add_parser("renew")
     renew.add_argument("--owner")
     renew.add_argument("--ttl", type=int, default=None)
     release = sub.add_parser("release")
     release.add_argument("--owner")
+    release.add_argument("--restore-mode", choices=["team", "studio", "stop"])
     for mode in ("team", "studio", "stop"):
         sub.add_parser(mode)
     return parser
@@ -356,9 +358,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                 else:
                     lease_id = secrets.token_urlsafe(32)
                 _write_private_json(_lease_path(owner), {"owner": owner, "lease_id": lease_id, "manager": config.remote_url, "pending": True})
-                result = client.request("POST", "/v1/leases", {
-                    "mode": args.mode, "owner": owner, "ttl_seconds": ttl, "lease_id": lease_id,
-                })
+                request_body = {
+                    "mode": args.mode,
+                    "owner": owner,
+                    "ttl_seconds": ttl,
+                    "lease_id": lease_id,
+                }
+                if args.expected_restore_mode is not None:
+                    request_body["expected_restore_mode"] = args.expected_restore_mode
+                result = client.request("POST", "/v1/leases", request_body)
                 _write_private_json(_lease_path(owner), {"owner": owner, "lease_id": result["lease_id"], "manager": config.remote_url})
         elif args.command == "renew":
             owner = _owner(args)
@@ -372,7 +380,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             with _client_lock():
                 lease = _load_lease(owner)
                 _assert_lease_manager(lease, config)
-                result = client.request("DELETE", f"/v1/leases/{lease['lease_id']}")
+                body = {"restore_mode": args.restore_mode} if args.restore_mode else None
+                result = client.request("DELETE", f"/v1/leases/{lease['lease_id']}", body)
                 _remove_lease(owner)
         else:
             result = client.request("POST", "/v1/mode", {"mode": args.command})

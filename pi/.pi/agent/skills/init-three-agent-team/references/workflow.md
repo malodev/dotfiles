@@ -4,7 +4,7 @@
 
 This initializer adapts the useful process layer from `russelleNVy/three-man-team` to Pi and local OpenAI-compatible models. It does not install or execute upstream Claude Code scripts.
 
-The workflow has one task-level authorization: owner and Architect agree on a validated Goal Contract, then the owner runs `/team-go <task-id>`. The global extension executes Builder, Reviewer, and verification autonomously until the objective success tests pass or a genuine blocker requires changing the contract. Plain `go` has no authority.
+The workflow has one task-level approval: owner and Architect agree on a validated Goal Contract, then the owner chooses immediate `/team-go <task-id>` or clean committed FIFO `/team-enqueue <task-id> [--after ...]`. The global extension executes Builder, Reviewer, and verification autonomously until the objective success tests pass or a genuine blocker requires changing the contract. Plain `go` has no authority, and queue metadata alone is never execution authorization.
 
 ## Roles
 
@@ -50,6 +50,26 @@ The workflow has one task-level authorization: owner and Architect agree on a va
 
 Any other transition is invalid and must stop.
 
+### External durable queue states
+
+Queue lifecycle is stored outside the repository; `QUEUED` and `RUNNING` are not `status.yaml` states.
+
+| Current | Event | Next |
+|---|---|---|
+| `QUEUED` | Fenced FIFO claim | `RUNNING` |
+| `QUEUED` | Owner dequeues an unclaimed entry with no dependents | `DEQUEUED` |
+| `RUNNING` | Uncertain/error outcome | `BLOCKED` |
+| `RUNNING` | Exact completion commit installed and verified | `COMPLETED` |
+| `BLOCKED` | Matching owner recovery, process quiescence, and immutable authorization validation | `RUNNING` under a new attempt/fence |
+
+Attempts are immutable and append-only:
+
+```text
+CLAIMED → AUTHORIZING → AUTHORIZED → EXECUTING → VERIFIED → COMMITTING → COMPLETED
+```
+
+Any nonterminal phase may end at `BLOCKED`. A blocked or running head is a queue-wide FIFO barrier. It is never skipped, reset to `QUEUED`, or retried from lease expiry alone. `/team-pause` prevents the next claim; `/team-continue` explicitly reconciles and drains until idle, paused, or blocked; `/team-dequeue` is forbidden after claim.
+
 ## The one task gate
 
 Before execution, the owner sees a concise Goal Contract covering:
@@ -62,7 +82,7 @@ Before execution, the owner sees a concise Goal Contract covering:
 - allowed repository operations;
 - commit, push, and deployment policy.
 
-The owner runs `/team-go <task-id>` once. The extension validates first, records authorization, and then owns implementation, review, fixes, routine technical decisions, and final verification within the contract.
+For immediate work, the owner runs `/team-go <task-id>` once. For deferred work, the owner first commits every approved input into a completely clean repository, then runs `/team-enqueue <task-id>` and `/team-continue`. Enrollment freezes approval but leaves repository authorization `PENDING`; only the runnable fenced dispatcher may materialize the exact `/team-enqueue` authorization marker, status snapshot, and immutable external authorization record. After either path authorizes execution, the extension owns implementation, review, fixes, routine technical decisions, and final verification within the contract.
 
 ### Deterministic pre-go gate
 
@@ -76,7 +96,11 @@ A Goal Contract is not eligible for `go` merely because it reads plausibly. Befo
 6. run `git add -N .` so no untracked file is omitted from the baseline diff;
 7. pass `python team/validate_goal_contract.py team/tasks/<task-id> --phase pre-go`.
 
-At `go`, the extension records the current `HEAD` as `authorization_head` plus a SHA-256 digest of the authorized brief in task metadata and in an extension-owned state record outside the Builder-writable repository. For tasks authorized by an older extension, an explicit owner `/team-resume` or finalized recovery performs a one-time migration and reports the exact adopted head and digest; partial snapshots fail closed. After `go`, Architect must pass the same validator with `--phase execution` before invoking Builder; execution fails closed if `HEAD` or the brief drifts from that snapshot. Agents use the repository copy for immediate feedback, while extension runtime gates invoke the trusted bundled validator so Builder edits cannot weaken enforcement. Builder reruns it before mutation and before review; Reviewer reruns it independently. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
+At immediate `go`, or at runnable queued dispatch, the extension records the current exact `HEAD` as `authorization_head` plus a SHA-256 digest of the authorized brief in task metadata and in an extension-owned state record outside the Builder-writable repository. For tasks authorized by an older extension, an explicit owner `/team-resume` or finalized recovery performs a one-time migration and reports the exact adopted head and digest; partial snapshots fail closed. Before Builder, the extension passes the same validator with `--phase execution`; execution fails closed if `HEAD`, brief, status, external record, dispatcher fence, or repository capability drifts. Agents use the repository copy for immediate feedback, while extension runtime gates invoke the trusted bundled validator so Builder edits cannot weaken enforcement. Builder reruns it before mutation and before review; Reviewer reruns it independently. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
+
+### Deferred queue admission
+
+`/team-enqueue` additionally requires a full SHA-1 `HEAD`, no in-progress Git operation, no staged/unstaged/intent-to-add/untracked content, all task files regular and committed byte-for-byte at `HEAD`, no stale external authorization record, `commit_on_success: true`, and push/deploy false. Dependencies must name earlier non-dequeued entries. Queue and authorization state are passwd-home-rooted under owner-only `~/.local/state/pi-three-agent-team`; environment variables cannot redirect it. Administrative retries are idempotent only when every immutable enrollment input matches.
 
 ## Autonomous review gate
 
@@ -92,7 +116,11 @@ push_on_success: false
 deploy_on_success: false
 ```
 
-A `true` value is explicit advance authorization for that action after all success tests pass. A `false` value means leave the work ready and do not interrupt to ask again during the run. Authorization for one action does not imply another.
+A `true` value is explicit advance authorization for that action after all success tests pass. A `false` value means leave the work ready and do not interrupt to ask again during the run. Authorization for one action does not imply another. Queued tasks require commit true and push/deploy false so each successful FIFO entry advances the exact expected-head chain.
+
+### Exact reviewed-tree completion
+
+Reviewer approval freezes the complete worktree through an isolated temporary index and explicit path list. After that point, only `status.yaml`, `verification.log`, and `completion-report.md` under the active task may change. The extension rejects all other post-review contamination, creates the exact single-parent commit with `git commit-tree`, journals tree/parent/subject/commit, installs it with `git update-ref` compare-and-swap, normalizes only the index, and verifies a clean worktree. It never uses `git reset --hard`, never broadly stages arbitrary late changes, and never adopts arbitrary `HEAD`.
 
 ## Genuine blockers
 
@@ -120,7 +148,7 @@ This is a safety ceiling, not a routine approval point.
 
 ## Single-GPU scheduling
 
-The configured large role models may not remain loaded together with useful runtime headroom on a single 32 GiB R9700. The extension enters the configured inference mode, invokes one exact-model child session at a time, snapshots role choices per authorized task, and never uses delegated or parallel routing.
+The configured large role models may not remain loaded together with useful runtime headroom on a single 32 GiB R9700. The extension enters the configured inference mode, invokes one exact-model child session at a time, snapshots role choices per authorized task, and never uses delegated or parallel routing. The durable dispatcher lease/fence coordinates FIFO repository ownership; the independent host-global inference lease is acquired only immediately before Builder/Reviewer work and released before dispatcher ownership ends. Both renew independently, and loss of either aborts the recorded process group and blocks the attempt.
 
 ## Durable versus task-local knowledge
 

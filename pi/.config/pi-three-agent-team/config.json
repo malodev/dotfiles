@@ -63,6 +63,12 @@
     "roleTimeoutSeconds": 7200,
     "idleTimeoutSeconds": 300
   },
+  "queue": {
+    "leaseTtlSeconds": 120,
+    "heartbeatIntervalSeconds": 30,
+    "executionLockTimeoutSeconds": 30,
+    "localExpiryMarginSeconds": 15
+  },
   "lifecycle": {
     "managedProviders": [
       "pi-llama"

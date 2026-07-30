@@ -35,6 +35,10 @@ REQUIRED_SECTIONS = (
 )
 PLACEHOLDER_RE = re.compile(r"REPLACE_ME|\bTBD\b|\bTODO\b|\[PROJECT_[A-Z_]+\]|<[^>\n]+>", re.IGNORECASE)
 SUCCESS_HEADING_RE = re.compile(r"^###\s+(ST-\d{2,})\s*(?:[:—-])\s*(.+?)\s*$", re.MULTILINE)
+EXECUTION_AUTHORIZATION_RE = re.compile(
+    r"AUTHORIZED at (?P<timestamp>\S+) by owner "
+    r"(?P<source>message `go`|command `/team-enqueue`)"
+)
 FULL_SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
 TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 STATE_ROOT = Path(pwd.getpwuid(os.getuid()).pw_dir) / ".local" / "state" / "pi-three-agent-team"
@@ -351,8 +355,8 @@ def validate(task_dir: Path, phase: str) -> list[str]:
             for key, expected in expected_record.items():
                 if record.get(key) != expected:
                     errors.append(f"External authorization record {key} does not match status.yaml.")
-        if state not in {"EXECUTING", "REVIEWING", "VERIFYING"}:
-            errors.append("Execution validation requires state EXECUTING, REVIEWING, or VERIFYING.")
+        if state not in {"EXECUTING", "REVIEWING", "VERIFYING", "BLOCKED"}:
+            errors.append("Execution validation requires state EXECUTING, REVIEWING, VERIFYING, or BLOCKED.")
         if not authorization_head or not re.fullmatch(r"[0-9a-f]{40}", authorization_head):
             errors.append("Execution validation requires a full authorization_head commit SHA.")
         else:
@@ -368,9 +372,14 @@ def validate(task_dir: Path, phase: str) -> list[str]:
             errors.append("Goal Contract digest changed after owner authorization.")
         if authorized_at in {None, "null", ""}:
             errors.append("Execution validation requires a recorded execution_authorized_at timestamp.")
-        if not re.fullmatch(r"AUTHORIZED at \S+ by owner message `go`", authorization):
-            errors.append("Execution authorization must be 'AUTHORIZED at <timestamp> by owner message `go`'.")
-        elif authorized_at and f"AUTHORIZED at {authorized_at} " not in authorization:
+        authorization_match = EXECUTION_AUTHORIZATION_RE.fullmatch(authorization)
+        if authorization_match is None:
+            errors.append(
+                "Execution authorization must be exactly "
+                "'AUTHORIZED at <timestamp> by owner message `go`' or "
+                "'AUTHORIZED at <timestamp> by owner command `/team-enqueue`'."
+            )
+        elif authorized_at and authorization_match.group("timestamp") != authorized_at:
             errors.append("brief.md authorization timestamp does not match status.yaml.")
 
     if not task_id or not TASK_ID_RE.fullmatch(task_id) or task_id == "REPLACE_ME" or task_id != task_dir.name:
