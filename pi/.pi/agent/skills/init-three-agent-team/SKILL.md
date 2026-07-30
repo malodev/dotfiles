@@ -6,7 +6,7 @@ compatibility: Requires Python 3, Git, Pi, and the global three-agent-team exten
 
 # Initialize Three-Agent Team
 
-Create a safe, auditable Architect → Builder → Reviewer workflow in an existing Git repository. Repository installation uses explicit file approval; each development task then uses one extension-owned Goal Contract authorization followed by deterministic sequential execution until completion or a genuine blocker.
+Create a safe, auditable Architect → Builder → Reviewer workflow in an existing Git repository. Repository installation uses explicit file approval. A development task may run immediately after `/team-go`, or be durably approved and ordered after `/team-enqueue`; both paths require one validated owner-approved Goal Contract. Durable queue execution uses fenced deferred authorization, stop-before-exec role journaling, exact reviewed-tree completion, and owner-led blocked recovery.
 
 ## Safety contract
 
@@ -27,7 +27,7 @@ Confirm:
 
 - the target is the root of an existing Git repository;
 - `pi` is available;
-- the global `three-agent-team` extension exposes `/team-config`, `/team-new`, `/team-grill-me`, `/team-repair`, `/team-validate`, `/team-go`, `/team-resume`, `/team-unblock`, `/team-discard`, `/team-status`, `/team-report`, and `/team-cancel`;
+- the global `three-agent-team` extension exposes `/team-config`, `/team-new`, `/team-grill-me`, `/team-repair`, `/team-validate`, `/team-go`, `/team-enqueue`, `/team-queue`, `/team-pause`, `/team-continue`, `/team-dequeue`, `/team-resume`, `/team-unblock`, `/team-discard`, `/team-status`, `/team-report`, and `/team-cancel`;
 - `/team-config` resolves valid Architect, Builder, and Reviewer profiles from `~/.config/pi-three-agent-team/config.json`;
 - every configured provider/model ID is available exactly as configured.
 
@@ -108,14 +108,23 @@ Architect discusses and writes a structurally validated Goal Contract but never 
 /team-grill-me <task-id>
 ```
 
-After validation, authorize only with:
+After validation, choose one owner command:
 
 ```text
+# Immediate execution
 /team-go <task-id>
+
+# Deferred FIFO execution; dependencies must already be earlier queue entries
+/team-enqueue <task-id> [--after <task-id>[,<task-id>...]]
+/team-continue
 ```
 
-The extension records the authorization and runs Builder and Reviewer sequentially with exact local models until the task is `COMPLETED` or a genuine blocker is `BLOCKED`. Plain `go` and direct `subagent` calls are intentionally rejected in initialized team repositories.
+Queue enrollment is stricter: set `commit_on_success: true`, keep push/deploy false, commit the approved Goal Contract and every repository file, and require a completely clean Git checkout with no in-progress operation. Enrollment freezes approval externally but leaves repository `status.yaml` as unauthorized `DISCUSSING`/`PENDING`; `QUEUED` is not a repository task state. Dispatch later materializes the exact ``owner command `/team-enqueue``` authorization marker together with the full head/digest/status/external-record snapshot.
+
+Use `/team-queue` to inspect durable order and barriers. `/team-pause` prevents the next claim but does not interrupt a running task. `/team-dequeue` applies only before any claim and only when no later entry depends on the task. A `BLOCKED` head stops the whole queue and requires explicit owner-led recovery; restart or lease expiry never silently retries it. Run `/team-continue` explicitly after restart or recovery. Recovery must match the failed attempt and queue revision, prove recorded role processes are quiescent, retain exact authorization evidence, and append a newly fenced attempt; never bypass the barrier with the immediate workflow or reset its evidence.
+
+The extension runs Builder and Reviewer sequentially with exact local models until the task is `COMPLETED` or a genuine blocker is `BLOCKED`. Queued completion commits only the frozen reviewed tree and named evidence; unrelated Git changes block rather than being included. Plain `go` and direct `subagent` calls are intentionally rejected in initialized team repositories.
 
 ## Reference
 
-Read [references/workflow.md](references/workflow.md) when adapting templates, diagnosing a state transition, or explaining why a safety constraint exists.
+Read [references/workflow.md](references/workflow.md) before adapting templates, operating or recovering the durable queue, diagnosing a state transition, or explaining why a safety constraint exists.

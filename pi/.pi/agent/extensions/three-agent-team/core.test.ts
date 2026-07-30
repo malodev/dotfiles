@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -17,11 +17,13 @@ import {
   authorizationSnapshotKind,
   buildTeamGrillPrompt,
   completeTeamNewTaskId,
+  completionParent,
   localTaskDatePrefix,
   orderSuccessTests,
   parseReviewVerdict,
   parseStatus,
   parseSuccessTests,
+  parseTeamEnqueueArgs,
   parseTeamNewArgs,
   parseTeamTaskId,
   recoveryReviewCeiling,
@@ -29,6 +31,7 @@ import {
   releaseOwnedSlot,
 } from "./core.ts";
 import threeAgentTeamExtension, { archiveTask, completionReportMessage, taskArgumentCompletions } from "./index.ts";
+import { acquireAdvisoryLock } from "./durable-state.ts";
 import {
   loadOrCreateTaskConfig,
   parseTeamConfig,
@@ -181,6 +184,22 @@ PENDING
   );
 });
 
+test("parses strict team-enqueue arguments", () => {
+  assert.deepEqual(parseTeamEnqueueArgs("task-a"), { taskId: "task-a", dependsOn: [] });
+  assert.deepEqual(
+    parseTeamEnqueueArgs("task-c --after task-a,task-b"),
+    { taskId: "task-c", dependsOn: ["task-a", "task-b"] },
+  );
+  assert.throws(() => parseTeamEnqueueArgs(""), /Missing task ID.*Usage:/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --after"), /Malformed queue arguments.*Usage:/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --before task-b"), /Malformed queue arguments.*Usage:/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --after task-b, task-c"), /Malformed queue arguments.*Usage:/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --after task-b,"), /comma-separated list/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --after Task-B"), /uppercase letters are not allowed.*task-b/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --after task-a"), /cannot depend on itself/);
+  assert.throws(() => parseTeamEnqueueArgs("task-a --after task-b,task-b"), /must be unique/);
+});
+
 test("parses team-new arguments and explains each malformed form", () => {
   assert.deepEqual(
     parseTeamNewArgs("2026-07-20-rt100-gui-refine-ux -- Explain the daemon"),
@@ -304,12 +323,21 @@ test("persists authorization outside the repository and archives it without dele
     "2".repeat(64),
     "2026-07-26T00:00:00.000Z",
   );
-  await writeAuthorizationRecord(repo, record, stateDir);
-  assert.deepEqual(await readAuthorizationRecord(repo, "sample", stateDir), record);
-  await assert.rejects(writeAuthorizationRecord(repo, record, stateDir), /EEXIST/);
-  await assert.rejects(createAuthorizationRecord(repo, "../escape", "1".repeat(40), "2".repeat(64), record.authorizedAt), /Invalid task ID/);
-  assert.ok(await archiveAuthorizationRecord(repo, "sample", "2026-07-26T00-00-00-000Z", stateDir));
-  await assert.rejects(readAuthorizationRecord(repo, "sample", stateDir), /ENOENT/);
+  const capability = await acquireAdvisoryLock(join(stateDir, "test.lock"), "authorization test");
+  try {
+    await writeAuthorizationRecord(repo, record, capability, stateDir);
+    assert.deepEqual(await readAuthorizationRecord(repo, "sample", stateDir), record);
+    await assert.doesNotReject(writeAuthorizationRecord(repo, record, capability, stateDir));
+    await assert.rejects(
+      writeAuthorizationRecord(repo, { ...record, contractDigest: "3".repeat(64) }, capability, stateDir),
+      /conflict/i,
+    );
+    await assert.rejects(createAuthorizationRecord(repo, "../escape", "1".repeat(40), "2".repeat(64), record.authorizedAt), /Invalid task ID/);
+    assert.ok(await archiveAuthorizationRecord(repo, "sample", "2026-07-26T00-00-00-000Z", capability, stateDir));
+    await assert.rejects(readAuthorizationRecord(repo, "sample", stateDir), /ENOENT/);
+  } finally {
+    await capability.release();
+  }
 });
 
 test("centralizes active-run admission for Architect session commands", async () => {
@@ -426,6 +454,13 @@ test("orders success tests by prerequisites", () => {
   assert.deepEqual(ordered.map((item) => item.id), ["ST-01", "ST-02"]);
 });
 
+test("completion is parented at authorization head rather than discussion baseline", () => {
+  const authorizationHead = "b".repeat(40);
+  assert.equal(completionParent({ authorizationHead }), authorizationHead);
+  assert.equal(completionParent({ authorizationHead }, "c".repeat(40)), "c".repeat(40));
+  assert.throws(() => completionParent({ authorizationHead: null }), /authorization head/);
+});
+
 test("requires exact review verdict heading", () => {
   assert.equal(parseReviewVerdict("# Review\n\n## Verdict\nAPPROVED\n"), "APPROVED");
   assert.throws(() => parseReviewVerdict("looks good"));
@@ -444,6 +479,32 @@ test("requires a complete renewable inference lease lifecycle", () => {
   assert.equal(parsed.lifecycle.acquireTeamCommand, "pi-inference acquire");
 });
 
+test("defaults and validates queue timing independently of inference lifecycle", () => {
+  assert.deepEqual(teamConfig.queue, {
+    leaseTtlSeconds: 120,
+    heartbeatIntervalSeconds: 30,
+    executionLockTimeoutSeconds: 30,
+    localExpiryMarginSeconds: 15,
+  });
+
+  const raw = JSON.parse(configText);
+  raw.queue = {
+    leaseTtlSeconds: 180,
+    heartbeatIntervalSeconds: 40,
+    executionLockTimeoutSeconds: 20,
+    localExpiryMarginSeconds: 30,
+  };
+  const parsed = parseTeamConfig(JSON.stringify(raw));
+  assert.deepEqual(parsed.queue, raw.queue);
+  assert.deepEqual(parsed.lifecycle, teamConfig.lifecycle);
+
+  raw.queue.heartbeatIntervalSeconds = 150;
+  assert.throws(() => parseTeamConfig(JSON.stringify(raw)), /heartbeat and local expiry margin/);
+  raw.queue.heartbeatIntervalSeconds = 40;
+  raw.queue.executionLockTimeoutSeconds = 0;
+  assert.throws(() => parseTeamConfig(JSON.stringify(raw)), /executionLockTimeoutSeconds must be a positive integer/);
+});
+
 test("loads configurable roles and snapshots task runtime choices", async () => {
   assert.equal(roleModel(teamConfig, "architect"), "pi-llama/pi/gemma");
   assert.equal(roleModel(teamConfig, "builder"), "pi-llama/pi/qwen");
@@ -455,6 +516,8 @@ test("loads configurable roles and snapshots task runtime choices", async () => 
   const snapshot = JSON.parse(await readFile(join(taskDir, "runtime-config.json"), "utf8"));
   assert.equal(snapshot.roles.builder.model, "pi/qwen");
   assert.equal(snapshot.limits.builderAttempts, 16);
+  assert.equal("queue" in snapshot, false, "queue host timing must not enter task runtime snapshots");
+  assert.deepEqual(taskConfig.queue, teamConfig.queue);
 });
 
 test("retries only exact-model tool-productive stale streams", () => {
@@ -522,6 +585,7 @@ test("role runner uses configured model, isolated agent config, persistent sessi
   const fakePi = join(dir, "pi-fake");
   const prompt = join(dir, "agent.md");
   const argsLog = join(dir, "args.log");
+  const startedMarker = join(dir, "started.marker");
   const sessionDir = join(dir, "sessions");
   const sessionId = "01234567-89ab-4cde-af01-23456789abcd";
   await writeFile(prompt, "---\nname: fake\ndescription: fake\n---\nRole body\n");
@@ -534,6 +598,7 @@ test "$UV_CACHE_DIR" = /tmp/pi-three-agent-uv-cache || exit 95
 test "$XDG_CACHE_HOME" = /tmp/pi-three-agent-xdg-cache || exit 96
 test -f "$PI_CODING_AGENT_DIR/models.json" || exit 97
 grep -q '"maxTokens": 32768' "$PI_CODING_AGENT_DIR/models.json" || exit 98
+printf '%s\\n' started > "${startedMarker}"
 printf '%s\\n' "$@" > "${argsLog}"
 printf '%s\\n' '{"type":"tool_execution_start","toolName":"read"}'
 printf '%s\\n' '{"type":"message_end","message":{"role":"assistant","provider":"pi-llama","model":"pi/qwen","stopReason":"stop","content":[{"type":"text","text":"READY"}]}}'
@@ -542,6 +607,7 @@ printf '%s\\n' '{"type":"message_end","message":{"role":"assistant","provider":"
   const previous = process.env.PI_THREE_AGENT_PI_BIN;
   process.env.PI_THREE_AGENT_PI_BIN = fakePi;
   try {
+    let recordedPid = 0;
     const result = await runRole({
       role: "builder",
       config: teamConfig,
@@ -551,8 +617,17 @@ printf '%s\\n' '{"type":"message_end","message":{"role":"assistant","provider":"
       timeoutMs: 5000,
       sessionId,
       sessionDir,
+      onSpawn: async (identity) => {
+        recordedPid = identity.pid;
+        assert.equal(identity.role, "builder");
+        assert.equal(identity.pgid, identity.pid);
+        assert.match(identity.processStart, /^(proc|ps|conservative-pid):/);
+        await assert.rejects(access(startedMarker), /ENOENT/);
+      },
     });
     assert.equal(result.error, undefined);
+    assert.ok(recordedPid > 1);
+    assert.equal(await readFile(startedMarker, "utf8"), "started\n");
     assert.equal(result.output, "READY");
     assert.equal(result.responseProvider, "pi-llama");
     assert.equal(result.toolCount, 1);

@@ -1,10 +1,19 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expectedIdentity, roleModel, writeChildAgentConfig, type TeamConfig } from "./config.ts";
 
 export const STALE_STREAM_ERROR = "role produced no process event before the configured inactivity deadline";
+const ROLE_LAUNCHER = fileURLToPath(new URL("./role-launcher.py", import.meta.url));
+
+export interface RoleProcessIdentity {
+  role: "builder" | "reviewer";
+  pid: number;
+  pgid: number;
+  processStart: string;
+}
 
 export interface RoleResult {
   role: "builder" | "reviewer";
@@ -62,6 +71,8 @@ export async function runRole(options: {
   timeoutMs?: number;
   sessionId?: string;
   sessionDir?: string;
+  /** Called while the child process group is SIGSTOPed, before the role executable starts. */
+  onSpawn?: (identity: RoleProcessIdentity) => Promise<void>;
 }): Promise<RoleResult> {
   const profile = options.config.roles[options.role];
   const requestedModel = roleModel(options.config, options.role);
@@ -130,16 +141,47 @@ export async function runRole(options: {
             ...args,
           ]
         : args;
-      const child = spawn(executable, executableArgs, {
+      // The bundled launcher reports its PID/start identity on fd 3, then
+      // SIGSTOPs itself. The dispatcher journals that identity before SIGCONT
+      // permits exec, so no role tool can run ahead of its durable fence.
+      const child = spawn("python3", [ROLE_LAUNCHER, executable, ...executableArgs], {
         cwd: options.cwd,
         env: { ...process.env, PI_SUBAGENT_DEPTH: "1", PI_CODING_AGENT_DIR: agentDir },
         shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe", "pipe"],
       });
+      let launchReady = false;
+      let launchBuffer = "";
+      const launchPipe = child.stdio[3];
       const terminate = () => {
-        child.kill("SIGTERM");
-        setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+        try { if (child.pid) process.kill(-child.pid, "SIGCONT"); } catch { /* ignore */ }
+        try { if (child.pid) process.kill(-child.pid, "SIGTERM"); } catch { /* ignore */ }
+        setTimeout(() => {
+          try { if (child.pid) process.kill(-child.pid, "SIGKILL"); } catch { /* ignore */ }
+        }, 5000).unref();
       };
+      launchPipe?.on("data", (chunk: Buffer) => {
+        if (launchReady) return;
+        launchBuffer += chunk.toString("utf8");
+        const newline = launchBuffer.indexOf("\n");
+        if (newline < 0) return;
+        launchReady = true;
+        void (async () => {
+          try {
+            const identity = JSON.parse(launchBuffer.slice(0, newline)) as { pid?: unknown; pgid?: unknown; processStart?: unknown };
+            if (!Number.isSafeInteger(identity.pid) || Number(identity.pid) !== child.pid || !Number.isSafeInteger(identity.pgid) || Number(identity.pgid) < 1 || typeof identity.processStart !== "string" || !identity.processStart) {
+              throw new Error("role launcher returned an invalid process identity");
+            }
+            await options.onSpawn?.({ role: options.role, pid: Number(identity.pid), pgid: Number(identity.pgid), processStart: identity.processStart });
+            if (options.signal?.aborted) throw options.signal.reason ?? new Error("role aborted before launch");
+            process.kill(-Number(identity.pid), "SIGCONT");
+          } catch (launchError) {
+            error = `role launch was not authorized: ${launchError instanceof Error ? launchError.message : String(launchError)}`;
+            try { if (child.pid) process.kill(-child.pid, "SIGKILL"); } catch { /* ignore */ }
+          }
+        })();
+      });
       const timeout = setTimeout(() => {
         timedOut = true;
         terminate();
@@ -174,30 +216,32 @@ export async function runRole(options: {
         }
       };
 
-      child.stdout.on("data", (chunk) => {
+      child.stdout!.on("data", (chunk) => {
         lastActivityAt = Date.now();
         stdoutBuffer += chunk.toString();
         const lines = stdoutBuffer.split("\n");
         stdoutBuffer = lines.pop() ?? "";
         for (const line of lines) processLine(line);
       });
-      child.stderr.on("data", (chunk) => {
+      child.stderr!.on("data", (chunk) => {
         lastActivityAt = Date.now();
         stderr += chunk.toString();
       });
       child.on("error", (spawnError) => {
         error = `failed to spawn Pi: ${spawnError.message}`;
       });
-      child.on("close", (code) => {
-        clearTimeout(timeout);
-        clearInterval(idleWatchdog);
-        if (stdoutBuffer.trim()) processLine(stdoutBuffer);
-        resolvePromise(code ?? 1);
-      });
       const abort = () => {
         aborted = true;
         terminate();
       };
+      child.on("close", (code) => {
+        clearTimeout(timeout);
+        clearInterval(idleWatchdog);
+        options.signal?.removeEventListener("abort", abort);
+        if (!launchReady) error ||= "role launcher exited before reporting process identity";
+        if (stdoutBuffer.trim()) processLine(stdoutBuffer);
+        resolvePromise(code ?? 1);
+      });
       if (options.signal?.aborted) abort();
       else options.signal?.addEventListener("abort", abort, { once: true });
     });

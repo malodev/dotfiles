@@ -87,6 +87,36 @@ source "$SCRIPT_DIR/scripts/install/packages.sh"
 source "$SCRIPT_DIR/scripts/install/dev-tools.sh"
 
 #=============================================================================
+# INSTALL NODE DEPENDENCIES
+#=============================================================================
+install_node_dependencies() {
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log_dry_run "npm ci (in $SCRIPT_DIR)"
+        return
+    fi
+
+    if [[ ! -f "$SCRIPT_DIR/package.json" ]]; then
+        return
+    fi
+
+    if ! command -v npm &>/dev/null; then
+        log_warn "npm not found — skipping Node.js dependency installation"
+        log_info "Install Node.js and run: cd $SCRIPT_DIR && npm ci"
+        return
+    fi
+
+    log_info "Installing Node.js dependencies (npm ci)..."
+    cd "$SCRIPT_DIR"
+    if npm ci --no-audit --no-fund 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Node.js dependencies installed"
+    else
+        log_error "npm ci failed — extension may not load"
+        log_info "Try manually: cd $SCRIPT_DIR && npm ci"
+    fi
+    cd "$ORIGINAL_DIR"
+}
+
+#=============================================================================
 # MAIN INSTALLATION FLOW
 #=============================================================================
 main() {
@@ -112,6 +142,7 @@ main() {
     run_install_programs
     run_stow_preflight_for_selection
     run_stow_and_post_steps
+    install_node_dependencies
     show_final_summary
 }
 
