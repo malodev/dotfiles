@@ -370,9 +370,11 @@ async function findAuthorizedNonterminalTask(repo: string): Promise<string | und
     .map((entry) => entry.name)
     .sort();
   for (const name of names) {
-    const { status } = await readStatus(taskPath(repo, name));
-    if (status.state === "DISCUSSING" || status.state === "COMPLETED") continue;
-    if (status.executionAuthorizedAt) return status.taskId;
+    try {
+      const { status } = await readStatus(taskPath(repo, name));
+      if (status.state === "DISCUSSING" || status.state === "COMPLETED") continue;
+      if (status.executionAuthorizedAt) return status.taskId;
+    } catch { /* skip malformed task directories */ }
   }
   return undefined;
 }
