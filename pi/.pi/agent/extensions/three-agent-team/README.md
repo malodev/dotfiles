@@ -109,8 +109,25 @@ Runtime authorization and execution gates always invoke the bundled validator fr
 ## Development
 
 ```bash
-npm run test:three-agent-team
+# Full CI suite
+npm run test:three-agent-team                    # all node + validator + inference tests
+npm run test:team-import-crash-matrix            # 9 SIGKILL/matrix crash tests
+npm run test:team-import-clean-install           # clean-install smoke test
+
+# Individual suites (from extension directory)
+cd pi/.pi/agent/extensions/three-agent-team
+npm run test:node                                # 144 unit + integration tests
+npm run test:validator                           # 11 Python validator tests
+npm run test:crash-matrix                        # crash recovery tests
+npm run test:clean-install                       # extension-load smoke test
+npm run test:production                          # handler + crash tests
+npm run test:unit                                # core + queue + manifest tests
+npm run test:integration                         # integration tests
+
+# Type check
 npx tsc --noEmit --skipLibCheck --allowImportingTsExtensions --module nodenext --moduleResolution nodenext --target es2023 --types node pi/.pi/agent/extensions/three-agent-team/*.ts pi/.pi/agent/extensions/three-agent-team/test/*.ts
+
+# Load extension
 pi -e ./index.ts --list-models
 ```
 
