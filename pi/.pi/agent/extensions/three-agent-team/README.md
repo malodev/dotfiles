@@ -4,7 +4,7 @@ Deterministic runtime orchestration for a configurable Architect → Builder →
 
 ## Installation
 
-**With dotfiles:** the extension is part of the `pi` Stow package. `install.sh` runs `npm ci` after Stow if npm is available.
+**With dotfiles:** `./install.sh pi-agent` installs the `pi` Stow package and runs `npm ci`.
 
 **Standalone:**
 
