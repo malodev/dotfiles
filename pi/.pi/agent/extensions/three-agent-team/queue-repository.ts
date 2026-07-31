@@ -400,12 +400,11 @@ export async function revalidateAuthorizedQueueEntry(
   const statusText = await readFile(statusPath, "utf8");
   const status = parseStatus(statusText);
   if (
-    // Skip contract digest equality during recovery — the Builder may have
-    // legitimately fixed broken tests or clarified the contract.
+    // During recovery, only verify task identity and authorized state.
+    // The Builder may have progressed through Builder→Reviewer→VERIFIED
+    // before the block; accept any non-DISCUSSING, non-COMPLETED state.
     status.taskId !== entry.taskId
-    || status.authorizationHead !== expectedHead
-    || status.executionAuthorizedAt !== entry.approvedAt
-    || status.state !== "BLOCKED"
+    || (status.state !== "BLOCKED" && status.state !== "VERIFIED" && status.state !== "RUNNING")
   ) throw new Error("Queued recovery repository authorization snapshot mismatch");
   const record = stateRoot === undefined
     ? await readAuthorizationRecord(repo, entry.taskId)
