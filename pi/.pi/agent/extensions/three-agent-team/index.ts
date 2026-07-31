@@ -53,6 +53,9 @@ import { dispatchQueueOnce, type QueuedExecutionContext } from "./queue-dispatch
 import { acquireRepositoryExecutionLock, inspectEnrollmentAdmission, freezeReviewedTree, completeExactCommit, installExactCommit, atomicRepositoryWrite, assertStrictCleanRepository, type ReviewedTree } from "./queue-repository.ts";
 import { previewPlanImport, applyPlanImport, assertNoIncompleteImport } from "./plan-import.ts";
 import { parseTeamImportArgs, ImportArgsError } from "./team-import-command.ts";
+
+// Stores the last preview so approval shorthand can reuse it.
+let lastPreview: { digest: string; head: string } | undefined;
 import { renderContract } from "./goal-contract.ts";
 import type { TaskSpec } from "./plan-manifest.ts";
 
@@ -1345,12 +1348,26 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       if (!requireIdle(ctx, "team-import")) return;
 
-      let parsed: { kind: "preview" | "approve"; manifestPath: string; approvedDigest?: string; approvalHead?: string };
+      let parsed: ImportCommandArgs;
       try {
         parsed = parseTeamImportArgs(args);
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
         return;
+      }
+
+      // Resolve short approval from last preview
+      if (parsed.kind === "approve-short") {
+        if (!lastPreview) {
+          ctx.ui.notify("No preview to approve — run /team-import team/plan.yaml first", "error");
+          return;
+        }
+        parsed = {
+          kind: "approve",
+          manifestPath: parsed.manifestPath,
+          approvedDigest: lastPreview.digest,
+          approvalHead: lastPreview.head,
+        };
       }
 
       const manifestPath = resolve(ctx.cwd, parsed.manifestPath);
@@ -1369,12 +1386,14 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             approvedDigest: "",
             ownerPrincipal: `uid:${currentUid()}`,
           });
+          lastPreview = { digest: preview.manifestDigest, head: preview.initialHead };
           ctx.ui.notify(
             `Manifest Preview:\n` +
             `Digest: sha256:${preview.manifestDigest}\n` +
             `Initial HEAD: ${preview.initialHead}\n` +
             `Tasks:\n${preview.tasks.map(t => `  - ${t.id}${t.dependsOn.length > 0 ? ` (depends on: ${t.dependsOn.join(", ")})` : ""}`).join("\n")}\n\n` +
-            `To approve and import, run:\n${preview.approvalCommand}`,
+            `To approve and import, run:\n${preview.approvalCommand}\n` +
+            `Or use: /team-import team/plan.yaml --approve`,
             "info"
           );
         } catch (error) {

@@ -11,7 +11,8 @@
 
 export type ImportCommandArgs =
   | { kind: "preview"; manifestPath: string }
-  | { kind: "approve"; manifestPath: string; approvedDigest: string; approvalHead: string };
+  | { kind: "approve"; manifestPath: string; approvedDigest: string; approvalHead: string }
+  | { kind: "approve-short"; manifestPath: string };
 
 export function parseTeamImportArgs(args: string): ImportCommandArgs {
   const parts = args.trim().split(/\s+/).filter(s => s.length > 0);
@@ -31,7 +32,13 @@ export function parseTeamImportArgs(args: string): ImportCommandArgs {
     return { kind: "preview", manifestPath };
   }
 
-  // Approval: exactly five tokens in fixed order
+  // Short approval: exactly two tokens (path + --approve)
+  // Uses the last previewed digest and current HEAD.
+  if (parts.length === 2 && parts[1] === "--approve") {
+    return { kind: "approve-short", manifestPath };
+  }
+
+  // Full approval: exactly five tokens in fixed order
   //   team/plan.yaml --approve sha256:<64-hex> --head <40-hex>
   if (parts.length !== 5) {
     throw new ImportArgsError(
