@@ -2055,6 +2055,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     if (event.toolName === "subagent" && activeRun) {
       return { block: true, reason: "Direct subagent calls are disabled during team task execution. Use /team-go so the extension enforces models, errors, and transitions." };
     }
+    const isRecoveryDiscussion = (path: string) => /^team\/tasks\/[a-z0-9][a-z0-9._-]*\/recovery-discussion\.md$/i.test(path.replace(/^\.\//, ""));
     if (isToolCallEventType("write", event)) {
       if (isRecoveryDiscussion(event.input.path)) return { block: true, reason: "recovery-discussion.md is extension-owned owner context and must not be edited by an agent." };
       const target = draftContractFile(ctx.cwd, event.input.path);
