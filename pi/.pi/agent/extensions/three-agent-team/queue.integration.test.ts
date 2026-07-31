@@ -698,6 +698,41 @@ test("matching owner recovery appends a fenced attempt and resumes exact authori
   ]);
 });
 
+test("/team-continue auto-recovers an unapproved BLOCKED entry", async () => {
+  const { repo, state, task, validator } = await gitRepository();
+  const { queue } = await enrollSample(repo, state, validator);
+  // Dispatch once to get the task into BLOCKED state (no executor → blocks)
+  const first = await dispatchQueueOnce(repo, { queue, stateRoot: state, validatorPath: validator, timing: dispatchTiming });
+  assert.equal(first.kind, "blocked");
+  assert.equal((await queue.snapshot()).entries[0].state, "BLOCKED");
+  assert.equal((await queue.snapshot()).entries[0].recoveryApproval, null);
+  // /team-continue without prior /team-unblock — should auto-recover and complete
+  const result = await dispatchQueueOnce(repo, {
+    queue,
+    stateRoot: state,
+    validatorPath: validator,
+    timing: dispatchTiming,
+    executor: async (execution) => {
+      await writeFile(resolve(repo, "implementation.txt"), "auto-recovered\n");
+      const reviewedTree = await freezeReviewedTree(repo, execution.expectedParent, execution.capability);
+      await execution.markVerified(JSON.stringify({ reviewedTree }));
+      await atomicRepositoryWrite(resolve(task, "completion-report.md"), "auto-recovered evidence\n", execution.capability);
+      const exact = await completeExactCommit(repo, execution.taskId, execution.expectedParent, reviewedTree, await expectedEvidence(repo, execution.taskId), execution.capability);
+      await execution.markCommitting(JSON.stringify({ tree: exact.treeSha, parent: exact.parent, subject: exact.subject, commit: exact.commitSha, indexDigest: exact.indexDigest }));
+      await installExactCommit(repo, exact, execution.capability);
+      await execution.complete(exact.commitSha);
+    },
+  });
+  assert.equal(result.kind, "completed");
+  const entry = (await queue.snapshot()).entries[0];
+  assert.equal(entry.state, "COMPLETED");
+  assert.equal(entry.attempts.length, 2);
+  assert.equal(entry.attempts[1].kind, "RECOVERY");
+  assert.deepEqual(entry.attempts[1].events.map((event: any) => event.phase), [
+    "CLAIMED", "AUTHORIZING", "AUTHORIZED", "EXECUTING", "VERIFIED", "COMMITTING", "COMPLETED",
+  ]);
+});
+
 test("owner recovery refuses a recorded role process that is still live", async () => {
   const { repo, state } = await baseFixture();
   const queue = await openDurableQueue(repo, { stateRoot: state, leaseTtlMs: 5_000 });
