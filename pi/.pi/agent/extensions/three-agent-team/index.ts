@@ -1812,7 +1812,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       ctx.ui.notify(`Team task ${activeRun.taskId} is active. Use /team-status or /team-cancel; other input is blocked to preserve single-GPU sequencing.`, "warning");
       return { action: "handled" };
     }
-    if (event.source === "interactive" && !activeUnblockDiscussion && await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
+    if (event.source === "interactive" && !activeUnblockDiscussion && authorizedInteractiveTaskId && await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
       try {
         await assertImmediateQueueAvailable(ctx.cwd, "Interactive Architect input");
       } catch (error) {
@@ -2031,7 +2031,14 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   });
 
   pi.on("tool_call", async (event, ctx) => {
-    if (await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
+    const teamRepo = await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"));
+    if (!teamRepo) return;
+
+    // Only gate write and edit tools — they mutate the repository.
+    // Bash, read, and other tools are unrestricted.
+    const isMutation = event.toolName === "write" || event.toolName === "edit";
+
+    if (isMutation) {
       const lock = currentRepositoryLock();
       if (!lock && (activeRun || pendingUnblockRecovery || activeUnblockDiscussion)) {
         return { block: true, reason: `Tool ${event.toolName} is blocked because no repository execution-lock capability is held.` };
@@ -2043,9 +2050,10 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       try { await assertNoIncompleteImport(ctx.cwd); }
       catch (error) { return { block: true, reason: error instanceof Error ? error.message : String(error) }; }
     }
-    const isRecoveryDiscussion = (path: string) => /^team\/tasks\/[a-z0-9][a-z0-9._-]*\/recovery-discussion\.md$/i.test(path.replace(/^\.\//, ""));
-    if (event.toolName === "subagent" && await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
-      return { block: true, reason: "Direct subagent calls are disabled in initialized team repositories. Use /team-go so the extension enforces models, errors, and transitions." };
+
+    // Subagent only blocked during active workflow
+    if (event.toolName === "subagent" && activeRun) {
+      return { block: true, reason: "Direct subagent calls are disabled during team task execution. Use /team-go so the extension enforces models, errors, and transitions." };
     }
     if (isToolCallEventType("write", event)) {
       if (isRecoveryDiscussion(event.input.path)) return { block: true, reason: "recovery-discussion.md is extension-owned owner context and must not be edited by an agent." };
@@ -2112,7 +2120,11 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         lock.signal.addEventListener("abort", () => ctx.abort(), { once: true });
       } catch (error) {
         ctx.ui.notify(`Repository lock unavailable — some guards are disabled: ${error instanceof Error ? error.message : String(error)}`, "warning");
-        // Don't block the agent turn; let it proceed without the lock guard.
+        // Release if lock was acquired but guard failed.
+        if (interactiveRepositoryLock) {
+          await interactiveRepositoryLock.release().catch(() => undefined);
+          interactiveRepositoryLock = undefined;
+        }
       }
     }
     if (ctx.model && configuredTeam.lifecycle.managedProviders.includes(ctx.model.provider) && !activeRun) {
