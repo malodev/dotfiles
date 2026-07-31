@@ -112,6 +112,7 @@ contract_digest: "null"
 execution_authorized_at: "null"
 blocked_reason: "null"
 verified_at: "null"
+completed_at: "null"
 commit_sha: "null"
 max_review_cycles: 3
 completion_policy:

@@ -184,7 +184,7 @@ async function setState(taskDir: string, state: string, extra: Record<string, st
   const path = resolve(taskDir, "status.yaml");
   let text = await readFile(path, "utf8");
   text = setYamlScalar(text, "state", state);
-  for (const [key, value] of Object.entries(extra)) text = setYamlScalar(text, key, value);
+  for (const [key, value] of Object.entries(extra)) text = upsertYamlScalar(text, key, value);
   if (capability) {
     await atomicRepositoryWrite(path, text, capability);
   } else {
