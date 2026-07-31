@@ -416,6 +416,7 @@ export async function revalidateAuthorizedQueueEntry(
   ) throw new Error("Queued recovery external authorization record mismatch");
   await runValidator(repo, entry.taskId, validatorPath, "execution");
   assertSideEffectCapability(capability);
+}
 
 function nulPaths(bytes: Buffer): string[] {
   return bytes.toString("utf8").split("\0").filter(Boolean);
