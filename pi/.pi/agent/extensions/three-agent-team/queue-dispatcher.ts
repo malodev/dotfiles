@@ -213,7 +213,7 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
           type: "recover",
           taskId: barrier.taskId,
           failedAttemptId: failed.attemptId,
-          approvedBy: "owner:/team-continue",
+          approvedBy: barrier.ownerPrincipal,
           approvedAt: new Date().toISOString(),
           expectedRevision: snapshot.revision,
         });
