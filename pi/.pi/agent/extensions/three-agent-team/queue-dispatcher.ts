@@ -209,12 +209,13 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
         if (!failed) {
           return { kind: "blocked", taskId: barrier.taskId, reason: "BLOCKED entry has no failed attempt to recover", snapshot };
         }
+        const failedAttemptId = failed.attemptId;
         // Auto-approve or refresh recovery — explicit /team-continue is owner intent.
-        if (!barrier.recoveryApproval || barrier.recoveryApproval.failedAttemptId !== failed.attemptId) {
-          await options.queue!.command({
+        if (!barrier.recoveryApproval || barrier.recoveryApproval.failedAttemptId !== failedAttemptId) {
+          await queue.command({
             type: "recover",
             taskId: barrier.taskId,
-            failedAttemptId: failed.attemptId,
+            failedAttemptId,
             approvedBy: barrier.ownerPrincipal,
             approvedAt: new Date().toISOString(),
             expectedRevision: snapshot.revision,
@@ -226,7 +227,7 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
         claimed = await session.claimNext();
         if (!claimed) return { kind: "blocked", taskId: barrier.taskId, reason: "recovery approval could not be claimed", snapshot: await session.assertCurrent() };
         const recoveryDetail = JSON.stringify({
-          recoveredAttempt: barrier.recoveryApproval!.failedAttemptId,
+          recoveredAttempt: failedAttemptId,
           authorizationHead: claimed.entry.authorizationHead,
           contractDigest: claimed.entry.contractDigest,
         });

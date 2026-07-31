@@ -1812,7 +1812,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       ctx.ui.notify(`Team task ${activeRun.taskId} is active. Use /team-status or /team-cancel; other input is blocked to preserve single-GPU sequencing.`, "warning");
       return { action: "handled" };
     }
-    if (event.source === "interactive" && !activeUnblockDiscussion && authorizedInteractiveTaskId && await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
+    if (event.source === "interactive" && !activeUnblockDiscussion && activeRun && await exists(resolve(ctx.cwd, "team/validate_goal_contract.py"))) {
       try {
         await assertImmediateQueueAvailable(ctx.cwd, "Interactive Architect input");
       } catch (error) {
@@ -2114,10 +2114,10 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     if (initializedRepository && !recoveryTurn && !currentRepositoryLock()) {
       try {
         const lock = await acquireRepositoryExecutionLock(ctx.cwd, configuredTeam.queue.executionLockTimeoutSeconds * 1000);
+        interactiveRepositoryLock = lock; // assign early so catch can release
         lock.assertHeld();
         await assertImmediateQueueAvailable(ctx.cwd, "Interactive agent turn");
         lock.assertHeld();
-        interactiveRepositoryLock = lock;
         lock.signal.addEventListener("abort", () => ctx.abort(), { once: true });
       } catch (error) {
         ctx.ui.notify(`Repository lock unavailable — some guards are disabled: ${error instanceof Error ? error.message : String(error)}`, "warning");
