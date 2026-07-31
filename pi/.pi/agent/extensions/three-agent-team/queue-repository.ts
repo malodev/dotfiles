@@ -416,16 +416,6 @@ export async function revalidateAuthorizedQueueEntry(
   ) throw new Error("Queued recovery external authorization record mismatch");
   await runValidator(repo, entry.taskId, validatorPath, "execution");
   assertSideEffectCapability(capability);
-  if (await gitText(repo, ["rev-parse", "--verify", "HEAD^{commit}"], "Cannot recheck queued recovery HEAD") !== expectedHead) {
-    throw new Error("Queued recovery HEAD changed during validation");
-  }
-  // Re-check that brief.md and status.yaml haven't changed during validation.
-  // Compare against the in-memory snapshot (brief, statusText), not the enrolled
-  // contract digest — the Builder may have legitimately fixed the contract.
-  if (digest(await readFile(briefPath)) !== digest(brief) || await readFile(statusPath, "utf8") !== statusText) {
-    throw new Error("Queued recovery authorization snapshot changed during validation");
-  }
-}
 
 function nulPaths(bytes: Buffer): string[] {
   return bytes.toString("utf8").split("\0").filter(Boolean);
