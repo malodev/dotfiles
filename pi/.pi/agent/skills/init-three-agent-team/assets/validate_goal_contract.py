@@ -257,9 +257,17 @@ def validate(task_dir: Path, phase: str) -> list[str]:
     if untracked.returncode != 0:
         errors.append("Unable to enumerate untracked files.")
     elif untracked.stdout.strip():
-        names = ", ".join(untracked.stdout.splitlines()[:8])
-        suffix = " …" if len(untracked.stdout.splitlines()) > 8 else ""
-        errors.append(f"Files are invisible to git diff; run `git add -N .`: {names}{suffix}")
+        # Exclude extension-owned files that are created at runtime and
+        # should not block validation (runtime-config.json, recovery-*).
+        ignored = {"runtime-config.json", "recovery-discussion.md", "recovery-plan.md"}
+        names = [
+            n for n in untracked.stdout.splitlines()
+            if n.split("/")[-1] not in ignored
+        ]
+        if names:
+            display = ", ".join(names[:8])
+            suffix = " …" if len(names) > 8 else ""
+            errors.append(f"Files are invisible to git diff; run `git add -N .`: {display}{suffix}")
 
     tests = parse_success_tests(sections["Success tests"], errors)
     verification = sections["Verification commands"]
