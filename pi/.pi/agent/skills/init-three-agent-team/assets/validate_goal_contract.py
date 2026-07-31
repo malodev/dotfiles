@@ -257,12 +257,13 @@ def validate(task_dir: Path, phase: str) -> list[str]:
     if untracked.returncode != 0:
         errors.append("Unable to enumerate untracked files.")
     elif untracked.stdout.strip():
-        # Exclude extension-owned files that are created at runtime and
-        # should not block validation (runtime-config.json, recovery-*).
-        ignored = {"runtime-config.json", "recovery-discussion.md", "recovery-plan.md"}
+        # The task directory is the extension's domain — files created there
+        # (runtime-config.json, recovery-*, etc.) are not build artifacts and
+        # should not block validation.
+        task_prefix = f"team/tasks/{task_dir.name}/"
         names = [
             n for n in untracked.stdout.splitlines()
-            if n.split("/")[-1] not in ignored
+            if not n.startswith(task_prefix)
         ]
         if names:
             display = ", ".join(names[:8])
