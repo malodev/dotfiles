@@ -1584,7 +1584,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             executor: async (execution) => {
               const run = reserveRun(execution.taskId);
               attachQueuedExecution(run, execution);
-              const taskConfig = await loadOrCreateTaskConfig(taskPath(ctx.cwd, execution.taskId), configuredTeam);
+              const taskConfig = await loadOrCreateTaskConfig(taskPath(ctx.cwd, execution.taskId), configuredTeam, ctx.cwd);
               await executeWorkflow(ctx.cwd, execution.taskId, ctx as ExtensionCommandContext, taskConfig, run);
             },
           });
@@ -1636,7 +1636,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
           throw new Error("Task is not in unauthorized DISCUSSING state");
         }
         await validate(ctx.cwd, taskDir, "pre-go");
-        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam, ctx.cwd);
         await enterTeamMode(ctx.cwd, taskConfig);
         authorized = true;
         authorizedInteractiveTaskId = taskId;
@@ -1684,7 +1684,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
           throw new Error(`Task ${taskId} cannot resume from ${status.state}; expected BLOCKED or EXECUTING.`);
         }
         resumeEligible = true;
-        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam, ctx.cwd);
         await enterTeamMode(ctx.cwd, taskConfig);
         const snapshot = await ensureAuthorizationSnapshot(ctx.cwd, taskDir, true, run.repositoryExecutionLock!);
         if (snapshot.migrated) {
@@ -1906,7 +1906,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             executor: async (execution) => {
               if (execution.taskId !== recoveryRun.taskId) throw new Error("Queued recovery task identity changed before execution");
               attachQueuedExecution(recoveryRun, execution);
-              const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+              const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam, ctx.cwd);
               workflowOwnsRun = true;
               await executeWorkflow(recovery.repo, execution.taskId, ctx as ExtensionCommandContext, taskConfig, recoveryRun);
             },
@@ -1925,7 +1925,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         attachRepositoryExecutionLock(recoveryRun, executionLock);
         recoveryRun.repositoryExecutionLock!.assertHeld();
         await assertImmediateQueueAvailable(recovery.repo, "Owner-approved immediate recovery");
-        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam, ctx.cwd);
         await enterTeamMode(recovery.repo, taskConfig);
         const snapshot = await ensureAuthorizationSnapshot(recovery.repo, taskDir, true, recoveryRun.repositoryExecutionLock!);
         if (snapshot.migrated) {

@@ -244,8 +244,9 @@ export function taskRuntimeSnapshot(config: TeamConfig): TaskRuntimeSnapshot {
   };
 }
 
-export async function loadOrCreateTaskConfig(taskDir: string, current: TeamConfig): Promise<TeamConfig> {
+export async function loadOrCreateTaskConfig(taskDir: string, current: TeamConfig, repo?: string): Promise<TeamConfig> {
   const path = resolve(taskDir, "runtime-config.json");
+  let created = false;
   let snapshot: TaskRuntimeSnapshot;
   try {
     snapshot = JSON.parse(await readFile(path, "utf8")) as TaskRuntimeSnapshot;
@@ -253,6 +254,16 @@ export async function loadOrCreateTaskConfig(taskDir: string, current: TeamConfi
     if (error?.code !== "ENOENT") throw error;
     snapshot = taskRuntimeSnapshot(current);
     await writeFile(path, JSON.stringify(snapshot, null, 2) + "\n", { encoding: "utf8", flag: "wx" });
+    created = true;
+  }
+  // Make newly-created runtime-config.json visible to git diff (validator requirement)
+  if (created && repo) {
+    const { spawn } = await import("node:child_process");
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("git", ["add", "-N", path], { cwd: repo });
+      proc.once("error", reject);
+      proc.once("close", (code) => code === 0 ? resolve() : reject(new Error(`git add -N failed with code ${code}`)));
+    });
   }
   if (snapshot.version !== 1) throw new Error("task runtime-config.json version must be 1");
   const roles = parseRoles(snapshot.roles);
