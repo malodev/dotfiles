@@ -204,7 +204,21 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
         return { kind: "blocked", taskId: barrier.taskId, reason, snapshot };
       }
       if (barrier.state === "BLOCKED" && !barrier.recoveryApproval) {
-        return { kind: "blocked", taskId: barrier.taskId, reason: barrier.attempts.at(-1)?.events.at(-1)?.detail ?? "blocked FIFO barrier", snapshot };
+        // Auto-approve recovery — explicit /team-continue is owner intent to retry.
+        const failed = barrier.attempts.at(-1);
+        if (!failed) {
+          return { kind: "blocked", taskId: barrier.taskId, reason: "BLOCKED entry has no failed attempt to recover", snapshot };
+        }
+        await options.queue!.command({
+          type: "recover",
+          taskId: barrier.taskId,
+          failedAttemptId: failed.attemptId,
+          approvedBy: "owner:/team-continue",
+          approvedAt: new Date().toISOString(),
+          expectedRevision: snapshot.revision,
+        });
+        snapshot = await session.assertCurrent();
+        // Fall through to recovery dispatch below
       }
       let claimed;
       if (barrier.state === "BLOCKED" && barrier.recoveryApproval) {
