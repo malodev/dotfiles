@@ -1800,11 +1800,14 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       const taskId = authorizedInteractiveTaskId;
       let state = "authorized";
       try { state = (await readStatus(taskPath(ctx.cwd, taskId))).status.state; } catch { /* Keep the safe lock if task metadata cannot be read. */ }
-      ctx.ui.notify(
-        `Task ${taskId} is ${state}. Direct interactive Architect chat is disabled after /team-go. Use /team-status, /team-unblock for strategy, /team-resume after an owner-approved correction, or /team-discard.`,
-        "warning",
-      );
-      return { action: "handled" };
+      // Allow interactive chat when BLOCKED — the owner needs to fix things.
+      if (state !== "BLOCKED") {
+        ctx.ui.notify(
+          `Task ${taskId} is ${state}. Direct interactive Architect chat is disabled after /team-go. Use /team-status, /team-unblock for strategy, /team-resume after an owner-approved correction, or /team-discard.`,
+          "warning",
+        );
+        return { action: "handled" };
+      }
     }
     if (activeRun && event.source === "interactive") {
       ctx.ui.notify(`Team task ${activeRun.taskId} is active. Use /team-status or /team-cancel; other input is blocked to preserve single-GPU sequencing.`, "warning");
