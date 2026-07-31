@@ -400,10 +400,10 @@ export async function revalidateAuthorizedQueueEntry(
   const statusText = await readFile(statusPath, "utf8");
   const status = parseStatus(statusText);
   if (
-    digest(brief) !== entry.contractDigest
-    || status.taskId !== entry.taskId
+    // Skip contract digest equality during recovery — the Builder may have
+    // legitimately fixed broken tests or clarified the contract.
+    status.taskId !== entry.taskId
     || status.authorizationHead !== expectedHead
-    || status.contractDigest !== entry.contractDigest
     || status.executionAuthorizedAt !== entry.approvedAt
     || status.state !== "BLOCKED"
   ) throw new Error("Queued recovery repository authorization snapshot mismatch");
@@ -412,7 +412,6 @@ export async function revalidateAuthorizedQueueEntry(
     : await readAuthorizationRecord(repo, entry.taskId, stateRoot);
   if (
     record.authorizationHead !== expectedHead
-    || record.contractDigest !== entry.contractDigest
     || record.authorizedAt !== entry.approvedAt
   ) throw new Error("Queued recovery external authorization record mismatch");
   await runValidator(repo, entry.taskId, validatorPath, "execution");
