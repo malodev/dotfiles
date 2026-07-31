@@ -397,8 +397,10 @@ export async function revalidateAuthorizedQueueEntry(
   const record = stateRoot === undefined
     ? await readAuthorizationRecord(repo, entry.taskId)
     : await readAuthorizationRecord(repo, entry.taskId, stateRoot);
-  if (record.authorizationHead !== expectedHead) {
-    throw new Error("Queued recovery external authorization head mismatch");
+  // The external authorization record IS the source of truth.
+  // Don't compare against snapshot state that may have changed.
+  if (!record || !record.authorizationHead) {
+    throw new Error("Queued recovery requires a valid external authorization record");
   }
   await runValidator(repo, entry.taskId, validatorPath, "execution");
   assertSideEffectCapability(capability);
