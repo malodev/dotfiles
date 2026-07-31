@@ -203,31 +203,30 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
         snapshot = await session.block(barrier.taskId, attempt.attemptId, reason);
         return { kind: "blocked", taskId: barrier.taskId, reason, snapshot };
       }
-      if (barrier.state === "BLOCKED" && !barrier.recoveryApproval) {
-        // Auto-approve recovery — explicit /team-continue is owner intent to retry.
+      let claimed;
+      if (barrier.state === "BLOCKED") {
         const failed = barrier.attempts.at(-1);
         if (!failed) {
           return { kind: "blocked", taskId: barrier.taskId, reason: "BLOCKED entry has no failed attempt to recover", snapshot };
         }
-        await options.queue!.command({
-          type: "recover",
-          taskId: barrier.taskId,
-          failedAttemptId: failed.attemptId,
-          approvedBy: barrier.ownerPrincipal,
-          approvedAt: new Date().toISOString(),
-          expectedRevision: snapshot.revision,
-        });
-        snapshot = await session.assertCurrent();
-        // Fall through to recovery dispatch below
-      }
-      let claimed;
-      if (barrier.state === "BLOCKED" && barrier.recoveryApproval) {
+        // Auto-approve or refresh recovery — explicit /team-continue is owner intent.
+        if (!barrier.recoveryApproval || barrier.recoveryApproval.failedAttemptId !== failed.attemptId) {
+          await options.queue!.command({
+            type: "recover",
+            taskId: barrier.taskId,
+            failedAttemptId: failed.attemptId,
+            approvedBy: barrier.ownerPrincipal,
+            approvedAt: new Date().toISOString(),
+            expectedRevision: snapshot.revision,
+          });
+          snapshot = await session.assertCurrent();
+        }
         assertRepositoryCapability();
         await assertAttemptProcessesQuiescent(barrier);
         claimed = await session.claimNext();
         if (!claimed) return { kind: "blocked", taskId: barrier.taskId, reason: "recovery approval could not be claimed", snapshot: await session.assertCurrent() };
         const recoveryDetail = JSON.stringify({
-          recoveredAttempt: barrier.recoveryApproval.failedAttemptId,
+          recoveredAttempt: barrier.recoveryApproval!.failedAttemptId,
           authorizationHead: claimed.entry.authorizationHead,
           contractDigest: claimed.entry.contractDigest,
         });

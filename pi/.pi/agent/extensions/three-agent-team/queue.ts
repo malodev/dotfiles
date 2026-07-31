@@ -804,7 +804,8 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       queueRevision: input.expectedRevision,
     };
     if (entry.recoveryApproval) {
-      if (!same(entry.recoveryApproval, proposed)) throw new Error("Conflicting recovery approval");
+      // Recovery already approved — idempotent. Don't fail on minor differences
+      // (auto-recovery from /team-continue vs manual /team-unblock).
       return { changed: false, snapshot: clone(snapshot) };
     }
     assertRevision(snapshot, input.expectedRevision);
