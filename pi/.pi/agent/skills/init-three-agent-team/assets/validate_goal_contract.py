@@ -377,10 +377,6 @@ def validate(task_dir: Path, phase: str) -> list[str]:
                 errors.append("HEAD must equal the authorization head during execution.")
         if not contract_digest or not re.fullmatch(r"[0-9a-f]{64}", contract_digest):
             errors.append("Execution validation requires a SHA-256 contract_digest.")
-        elif hashlib.sha256(brief_bytes).hexdigest() != contract_digest:
-            # Warn, don't block — the Builder may have legitimately fixed
-            # a broken test or clarified the contract during execution.
-            pass
         if authorized_at in {None, "null", ""}:
             errors.append("Execution validation requires a recorded execution_authorized_at timestamp.")
         authorization_match = EXECUTION_AUTHORIZATION_RE.fullmatch(authorization)
