@@ -1798,12 +1798,11 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     }
     if (event.source === "interactive" && authorizedInteractiveTaskId && !activeUnblockDiscussion) {
       const taskId = authorizedInteractiveTaskId;
-      let state = "authorized";
-      try { state = (await readStatus(taskPath(ctx.cwd, taskId))).status.state; } catch { /* Keep the safe lock if task metadata cannot be read. */ }
-      // Allow interactive chat when BLOCKED — the owner needs to fix things.
-      if (state !== "BLOCKED") {
+      // Only block interactive chat when a task is actively running (Builder/Reviewer).
+      // BLOCKED tasks need owner intervention; let the Architect help.
+      if (activeRun && activeRun.taskId === taskId) {
         ctx.ui.notify(
-          `Task ${taskId} is ${state}. Direct interactive Architect chat is disabled after /team-go. Use /team-status, /team-unblock for strategy, /team-resume after an owner-approved correction, or /team-discard.`,
+          `Task ${taskId} is active. Direct interactive Architect chat is disabled during execution. Use /team-status or /team-cancel.`,
           "warning",
         );
         return { action: "handled" };
