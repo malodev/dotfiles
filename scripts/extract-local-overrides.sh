@@ -52,6 +52,7 @@ MANAGED_FILES=(
   "bash/.bashrc|$HOME/.bashrc|$HOME/.bashrc_local"
   "bash/.bash_profile|$HOME/.bash_profile|$HOME/.bash_profile_local"
   "bash/.bash_aliases|$HOME/.bash_aliases|$HOME/.bash_aliases_local"
+  "git/.gitconfig|$HOME/.gitconfig|$HOME/.gitconfig_local"
 )
 
 #-------------------------------------------------------------------------

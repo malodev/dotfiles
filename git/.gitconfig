@@ -39,3 +39,4 @@
 # Write with:  git config --file ~/.gitconfig_local --add safe.directory /path
 [include]
 	path = ~/.gitconfig_local
+# >>> END MANAGED CONFIG <<<
