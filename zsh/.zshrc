@@ -279,8 +279,6 @@ if command -v fzf >/dev/null 2>&1; then
   function zvm_after_init() {
     eval "$(fzf --zsh)" 2>/dev/null
   }
-  # Also source directly in case zsh-vi-mode isn't loaded yet
-  eval "$(fzf --zsh)" 2>/dev/null
 fi
 
 bindkey "^[[A" history-substring-search-up
