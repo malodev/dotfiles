@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #=============================================================================
-# extract-shell-local-overrides.sh
+# extract-local-overrides.sh
 #
 # Ensure managed dotfiles end with a sentinel line. If they don't, the file
 # has machine-specific additions — extract those into a `_local` file (which
@@ -10,9 +10,9 @@
 # skipped cleanly. Machine-specific settings then live only in `_local` files.
 #
 # Usage:
-#   ./scripts/extract-shell-local-overrides.sh            # interactive
-#   ./scripts/extract-shell-local-overrides.sh --apply     # non-interactive
-#   ./scripts/extract-shell-local-overrides.sh --dry-run   # preview only
+#   ./scripts/extract-local-overrides.sh                 # interactive
+#   ./scripts/extract-local-overrides.sh --apply          # non-interactive
+#   ./scripts/extract-local-overrides.sh --dry-run        # preview only
 #=============================================================================
 set -eo pipefail
 
