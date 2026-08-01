@@ -1755,12 +1755,29 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("team-status", {
-    description: "Show one team task status",
+    description: "Show team task status — all tasks with no arg, one task with <task-id>",
     getArgumentCompletions: completeTaskArgument,
     handler: async (args, ctx) => {
       const taskId = args.trim();
-      if (!taskId) { ctx.ui.notify("Usage: /team-status <task-id>", "warning"); return; }
       try {
+        if (!taskId) {
+          // No arg: show all tasks with their states (like completion list)
+          const tasksRoot = resolve(ctx.cwd, "team/tasks");
+          if (!(await exists(tasksRoot))) { ctx.ui.notify("No team/tasks directory", "warning"); return; }
+          const names = (await readdir(tasksRoot, { withFileTypes: true }))
+            .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+            .map((entry) => entry.name)
+            .sort();
+          const lines: string[] = [];
+          for (const name of names) {
+            try {
+              const { status } = await readStatus(taskPath(ctx.cwd, name));
+              lines.push(`${name}  ${status.state}${status.reviewCycle > 0 ? ` (review ${status.reviewCycle}/${status.maxReviewCycles})` : ""}`);
+            } catch { lines.push(`${name}  unknown`); }
+          }
+          ctx.ui.notify(lines.length ? lines.join("\n") : "No tasks found", "info");
+          return;
+        }
         const { status } = await readStatus(taskPath(ctx.cwd, taskId));
         ctx.ui.notify(`${status.taskId}: ${status.state}, review ${status.reviewCycle}/${status.maxReviewCycles}`, "info");
       } catch (error) { ctx.ui.notify(String(error), "error"); }
