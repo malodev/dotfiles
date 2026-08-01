@@ -28,7 +28,7 @@ for arg in "$@"; do
     --apply)   MODE="apply" ;;
     --dry-run) MODE="dry-run" ;;
     --list)    MODE="list" ;;
-    --help|-h) sed -n '2,/^$/p' "$0" | tail -n +2; exit 0 ;;
+    --help|-h) MODE="help" ;;
     *) echo "Unknown flag: $arg"; exit 1 ;;
   esac
 done
@@ -73,9 +73,28 @@ if [[ "$MODE" == "list" ]]; then
 fi
 
 #-------------------------------------------------------------------------
+# --help
+#-------------------------------------------------------------------------
+if [[ "$MODE" == "help" ]]; then
+  echo "Usage: extract-local-overrides.sh [--apply|--dry-run|--list|--help]"
+  echo ""
+  echo "  (no flag)  Show status of all managed files"
+  echo "  --apply    Non-interactive: extract all diffs to _local files"
+  echo "  --dry-run  Preview what would be extracted"
+  echo "  --list     List tracked files and their local overrides"
+  echo "  --help     Show this help"
+  exit 0
+fi
+
+#-------------------------------------------------------------------------
 # Phase 1 — check each file
 #-------------------------------------------------------------------------
-header "Checking managed dotfiles for sentinel..."
+if [[ "$MODE" == "interactive" ]]; then
+  printf '%-40s %s\n' "FILE" "STATUS"
+  printf '%-40s %s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "━━━━━━━━"
+else
+  header "Checking managed dotfiles for sentinel..."
+fi
 
 clean=0
 migrated=0
@@ -94,15 +113,32 @@ for entry in "${MANAGED_FILES[@]}"; do
 
   if [[ "$last_line" == "$SENTINEL" ]]; then
     clean=$((clean + 1))
+    if [[ "$MODE" == "interactive" ]]; then
+      printf '%-40s \033[1;32m✓ clean\033[0m\n' "$name"
+    fi
     continue
   fi
 
   to_migrate+=("$entry")
-  info "$name — sentinel missing (needs migration)"
+  if [[ "$MODE" == "interactive" ]]; then
+    printf '%-40s \033[1;33m✗ needs migration\033[0m\n' "$name"
+  else
+    info "$name — sentinel missing (needs migration)"
+  fi
 done
 
-if [[ $clean -eq ${#MANAGED_FILES[@]} ]]; then
+if [[ $clean -eq ${#MANAGED_FILES[@]} && "$MODE" != "interactive" ]]; then
   ok "All files have sentinel — nothing to do."
+  exit 0
+fi
+
+if [[ "$MODE" == "interactive" ]]; then
+  echo ""
+  if [[ ${#to_migrate[@]} -eq 0 ]]; then
+    ok "All files clean."
+    exit 0
+  fi
+  info "${#to_migrate[@]} file(s) need migration. Run with --dry-run to preview or --apply to migrate."
   exit 0
 fi
 
