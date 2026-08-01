@@ -13,6 +13,7 @@
 #   ./scripts/extract-local-overrides.sh                 # interactive
 #   ./scripts/extract-local-overrides.sh --apply          # non-interactive
 #   ./scripts/extract-local-overrides.sh --dry-run        # preview only
+#   ./scripts/extract-local-overrides.sh --list           # list tracked files
 #=============================================================================
 set -eo pipefail
 
@@ -26,6 +27,7 @@ for arg in "$@"; do
   case "$arg" in
     --apply)   MODE="apply" ;;
     --dry-run) MODE="dry-run" ;;
+    --list)    MODE="list" ;;
     --help|-h) sed -n '2,/^$/p' "$0" | tail -n +2; exit 0 ;;
     *) echo "Unknown flag: $arg"; exit 1 ;;
   esac
@@ -56,6 +58,19 @@ MANAGED_FILES=(
   "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland_local.conf"
   "hyprland/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors_local.conf"
 )
+
+#-------------------------------------------------------------------------
+# --list: print tracked files
+#-------------------------------------------------------------------------
+if [[ "$MODE" == "list" ]]; then
+  printf '%-45s → %s\n' "TRACKED (repo)" "LOCAL OVERRIDE (untracked)"
+  printf '%-45s   %s\n' "━━━━━━━━━━━━━━━━━━━━━━━━" "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  for entry in "${MANAGED_FILES[@]}"; do
+    IFS='|' read -r repo_rel home_path local_path <<< "$entry"
+    printf '%-45s → %s\n' "$repo_rel" "$local_path"
+  done
+  exit 0
+fi
 
 #-------------------------------------------------------------------------
 # Phase 1 — check each file
