@@ -184,10 +184,10 @@ fi
 #=============================================================================
 alias l='ls -al'
 alias v='nvim'
+alias vi='nvim'
 alias t='tmux'
 alias ts='tmux new-session -A -s'
 alias tl='tmux list-sessions'
-
 export EDITOR=nvim
 
 #=============================================================================
@@ -293,7 +293,4 @@ bindkey "^[[B" history-substring-search-down
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 
-# bun completions
-[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
-
-alias gam="$HOME/bin/gam7/gam"
+# >>> END MANAGED CONFIG <<<

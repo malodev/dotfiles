@@ -39,20 +39,24 @@ if IS_WSL then
     cache_enabled = true,
   }
 elseif os.getenv("SSH_TTY") ~= nil or os.getenv("SSH_CONNECTION") ~= nil then
-  -- SSH session: use OSC 52 so yanks reach the local clipboard via the terminal
-  -- Works with VSCode integrated terminal and Kitty (both support OSC 52)
-  local osc52 = require("vim.ui.clipboard.osc52")
-  vim.g.clipboard = {
-    name = "OSC 52",
-    copy = {
-      ["+"] = osc52.copy("+"),
-      ["*"] = osc52.copy("*"),
-    },
-    paste = {
-      ["+"] = osc52.paste("+"),
-      ["*"] = osc52.paste("*"),
-    },
-  }
+  -- SSH session: send yanks to the local clipboard via OSC 52.
+  -- OSC 52 reads hang on terminal multiplexers (herdr, tmux), so we use
+  -- Neovim's internal registers (no clipboard sync) and only push yanks
+  -- out to the system clipboard via the TextYankPost autocmd.
+  -- For system clipboard paste, use Cmd+V / Ctrl+Shift+V.
+  vim.opt.clipboard = "" -- no automatic sync (avoids broken OSC 52 reads)
+  local osc52 = require("clipboard.osc52_bel")
+
+  vim.api.nvim_create_autocmd("TextYankPost", {
+    group = vim.api.nvim_create_augroup("osc52-yank", { clear = true }),
+    callback = function()
+      local reg = vim.v.event.regname == '' and '"' or vim.v.event.regname
+      local content = vim.fn.getreg(reg)
+      if content ~= '' then
+        osc52.send('c', vim.base64.encode(content))
+      end
+    end,
+  })
 end
 
 vim.opt.number = true -- show absolute number

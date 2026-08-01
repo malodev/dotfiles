@@ -1,256 +1,168 @@
 #!/usr/bin/env bash
 #=============================================================================
-# localize-dotfile-changes.sh
+# extract-shell-local-overrides.sh
 #
-# Detect local (machine-specific) modifications to managed dotfiles
-# (bash/zsh rc, profile, env, aliases) that differ from the git-tracked
-# version, and extract the machine-specific additions into:
-#   ~/.bashrc_local  (for bash files)
-#   ~/.zshrc_local   (for zsh files)
+# Ensure managed dotfiles end with a sentinel line. If they don't, the file
+# has machine-specific additions — extract those into a `_local` file (which
+# is NOT tracked by git) and restore the managed file from the repo.
 #
-# These _local files are NOT tracked in the dotfiles repo, so each machine's
-# customizations stay on that machine.
+# Once migrated, the script is idempotent: every file with the sentinel is
+# skipped cleanly. Machine-specific settings then live only in `_local` files.
 #
 # Usage:
-#   ./scripts/localize-dotfile-changes.sh          # Interactive: show each diff, ask
-#   ./scripts/localize-dotfile-changes.sh --apply   # Non-interactive, extract all
-#   ./scripts/localize-dotfile-changes.sh --dry-run # Preview only
-#   ./scripts/localize-dotfile-changes.sh --restore # Restore managed files to git state
+#   ./scripts/extract-shell-local-overrides.sh            # interactive
+#   ./scripts/extract-shell-local-overrides.sh --apply     # non-interactive
+#   ./scripts/extract-shell-local-overrides.sh --dry-run   # preview only
 #=============================================================================
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOTFILES_REPO="$SCRIPT_DIR"
-HOME_DIR="$HOME"
 
-MODE="interactive"  # interactive | apply | dry-run | restore
+SENTINEL="# >>> END MANAGED CONFIG <<<"
 
+MODE="interactive"
 for arg in "$@"; do
   case "$arg" in
-    --apply)     MODE="apply" ;;
-    --dry-run)   MODE="dry-run" ;;
-    --restore)   MODE="restore" ;;
-    --help|-h)
-      echo "Usage: $0 [--apply|--dry-run|--restore]"
-      echo ""
-      echo "  (no flag)  Interactive: show each diff and ask before extracting"
-      echo "  --apply    Non-interactive: extract all diffs to _local files"
-      echo "  --dry-run  Preview what would happen (no changes)"
-      echo "  --restore  Restore managed files to git version (remove local overrides)"
-      exit 0 ;;
+    --apply)   MODE="apply" ;;
+    --dry-run) MODE="dry-run" ;;
+    --help|-h) sed -n '2,/^$/p' "$0" | tail -n +2; exit 0 ;;
+    *) echo "Unknown flag: $arg"; exit 1 ;;
   esac
 done
 
-#=============================================================================
-# Pretty printing
-#=============================================================================
-info()   { echo -e "  \033[1;34m•\033[0m $1"; }
-ok()     { echo -e "  \033[1;32m✓\033[0m $1"; }
-warn()   { echo -e "  \033[1;33m⚠\033[0m $1"; }
-error()  { echo -e "  \033[1;31m✗\033[0m $1" >&2; }
-header() { echo -e "\n\033[1;36m$1\033[0m"; }
+info()  { echo -e "  \033[1;34m•\033[0m $*"; }
+ok()    { echo -e "  \033[1;32m✓\033[0m $*"; }
+warn()  { echo -e "  \033[1;33m⚠\033[0m $*"; }
+header(){ echo -e "\n\033[1;36m$*\033[0m"; }
 
 confirm() {
   [[ "$MODE" == "apply" ]] && return 0
-  local prompt="$1"
-  local answer
-  echo ""
-  read -p "  $prompt [y/N] " answer
-  [[ "$answer" == "y" || "$answer" == "Y" ]]
+  local ans
+  read -rp "  $* [y/N] " ans
+  [[ "$ans" == "y" || "$ans" == "Y" ]]
 }
 
-# Show diff with optional truncation for large diffs
-show_diff_summary() {
-  local diff_text="$1"
-  local line_count
-  line_count=$(echo "$diff_text" | wc -l)
-
-  if [[ "$line_count" -le 80 ]]; then
-    echo "$diff_text" | sed 's/^/  /'
-  else
-    echo "$diff_text" | head -30 | sed 's/^/  /'
-    echo "  ... ($((line_count - 60))) lines omitted ..."
-    echo "$diff_text" | tail -30 | sed 's/^/  /'
-  fi
-}
-
-#=============================================================================
-# Managed dotfile definitions
-# Format: "repo_rel_path:home_file:local_target"
-#=============================================================================
+# Format: "repo_relative_path|home_path|local_override_path"
 MANAGED_FILES=(
-  "bash/.bashrc:$HOME/.bashrc:$HOME/.bashrc_local"
-  "bash/.bash_profile:$HOME/.bash_profile:$HOME/.bashrc_local"
-  "bash/.bash_aliases:$HOME/.bash_aliases:$HOME/.bashrc_local"
-  "zsh/.zshrc:$HOME/.zshrc:$HOME/.zshrc_local"
-  "zsh/.zshenv:$HOME/.zshenv:$HOME/.zshrc_local"
-  "zsh/.zprofile:$HOME/.zprofile:$HOME/.zshrc_local"
-  "zsh/.zlogin:$HOME/.zlogin:$HOME/.zshrc_local"
+  "zsh/.zshenv|$HOME/.zshenv|$HOME/.zshenv_local"
+  "zsh/.zprofile|$HOME/.zprofile|$HOME/.zprofile_local"
+  "zsh/.zlogin|$HOME/.zlogin|$HOME/.zlogin_local"
+  "zsh/.zshrc|$HOME/.zshrc|$HOME/.zshrc_local"
+  "bash/.bashrc|$HOME/.bashrc|$HOME/.bashrc_local"
+  "bash/.bash_profile|$HOME/.bash_profile|$HOME/.bash_profile_local"
+  "bash/.bash_aliases|$HOME/.bash_aliases|$HOME/.bash_aliases_local"
 )
 
-any_extracted=0
-any_restored=0
+#-------------------------------------------------------------------------
+# Phase 1 — check each file
+#-------------------------------------------------------------------------
+header "Checking managed dotfiles for sentinel..."
 
-#=============================================================================
-# Phase 1 — Detect differences
-#=============================================================================
-header "Detecting local changes to managed dotfiles..."
-
-declare -a changed_entries=()
+clean=0
+migrated=0
+declare -a to_migrate=()
 
 for entry in "${MANAGED_FILES[@]}"; do
-  IFS=':' read -r repo_rel home_path local_file <<< "$entry"
+  IFS='|' read -r repo_rel home_path local_path <<< "$entry"
   repo_path="$DOTFILES_REPO/$repo_rel"
+  name="$(basename "$home_path")"
+  local_name="$(basename "$local_path")"
 
-  repo_content=""
-  home_content=""
-  [[ -f "$repo_path" ]] && repo_content=$(cat "$repo_path")
-  [[ -f "$home_path" ]] && home_content=$(cat "$home_path")
+  [[ ! -f "$home_path" ]] && continue
+  [[ ! -f "$repo_path" ]] && { warn "$repo_rel missing from repo — skipping"; continue; }
 
-  if [[ "$home_content" == "$repo_content" ]]; then
+  last_line="$(tail -n 1 "$home_path" 2>/dev/null || true)"
+
+  if [[ "$last_line" == "$SENTINEL" ]]; then
+    clean=$((clean + 1))
     continue
   fi
-  if [[ -z "$home_content" && -z "$repo_content" ]]; then
-    continue
-  fi
 
-  changed_entries+=("$entry")
-  info "$(basename "$home_path") differs from git version"
+  to_migrate+=("$entry")
+  info "$name — sentinel missing (needs migration)"
 done
 
-if [[ ${#changed_entries[@]} -eq 0 ]]; then
-  ok "All managed dotfiles are in sync with git. No changes to extract."
+if [[ $clean -eq ${#MANAGED_FILES[@]} ]]; then
+  ok "All files have sentinel — nothing to do."
   exit 0
 fi
 
-#=============================================================================
-# Phase 2 — Handle --restore
-#=============================================================================
-if [[ "$MODE" == "restore" ]]; then
-  header "Restoring all managed files to git version..."
-
-  for entry in "${changed_entries[@]}"; do
-    IFS=':' read -r repo_rel home_path local_file <<< "$entry"
-    repo_path="$DOTFILES_REPO/$repo_rel"
-    name=$(basename "$home_path")
-
-    cat "$repo_path" > "$home_path" 2>/dev/null || error "Could not write $home_path"
-    ok "Restored $name from git version"
-    any_restored=1
-  done
-
-  echo ""
-  if [[ "$any_restored" == "1" ]]; then
-    ok "All managed files restored. Machine-specific changes are lost (check ~/.bashrc_local / ~/.zshrc_local for backups)."
-  fi
+if [[ ${#to_migrate[@]} -eq 0 ]]; then
   exit 0
 fi
 
-#=============================================================================
-# Phase 3 — Extract machine-specific lines for each changed file
-#=============================================================================
+#-------------------------------------------------------------------------
+# Phase 2 — migrate files missing sentinel
+#-------------------------------------------------------------------------
 if [[ "$MODE" == "dry-run" ]]; then
-  header "DRY RUN: Would check and optionally extract changes"
-else
-  header "Extracting machine-specific lines to _local files..."
+  header "DRY RUN — would migrate these files:"
+  for entry in "${to_migrate[@]}"; do
+    IFS='|' read -r _ home_path _ <<< "$entry"
+    info "$(basename "$home_path")"
+  done
+  exit 0
 fi
 
-for entry in "${changed_entries[@]}"; do
-  IFS=':' read -r repo_rel home_path local_file <<< "$entry"
+header "Migrating files..."
+
+for entry in "${to_migrate[@]}"; do
+  IFS='|' read -r repo_rel home_path local_path <<< "$entry"
   repo_path="$DOTFILES_REPO/$repo_rel"
-  name=$(basename "$home_path")
-  local_name=$(basename "$local_file")
+  name="$(basename "$home_path")"
+  local_name="$(basename "$local_path")"
 
   echo ""
   echo "━━━ $name ━━━"
-  echo "  Repo: $repo_rel"
-  echo "  Home: $home_path → $local_name"
 
-  # Generate the diff (capture to avoid pipefail issues)
-  diff_output=$(diff -u "$repo_path" "$home_path" 2>/dev/null || true)
+  # --- Find additions: diff + added lines ---
+  diff_out="$(diff -u "$repo_path" "$home_path" 2>/dev/null || true)"
+  added="$(echo "$diff_out" | sed -n '/^+++/d; /^+/ s/^+//p' || true)"
 
-  show_diff_summary "$diff_output"
-
-  # Extract added lines (starting with +, excluding +++ header)
-  # sed: print only '+' lines, then strip leading '+', but skip '+++' header
-  added_lines=$(echo "$diff_output" | sed -n '/^+++/d; /^+/ s/^+//p' || true)
-
-  if [[ -z "$added_lines" ]]; then
-    warn "No added lines found — changes appear to be deletions or edits only."
-    info "Machine-specific lines must be added (not just modified in place) to be extractable."
-    continue
-  fi
-
-  echo ""
-  info "Lines that would move to $local_name:"
-  line_count=$(echo "$added_lines" | wc -l)
-  if [[ "$line_count" -gt 30 ]]; then
-    echo "$added_lines" | head -15 | sed 's/^/    │ /'
-    echo "    │ ... ($((line_count - 30))) more lines ..."
-    echo "$added_lines" | tail -15 | sed 's/^/    │ /'
+  if [[ -z "$added" ]]; then
+    warn "No added lines — file may have been modified inline (edits, not appends)."
+    info "Restoring from repo (inline edits will be lost)."
   else
-    echo "$added_lines" | sed 's/^/    │ /'
-  fi
+    echo "  Lines to move to $local_name:"
+    echo "$added" | sed 's/^/    │ /'
+    echo ""
 
-  if [[ "$MODE" == "dry-run" ]]; then
-    info "[DRY-RUN] Would prompt to extract these to $local_name"
-    continue
-  fi
-
-  if ! confirm "Extract these additions to $local_name and restore $name to git version?"; then
-    info "Skipped $name"
-    continue
-  fi
-
-  # --- Append to _local file ---
-  if [[ ! -f "$local_file" ]]; then
-    touch "$local_file"
-  fi
-  if [[ -s "$local_file" ]]; then
-    lastchar=$(tail -c 1 "$local_file" | od -A n -t x1 | tr -d ' ')
-    if [[ -n "$lastchar" && "$lastchar" != "0a" ]]; then
-      echo "" >> "$local_file"
+    if [[ "$MODE" != "apply" ]]; then
+      confirm "Extract these to $local_name and restore $name?" || { info "Skipped."; continue; }
     fi
-    echo "" >> "$local_file"
+
+    # --- Append to _local file ---
+    mkdir -p "$(dirname "$local_path")"
+    if [[ -f "$local_path" && -s "$local_path" ]]; then
+      echo "" >> "$local_path"
+    fi
+    {
+      echo "# >>> extracted from $name on $(date +%Y-%m-%d)"
+      echo "$added"
+      echo "# <<< end $name"
+    } >> "$local_path"
+    ok "Appended to $local_name"
   fi
 
-  {
-    echo "# >>> extracted from $name on $(date +%Y-%m-%d)"
-    echo "$added_lines"
-    echo "# <<< end $name extraction"
-  } >> "$local_file"
-
-  ok "Appended additions to $local_name"
-
-  # --- Restore the managed file from git ---
-  cat "$repo_path" > "$home_path" 2>/dev/null || error "Could not restore $name"
-  ok "Restored $name from git version"
-
-  any_extracted=1
+  # --- Restore from repo ---
+  cp "$repo_path" "$home_path"
+  ok "Restored $name from repo (now has sentinel)"
+  migrated=$((migrated + 1))
 done
 
-#=============================================================================
-# Phase 4 — Summary
-#=============================================================================
+#-------------------------------------------------------------------------
+# Phase 3 — summary
+#-------------------------------------------------------------------------
 echo ""
-if [[ "$MODE" == "dry-run" ]]; then
-  header "Dry-run complete"
-  info "Run without --dry-run to apply, or use --restore to wipe local changes."
-elif [[ "$any_extracted" == "1" ]]; then
-  header "Summary"
-  echo ""
-  ok "Machine-specific lines extracted to _local files."
-  echo ""
-  for lf in "$HOME/.bashrc_local" "$HOME/.zshrc_local"; do
-    [[ -f "$lf" ]] && echo "    • $lf ($(wc -l < "$lf") lines)"
+header "Done"
+if [[ $migrated -gt 0 ]]; then
+  ok "Migrated $migrated file(s). Machine-specific lines are in:"
+  for entry in "${to_migrate[@]}"; do
+    IFS='|' read -r _ _ local_path <<< "$entry"
+    [[ -f "$local_path" ]] && echo "    • $local_path"
   done
   echo ""
-  info "The managed dotfiles already source _local files:"
-  echo "    ~/.bashrc → sources ~/.bashrc_local"
-  echo "    ~/.zshrc  → sources ~/.zshrc_local"
-  echo ""
-  info "To apply changes to your current shell:"
-  echo "    exec bash   # or: exec zsh"
+  info "To apply changes: exec zsh  (or: exec bash)"
 else
-  info "No changes were extracted."
+  info "No files migrated."
 fi

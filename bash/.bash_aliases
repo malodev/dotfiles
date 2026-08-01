@@ -8,3 +8,7 @@ alias tl='tmux list-sessions'
 [ -f "$HOME/bin/gamadv-xtd3/gam" ] && alias gam="$HOME/bin/gamadv-xtd3/gam"
 
 alias gam="/Users/mauro/bin/gam7/gam"
+
+# >>> machine-specific overrides (untracked) <<<
+[[ -f ~/.bash_aliases_local ]] && source ~/.bash_aliases_local
+# >>> END MANAGED CONFIG <<<

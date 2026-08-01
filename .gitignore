@@ -16,6 +16,7 @@ sketchybar/.config/sketchybar-old
 sketchybar/.config/sketchybar-new
 __pycache__
 node_modules
+*_local
 git/.local/bin/
 package-lock.json
 /pi/.pi/.task-forge

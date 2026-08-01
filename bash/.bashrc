@@ -304,3 +304,5 @@ _dotfiles_bashrc_debug "done"
 unset DOTFILES_BASHRC_LOADING
 unset -f _dotfiles_bashrc_debug
 unset _dotfiles_bashrc_debug_enabled
+
+# >>> END MANAGED CONFIG <<<
