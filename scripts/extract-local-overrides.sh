@@ -53,6 +53,8 @@ MANAGED_FILES=(
   "bash/.bash_profile|$HOME/.bash_profile|$HOME/.bash_profile_local"
   "bash/.bash_aliases|$HOME/.bash_aliases|$HOME/.bash_aliases_local"
   "git/.gitconfig|$HOME/.gitconfig|$HOME/.gitconfig_local"
+  "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland_local.conf"
+  "hyprland/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors_local.conf"
 )
 
 #-------------------------------------------------------------------------
