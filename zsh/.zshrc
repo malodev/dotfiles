@@ -289,7 +289,6 @@ bindkey "^[[B" history-substring-search-down
 #=============================================================================
 # These files exist in $HOME (not in repo) for per-machine configuration
 [[ -f ~/.zshrc_local ]] && source ~/.zshrc_local
-[[ -f ~/.zshrc_malo ]] && source ~/.zshrc_malo
 [[ -f ~/.zshrc_ubu_oracle ]] && source ~/.zshrc_ubu_oracle
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 
