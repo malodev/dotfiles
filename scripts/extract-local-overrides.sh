@@ -27,6 +27,7 @@ for arg in "$@"; do
   case "$arg" in
     --apply)   MODE="apply" ;;
     --dry-run) MODE="dry-run" ;;
+    --merge)   MODE="merge" ;;
     --list)    MODE="list" ;;
     --help|-h) MODE="help" ;;
     *) echo "Unknown flag: $arg"; exit 1 ;;
@@ -46,6 +47,9 @@ confirm() {
 }
 
 # Format: "repo_relative_path|home_path|local_override_path"
+# Format:
+#   sentinel-based: "repo_rel|home_path|local_override_path"
+#   merge-based:    "repo_rel|home_path|local_override_path|merge_command"
 MANAGED_FILES=(
   "zsh/.zshenv|$HOME/.zshenv|$HOME/.zshenv_local"
   "zsh/.zprofile|$HOME/.zprofile|$HOME/.zprofile_local"
@@ -57,8 +61,7 @@ MANAGED_FILES=(
   "git/.gitconfig|$HOME/.gitconfig|$HOME/.gitconfig_local"
   "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland_local.conf"
   "hyprland/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors_local.conf"
-  # models.json uses merge-models.sh instead of sentinel (JSON can't source)
-  "pi/.pi/agent/models.json|$HOME/.pi/agent/models.json|$HOME/.pi/agent/models_local.json"
+  "pi/.pi/agent/models.json|$HOME/.pi/agent/models.json|$HOME/.pi/agent/models_local.json|$SCRIPT_DIR/scripts/merge-models.sh"
 )
 
 #-------------------------------------------------------------------------
@@ -68,7 +71,7 @@ if [[ "$MODE" == "list" ]]; then
   printf '%-45s → %s\n' "TRACKED (repo)" "LOCAL OVERRIDE (untracked)"
   printf '%-45s   %s\n' "━━━━━━━━━━━━━━━━━━━━━━━━" "━━━━━━━━━━━━━━━━━━━━━━━━━━"
   for entry in "${MANAGED_FILES[@]}"; do
-    IFS='|' read -r repo_rel home_path local_path <<< "$entry"
+    IFS='|' read -r repo_rel home_path local_path merge_cmd <<< "$entry"
     printf '%-45s → %s\n' "$repo_rel" "$local_path"
   done
   exit 0
@@ -78,13 +81,38 @@ fi
 # --help
 #-------------------------------------------------------------------------
 if [[ "$MODE" == "help" ]]; then
-  echo "Usage: extract-local-overrides.sh [--apply|--dry-run|--list|--help]"
+  echo "Usage: extract-local-overrides.sh [--apply|--merge|--dry-run|--list|--help]"
   echo ""
   echo "  (no flag)  Show status of all managed files"
-  echo "  --apply    Non-interactive: extract all diffs to _local files"
+  echo "  --apply    Extract sentinel-based diffs to _local files"
+  echo "  --merge    Run merge scripts for merge-based files (e.g. models.json)"
   echo "  --dry-run  Preview what would be extracted"
   echo "  --list     List tracked files and their local overrides"
   echo "  --help     Show this help"
+  exit 0
+fi
+
+if [[ "$MODE" == "merge" ]]; then
+  header "Running merge for merge-based files..."
+  any_merged=0
+  for entry in "${MANAGED_FILES[@]}"; do
+    IFS='|' read -r repo_rel home_path local_path merge_cmd <<< "$entry"
+    [[ -z "$merge_cmd" ]] && continue
+    name="$(basename "$home_path")"
+    if [[ -x "$merge_cmd" ]]; then
+      info "$name → $merge_cmd"
+      "$merge_cmd"
+      any_merged=$((any_merged + 1))
+    else
+      warn "$name: merge script not found: $merge_cmd"
+    fi
+  done
+  echo ""
+  if [[ $any_merged -gt 0 ]]; then
+    ok "Ran $any_merged merge script(s)."
+  else
+    info "No merge-based files configured."
+  fi
   exit 0
 fi
 
@@ -103,7 +131,7 @@ migrated=0
 declare -a to_migrate=()
 
 for entry in "${MANAGED_FILES[@]}"; do
-  IFS='|' read -r repo_rel home_path local_path <<< "$entry"
+  IFS='|' read -r repo_rel home_path local_path merge_cmd <<< "$entry"
   repo_path="$DOTFILES_REPO/$repo_rel"
   name="$(basename "$home_path")"
   local_name="$(basename "$local_path")"
@@ -171,7 +199,7 @@ fi
 header "Migrating files..."
 
 for entry in "${to_migrate[@]}"; do
-  IFS='|' read -r repo_rel home_path local_path <<< "$entry"
+  IFS='|' read -r repo_rel home_path local_path merge_cmd <<< "$entry"
   repo_path="$DOTFILES_REPO/$repo_rel"
   name="$(basename "$home_path")"
   local_name="$(basename "$local_path")"

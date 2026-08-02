@@ -1,29 +1,5 @@
 {
   "providers": {
-    "openrouter": {
-      "baseUrl": "https://openrouter.ai/api/v1",
-      "api": "openai-completions",
-      "apiKey": "OPENROUTER_API_KEY",
-      "models": [
-        {
-          "id": "qwen/qwen3.6-plus",
-          "name": "Qwen 3.6 Plus",
-          "reasoning": true,
-          "input": [
-            "text",
-            "image"
-          ],
-          "contextWindow": 1000000,
-          "maxTokens": 65536,
-          "cost": {
-            "input": 0.325,
-            "output": 1.95,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        }
-      ]
-    },
     "ollama": {
       "api": "openai-completions",
       "apiKey": "ollama",
@@ -131,193 +107,24 @@
         }
       ]
     },
-    "unsloth": {
-      "name": "Unsloth Studio (Internet)",
-      "baseUrl": "https://ai.malo.tn.it/v1",
+    "openrouter": {
+      "baseUrl": "https://openrouter.ai/api/v1",
       "api": "openai-completions",
-      "apiKey": "!cat ~/.config/unsloth/pi-api-key",
-      "compat": {
-        "supportsStore": false,
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": true,
-        "supportsUsageInStreaming": true,
-        "maxTokensField": "max_tokens",
-        "supportsStrictMode": false
-      },
+      "apiKey": "OPENROUTER_API_KEY",
       "models": [
         {
-          "id": "unsloth/Qwen3.5-4B-MTP-GGUF:UD-Q4_K_XL",
-          "name": "Qwen3.5 4B MTP UD-Q4_K_XL",
+          "id": "qwen/qwen3.6-plus",
+          "name": "Qwen 3.6 Plus",
           "reasoning": true,
           "input": [
             "text",
             "image"
           ],
-          "contextWindow": 262144,
-          "maxTokens": 16384,
+          "contextWindow": 1000000,
+          "maxTokens": 65536,
           "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
-          "id": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q4_K_XL",
-          "name": "Qwen3.6 35B-A3B MTP UD-Q4_K_XL",
-          "reasoning": true,
-          "input": [
-            "text",
-            "image"
-          ],
-          "contextWindow": 240000,
-          "maxTokens": 16384,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
-          "id": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q5_K_XL",
-          "name": "Qwen3.6 27B MTP UD-Q5_K_XL",
-          "reasoning": true,
-          "input": [
-            "text",
-            "image"
-          ],
-          "contextWindow": 120000,
-          "maxTokens": 16384,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
-          "id": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL",
-          "name": "Qwen3 Coder 30B-A3B UD-Q4_K_XL",
-          "reasoning": false,
-          "input": [
-            "text"
-          ],
-          "contextWindow": 131072,
-          "maxTokens": 16384,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
-          "id": "unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL",
-          "name": "Gemma 4 31B QAT UD-Q4_K_XL",
-          "reasoning": true,
-          "input": [
-            "text",
-            "image"
-          ],
-          "contextWindow": 110000,
-          "maxTokens": 16384,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        }
-      ]
-    },
-    "pi-llama": {
-      "name": "Dedicated Pi llama.cpp router",
-      "baseUrl": "https://llm.malo.tn.it/v1",
-      "api": "openai-completions",
-      "apiKey": "!~/.local/bin/pi-inference credential model-api",
-      "authHeader": true,
-      "compat": {
-        "supportsStore": false,
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": false,
-        "supportsUsageInStreaming": true,
-        "maxTokensField": "max_tokens",
-        "supportsStrictMode": false,
-        "requiresReasoningContentOnAssistantMessages": true,
-        "thinkingFormat": "qwen-chat-template"
-      },
-      "models": [
-        {
-          "id": "pi/Qwen3.6-27B-MTP-UD-Q5_K_XL",
-          "name": "Qwen3.6 27B Builder",
-          "reasoning": true,
-          "input": [
-            "text"
-          ],
-          "contextWindow": 160000,
-          "maxTokens": 32768,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
-          "id": "pi/gemma-4-31B-it-qat-UD-Q4_K_XL",
-          "name": "Gemma 4 31B Architect/Reviewer",
-          "reasoning": true,
-          "input": [
-            "text"
-          ],
-          "contextWindow": 160000,
-          "maxTokens": 32768,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        }
-      ]
-    },
-    "ds4": {
-      "name": "ds4.c local",
-      "baseUrl": "http://127.0.0.1:8000/v1",
-      "api": "openai-completions",
-      "apiKey": "dsv4-local",
-      "compat": {
-        "supportsStore": false,
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": true,
-        "supportsUsageInStreaming": true,
-        "maxTokensField": "max_tokens",
-        "supportsStrictMode": false,
-        "thinkingFormat": "deepseek",
-        "requiresReasoningContentOnAssistantMessages": true
-      },
-      "models": [
-        {
-          "id": "deepseek-v4-flash",
-          "name": "DeepSeek V4 Flash (ds4.c local)",
-          "reasoning": true,
-          "thinkingLevelMap": {
-            "off": null,
-            "minimal": "low",
-            "low": "low",
-            "medium": "medium",
-            "high": "high",
-            "xhigh": "xhigh"
-          },
-          "input": [
-            "text"
-          ],
-          "contextWindow": 65536,
-          "maxTokens": 16384,
-          "cost": {
-            "input": 0,
-            "output": 0,
+            "input": 0.325,
+            "output": 1.95,
             "cacheRead": 0,
             "cacheWrite": 0
           }
