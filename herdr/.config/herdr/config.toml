@@ -4,8 +4,30 @@ prefix = "ctrl+space"
 switch_workspace = "prefix+1..9"
 switch_tab = "prefix+shift+1..9"
 
+[[keys.command]]
+key = "prefix+t"
+type = "popup"
+command = "exec \"${SHELL:-sh}\""
+description = "open scratch terminal"
+width = "80%"
+height = "80%"
+
+[[keys.command]]
+key = "prefix+alt+g"
+type = "popup"
+command = "lazygit"
+description = "run lazygit"
+width = "80%"
+height = "80%"
+
 [experimental]
 pane_history = true
+kitty_graphics = true
 
 [ui]
 agent_panel_sort = "spaces"
+
+show_agent_labels_on_pane_borders = false
+[ui.toast]
+delivery = "system"
+
