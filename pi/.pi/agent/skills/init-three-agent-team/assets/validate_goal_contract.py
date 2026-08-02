@@ -13,6 +13,7 @@ import json
 import os
 import pwd
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -41,6 +42,14 @@ EXECUTION_AUTHORIZATION_RE = re.compile(
 )
 FULL_SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
 TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+SHELL_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
+# Narrowly reject common imperative prose accidentally placed in a shell-command
+# field. Unknown project commands and explicit paths remain valid because Builder
+# may create them during implementation.
+PROSE_COMMAND_HEADS = {
+    "check", "click", "confirm", "ensure", "inspect", "move", "observe",
+    "open", "select", "switch", "verify",
+}
 STATE_ROOT = Path(pwd.getpwuid(os.getuid()).pw_dir) / ".local" / "state" / "pi-three-agent-team"
 
 
@@ -92,6 +101,22 @@ def unquote_code(value: str | None) -> str | None:
     return value[1:-1].strip()
 
 
+def command_shape_error(command: str) -> str | None:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError as error:
+        return f"has invalid shell quoting: {error}"
+    index = 0
+    while index < len(tokens) and SHELL_ASSIGNMENT_RE.fullmatch(tokens[index]):
+        index += 1
+    if index >= len(tokens):
+        return "contains only environment assignments"
+    head = tokens[index]
+    if "/" not in head and head.lower() in PROSE_COMMAND_HEADS and len(tokens) > index + 1:
+        return f"looks like a prose instruction beginning with {head!r}, not an executable command"
+    return None
+
+
 def parse_success_tests(section: str, errors: list[str]) -> list[SuccessTest]:
     headings = list(SUCCESS_HEADING_RE.finditer(section))
     if not headings:
@@ -138,6 +163,11 @@ def parse_success_tests(section: str, errors: list[str]) -> list[SuccessTest]:
         if command in {"true", "false", "none"} or "|| true" in command:
             errors.append(f"{identifier} Command is not a strict verification command: {command!r}.")
             continue
+        command_error = command_shape_error(command)
+        if command_error:
+            # Keep parsing the test so one malformed command does not create
+            # misleading secondary authority/prerequisite errors.
+            errors.append(f"{identifier} Command {command_error}: {command!r}.")
         try:
             expected_exit_code = int(exit_raw)
         except ValueError:
@@ -373,8 +403,12 @@ def validate(task_dir: Path, phase: str) -> list[str]:
             if snapshot_exists.returncode != 0:
                 errors.append(f"Authorization head does not exist: {authorization_head}.")
             head = run_git(repo, "rev-parse", "HEAD")
-            if head.returncode != 0 or head.stdout.strip() != authorization_head:
-                errors.append("HEAD must equal the authorization head during execution.")
+            if head.returncode != 0:
+                errors.append("Execution validation could not resolve HEAD.")
+            else:
+                ancestor = run_git(repo, "merge-base", "--is-ancestor", authorization_head, head.stdout.strip())
+                if ancestor.returncode != 0:
+                    errors.append("Authorization head must remain an ancestor of HEAD during execution.")
         if not contract_digest or not re.fullmatch(r"[0-9a-f]{64}", contract_digest):
             errors.append("Execution validation requires a SHA-256 contract_digest.")
         if authorized_at in {None, "null", ""}:

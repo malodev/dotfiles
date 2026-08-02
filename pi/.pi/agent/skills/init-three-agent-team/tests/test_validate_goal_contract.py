@@ -179,6 +179,24 @@ deployed_at: null
                 _repo, task_dir, _baseline = self.create_repository(Path(directory))
                 self.assertEqual(VALIDATOR.validate(task_dir, "pre-go"), [])
 
+    def test_command_shape_rejects_prose_without_rejecting_planned_commands(self) -> None:
+        self.assertIn("prose instruction", VALIDATOR.command_shape_error("Verify internal state updates") or "")
+        self.assertIn("prose instruction", VALIDATOR.command_shape_error("DISPLAY=:0 Click Apply in GUI") or "")
+        self.assertIsNone(VALIDATOR.command_shape_error("DISPLAY=:0 python -m unittest"))
+        self.assertIsNone(VALIDATOR.command_shape_error("./scripts/future-check --mode offline"))
+        self.assertIsNone(VALIDATOR.command_shape_error("project-cli verify --offline"))
+
+        with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
+            with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
+                _repo, task_dir, _baseline = self.create_repository(Path(directory))
+                brief_path = task_dir / "brief.md"
+                brief = brief_path.read_text(encoding="utf-8").replace(
+                    "python -m unittest", "Verify internal state updates"
+                )
+                brief_path.write_text(brief, encoding="utf-8")
+                errors = VALIDATOR.validate(task_dir, "pre-go")
+                self.assertTrue(any("prose instruction" in error for error in errors))
+
     def test_invalid_status_task_id_cannot_escape_authorization_directory(self) -> None:
         with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
             state_root = Path(directory) / "state"
@@ -284,7 +302,7 @@ deployed_at: null
                 errors = VALIDATOR.validate(task_dir, "execution")
                 self.assertTrue(any("contractDigest does not match" in error for error in errors))
 
-    def test_execution_snapshot_rejects_contract_and_head_drift(self) -> None:
+    def test_execution_snapshot_allows_forward_commits_but_rejects_rewind(self) -> None:
         with tempfile.TemporaryDirectory(prefix="three-agent-validator-") as directory:
             with patch.object(VALIDATOR, "STATE_ROOT", Path(directory) / "state"):
                 repo, task_dir, _baseline = self.create_repository(Path(directory))
@@ -300,13 +318,17 @@ deployed_at: null
                 brief_path = task_dir / "brief.md"
                 original = brief_path.read_text(encoding="utf-8")
                 brief_path.write_text(original.replace("No product changes.", "Changed after authorization."), encoding="utf-8")
-                self.assertTrue(any("digest" in error.lower() for error in VALIDATOR.validate(task_dir, "execution")))
+                self.assertEqual(VALIDATOR.validate(task_dir, "execution"), [])
                 brief_path.write_text(original, encoding="utf-8")
 
-                (repo / "unrelated.txt").write_text("head drift\n", encoding="utf-8")
+                (repo / "unrelated.txt").write_text("forward commit\n", encoding="utf-8")
                 self.git(repo, "add", "unrelated.txt")
                 self.git(repo, "commit", "-qm", "chore: advance head")
-                self.assertTrue(any("authorization head" in error.lower() for error in VALIDATOR.validate(task_dir, "execution")))
+                self.assertEqual(VALIDATOR.validate(task_dir, "execution"), [])
+
+                parent = self.git(repo, "rev-parse", f"{authorization_head}^")
+                self.git(repo, "update-ref", "--no-deref", "HEAD", parent)
+                self.assertTrue(any("ancestor of head" in error.lower() for error in VALIDATOR.validate(task_dir, "execution")))
 
 
 if __name__ == "__main__":
