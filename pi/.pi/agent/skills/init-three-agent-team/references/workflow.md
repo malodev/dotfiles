@@ -90,13 +90,13 @@ A Goal Contract is not eligible for `go` merely because it reads plausibly. Befo
 
 1. use an existing baseline commit that remains an ancestor of `HEAD` and was not created by Builder;
 2. remove project-command placeholders from `AGENTS.md`;
-3. give every numbered success test an exact command, expected integer exit code, specific evidence, hardware/system-write declaration, and prerequisites;
+3. give every numbered success test an executable shell command—not an imperative prose instruction—plus expected integer exit code, specific evidence, hardware/system-write declaration, and prerequisites;
 4. make every writing test depend on an offline non-writing test;
 5. resolve all open decisions and align completion policy with `status.yaml`;
 6. run `git add -N .` so no untracked file is omitted from the baseline diff;
-7. pass `python team/validate_goal_contract.py team/tasks/<task-id> --phase pre-go`.
+7. pass `/team-validate <task-id>`, which invokes the trusted bundled pre-go validator.
 
-At immediate `go`, or at runnable queued dispatch, the extension records the current exact `HEAD` as `authorization_head` plus a SHA-256 digest of the authorized brief in task metadata and in an extension-owned state record outside the Builder-writable repository. For tasks authorized by an older extension, an explicit owner `/team-resume` or finalized recovery performs a one-time migration and reports the exact adopted head and digest; partial snapshots fail closed. Before Builder, the extension passes the same validator with `--phase execution`; execution fails closed if `HEAD`, brief, status, external record, dispatcher fence, or repository capability drifts. Agents use the repository copy for immediate feedback, while extension runtime gates invoke the trusted bundled validator so Builder edits cannot weaken enforcement. Builder reruns it before mutation and before review; Reviewer reruns it independently. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
+At immediate `go`, or at runnable queued dispatch, the extension records the current exact `HEAD` as `authorization_head` plus a SHA-256 digest of the authorized brief in task metadata and in an extension-owned state record outside the Builder-writable repository. For tasks authorized by an older extension, an explicit owner `/team-resume` or finalized recovery performs a one-time migration and reports the exact adopted head and digest; partial snapshots fail closed. Before Builder and Reviewer, the extension invokes its trusted bundled validator with `--phase execution`; execution fails closed if `HEAD` is rewound or leaves the authorization ancestry, or if brief metadata, status, external record, dispatcher fence, or repository capability becomes invalid. Forward commits remain reviewable and are preserved. Repository copies are scaffolding for interactive feedback and may lag a newer global extension, so runtime roles never invoke or treat them as authority. The validator enforces structure and repository visibility, but agents must still challenge semantically vague, disjunctive, or impossible criteria.
 
 ### Deferred queue admission
 
@@ -104,7 +104,7 @@ At immediate `go`, or at runnable queued dispatch, the extension records the cur
 
 ## Autonomous review gate
 
-Reviewer checks the actual diff, not only Builder's report. Reviewer executes declared verification commands and records evidence. Findings inside the Goal Contract return directly to Builder without owner approval.
+Before Reviewer, the extension executes exact prerequisite-safe non-writing success-test commands and records cycle-specific `pre-review-verification-NN.log` evidence without overwriting earlier failures. Known prose-command forms are rejected before execution. Any runtime failure—including exit 126/127 from a missing intended script—becomes a machine-generated `CHANGES_REQUESTED` finding and returns to Builder while bounded review capacity remains; the owner is not interrupted merely because Builder omitted an executable. Reviewer checks the actual diff and exact command evidence, not only Builder's report, and may not substitute broader or related tests for declared commands. Hardware/system-writing commands remain deferred until approval and final prerequisite-ordered verification. A final verification failure also returns to Builder for another available cycle; only exhausted capacity or a genuine contract decision blocks the owner.
 
 ## Completion policy
 
@@ -120,7 +120,7 @@ A `true` value is explicit advance authorization for that action after all succe
 
 ### Exact reviewed-tree completion
 
-Reviewer approval freezes the complete worktree through an isolated temporary index and explicit path list. After that point, only `status.yaml`, `verification.log`, and `completion-report.md` under the active task may change. The extension rejects all other post-review contamination, creates the exact single-parent commit with `git commit-tree`, journals tree/parent/subject/commit, installs it with `git update-ref` compare-and-swap, normalizes only the index, and verifies a clean worktree. It never uses `git reset --hard`, never broadly stages arbitrary late changes, and never adopts arbitrary `HEAD`.
+Reviewer approval freezes the complete worktree through an isolated temporary index and explicit path list. After that point, only `status.yaml`, `verification.log`, and `completion-report.md` under the active task may change. The extension rejects all other post-review contamination, creates the exact single-parent commit on the current reviewed descendant with `git commit-tree`, journals tree/parent/subject/commit, installs it with `git update-ref` compare-and-swap, normalizes only the index, and verifies a clean worktree. It never uses `git reset --hard`, never broadly stages arbitrary late changes, and never adopts arbitrary `HEAD`.
 
 ## Genuine blockers
 
@@ -132,7 +132,7 @@ Interrupt the owner only when:
 - an unauthorized destructive or irreversible action is required;
 - five review cycles fail to achieve approval.
 
-Ask one focused question with evidence, options, and a recommendation.
+Ask one focused question with evidence, options, and a recommendation. During owner-led recovery, the owner selects only genuine verification direction choices. Architect then derives and runs exact focused commands and applies the smallest coherent success-test/authority correction autonomously; the owner never needs to dictate command strings or field-by-field edits. Broader goal, behavior, scope, architecture, or completion-policy changes remain blocked.
 
 ## Review loop limit
 

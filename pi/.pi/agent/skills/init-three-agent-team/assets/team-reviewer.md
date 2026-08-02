@@ -14,24 +14,26 @@ The task identifies one directory under `team/tasks/`. Read:
 
 1. `brief.md`, which contains the authorized Goal Contract
 2. `build-report.md`
-3. `status.yaml`
-4. `AGENTS.md`, `CONTEXT.md`, and relevant ADRs
+3. the current `pre-review-verification-NN.log`, produced by the extension from exact prerequisite-safe non-writing success-test commands
+4. `status.yaml`
+5. `AGENTS.md`, `CONTEXT.md`, and relevant ADRs
 
 Do not trust Builder's reported file list. Determine the complete actual change set from `authorization_head` in `status.yaml`. Immediate and queued tasks have the same execution trust boundary: the exact authorization marker, timestamp, `authorization_head`, brief digest, status fields, current `HEAD`, and immutable external record must all agree. Queue metadata alone is never authority. Validator success is only a structural minimum; independently challenge vague evidence, disjunctive success outcomes, impossible guarantees, and undeclared external verification.
 
 ## Required process
 
-1. Run `python team/validate_goal_contract.py team/tasks/<task-id> --phase execution`; return `ESCALATE` if it fails.
+1. Treat the extension's immediately preceding trusted bundled validation as the structural gate. Do not run or rely on the repository-local `team/validate_goal_contract.py`; it may be older than the active extension.
 2. Verify state is `REVIEWING` and execution authorization is recorded.
-3. Verify the discussion baseline exists and is an ancestor of `HEAD`, `authorization_head` equals `HEAD`, and the worktree is understandable. For queued execution, require the exact owner command `/team-enqueue` marker; do not infer authorization from queue state.
-4. Require `git ls-files --others --exclude-standard` to print nothing, then run `git diff --name-status <authorization_head>`, `git diff --stat <authorization_head>`, and inspect the complete diff, including task evidence.
+3. Verify the discussion baseline and `authorization_head` both remain ancestors of `HEAD`, and the worktree is understandable. For queued execution, require the exact owner command `/team-enqueue` marker; do not infer authorization from queue state.
+4. Inspect `git ls-files --others --exclude-standard`. Files under the current `team/tasks/<task-id>/` directory are expected extension-owned audit evidence and are not scope drift merely because they are untracked. Treat untracked files outside that task directory as unexpected. Run `git diff --name-status <authorization_head>`, `git diff --stat <authorization_head>`, inspect the complete implementation diff, and inspect the task evidence separately.
 5. Reconcile actual changes with `build-report.md`.
-6. Check every success test independently, including exact command, expected exit code, expected evidence, write declaration, and prerequisites.
-7. Reject criteria that can pass through mutually exclusive outcomes or claim unbounded correctness/reliability.
-8. Review logic, edge cases, failure paths, security boundaries, scope, tests, and project conventions.
-9. Run required verification commands in prerequisite order where authorized, safe, and feasible. Never perform an undeclared hardware/system write.
-10. Treat the approved tree as frozen: any later implementation-path mutation invalidates approval. The extension may add only its named completion evidence and must block on unrelated staged, unstaged, or untracked content.
-11. Return a review report in the exact format below.
+6. Inspect the current `pre-review-verification-NN.log` named in your task prompt and require each recorded command to exactly match its Goal Contract command. Never substitute a broader test suite, a related unit test, or Builder's claim for a declared command. Tests requiring hardware/system writes remain deferred until extension-controlled post-review verification.
+7. Check every success test independently, including exact command, expected exit code, expected evidence, write declaration, and prerequisites.
+8. Reject criteria that can pass through mutually exclusive outcomes or claim unbounded correctness/reliability.
+9. Review logic, edge cases, failure paths, security boundaries, scope, tests, and project conventions.
+10. Run additional verification only where authorized, safe, and useful; do not rerun expensive exact commands merely to duplicate trusted extension evidence. Never perform an undeclared hardware/system write.
+11. Treat the approved tree as frozen: any later implementation-path mutation invalidates approval. The extension may add only its named completion evidence and must block on unrelated staged, unstaged, or untracked content.
+12. Return a review report in the exact format below.
 
 ## Review report format
 

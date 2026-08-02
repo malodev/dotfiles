@@ -1,7 +1,7 @@
 ---
 name: three-agent-team
 description: "Prepares a strictly validated Goal Contract for immediate /team-go or durable /team-enqueue execution in the extension-controlled Architect–Builder–Reviewer workflow. This skill never invokes subagents itself."
-compatibility: Requires the global three-agent-team Pi extension, team/validate_goal_contract.py, and exact local Unsloth models.
+compatibility: Requires the global three-agent-team Pi extension and its configured exact local models.
 ---
 
 # Three-Agent Team Contract Preparation
@@ -38,6 +38,7 @@ Before writing a formal contract:
 - never ask Builder to create or commit the baseline;
 - resolve every `[PROJECT_*_COMMAND]` placeholder in `AGENTS.md` with a real command or `not configured`;
 - require all files to be visible to `git diff` through `git add -N .`;
+- put an executable shell command in every success-test `Command` field; descriptions such as “Click Apply” or “Verify behavior” belong in expected evidence, not in `Command`;
 - identify offline checks that must pass before any hardware/system write.
 
 An unborn branch or unavailable baseline is a pre-go blocker.
@@ -104,19 +105,11 @@ PENDING
 
 Every writing test must depend on at least one non-writing test. A manual observation must be named honestly as external verification.
 
-## 4. Validate before offering authorization
+## 4. Finish for extension-owned validation
 
-For either path, first run:
+For either path, make new repository files visible with `git add -N .` and inspect `git ls-files --others --exclude-standard`. Do not invoke or rely on the repository-local `team/validate_goal_contract.py`; it is scaffolding and may be older than the active extension. Finish the contract turn without claiming readiness. The extension automatically runs its trusted bundled pre-go validator, returns exact errors for a bounded correction pass, and alone reports when authorization may be offered.
 
-```bash
-git add -N .
-git ls-files --others --exclude-standard
-python team/validate_goal_contract.py team/tasks/<task-id> --phase pre-go
-```
-
-The untracked-file command must print nothing and the validator must pass. If either fails, correct the contract or report the blocker. Do not ask for approval.
-
-When validation passes, show the owner:
+When the extension reports that validation passes, show the owner:
 
 - goal and approach;
 - every exact success test and prerequisite;
@@ -143,10 +136,10 @@ Queue admission additionally requires:
 - no merge, rebase, cherry-pick, revert, or bisect in progress;
 - every dependency already enrolled earlier in the same queue.
 
-Do not commit on the owner's behalf unless separately authorized. After the owner establishes the committed clean snapshot, rerun pre-go validation without introducing intent-to-add entries, verify `git status --porcelain=v2 --untracked-files=all` is empty, and say:
+Do not commit on the owner's behalf unless separately authorized. After the owner establishes the committed clean snapshot, use `/team-validate <task-id>` for trusted pre-go validation, verify `git status --porcelain=v2 --untracked-files=all` is empty, and say:
 
 > The contract is structurally valid and the repository is clean and committed. To approve deferred execution, run `/team-enqueue <task-id>` (optionally with `--after` dependencies), then `/team-continue`.
 
-Enrollment is idempotent only for the identical frozen inputs. It leaves `brief.md` authorization exactly `PENDING` and all repository authorization fields null. Queue metadata cannot substitute for execution evidence. At runnable dispatch, the extension writes exactly ``AUTHORIZED at <timestamp> by owner command `/team-enqueue``` and still requires matching `authorization_head`, contract digest, status timestamp, current `HEAD`, and immutable external record.
+Enrollment is idempotent only for the identical frozen inputs. It leaves `brief.md` authorization exactly `PENDING` and all repository authorization fields null. Queue metadata cannot substitute for execution evidence. At runnable dispatch, the extension writes exactly ``AUTHORIZED at <timestamp> by owner command `/team-enqueue``` and still requires matching authorization metadata, contract digest, status timestamp, an `authorization_head` that remains an ancestor of current `HEAD`, and the immutable external record.
 
 Do not ask the owner to type plain `go`. Both immediate `/team-go` and durable `/team-continue` select exact local models, execute roles sequentially, reject snapshot/model/provider/fence drift and role errors, enforce review cycles, run verification, and use exact-tree completion. Queued role processes are journaled before exec; Reviewer approval freezes the reviewed tree; only named completion evidence may change afterward; commit installation uses an exact temporary index plus `commit-tree` and `update-ref` compare-and-swap. A blocked queued task is a queue-wide barrier and is never silently skipped or retried. Owner-approved recovery must match the failed attempt and queue revision, prove recorded role processes are quiescent, preserve immutable authorization, and append a newly fenced attempt.
