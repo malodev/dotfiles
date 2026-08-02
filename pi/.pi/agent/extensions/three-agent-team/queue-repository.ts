@@ -122,7 +122,7 @@ async function assertRegularTaskFiles(repo: string, taskId: string): Promise<voi
   }
 }
 
-async function runValidator(repo: string, taskId: string, validatorPath: string, phase: "pre-go" | "execution" = "pre-go"): Promise<void> {
+export async function runValidator(repo: string, taskId: string, validatorPath = DEFAULT_VALIDATOR, phase: "pre-go" | "execution" = "pre-go"): Promise<void> {
   await new Promise<void>((resolveValidation, rejectValidation) => {
     const child = spawn("python3", [validatorPath, taskPath(repo, taskId), "--phase", phase], { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
@@ -484,6 +484,19 @@ export interface ExactCommit {
   indexDigest: string;
 }
 
+export async function createExactWorktreeCommit(
+  repo: string,
+  expectedParent: string,
+  subject: string,
+  capability: SideEffectCapability,
+): Promise<ExactCommit> {
+  if (!subject.trim() || subject.includes("\n")) throw new Error("Exact worktree commit requires a one-line subject");
+  const reviewedTree = await freezeReviewedTree(repo, expectedParent, capability);
+  assertSideEffectCapability(capability);
+  const commitSha = await gitText(repo, ["commit-tree", reviewedTree.treeSha, "-p", expectedParent, "-m", subject], "Cannot create exact worktree commit");
+  return { commitSha, treeSha: reviewedTree.treeSha, parent: expectedParent, subject, indexDigest: reviewedTree.indexDigest };
+}
+
 export async function completeExactCommit(
   repo: string,
   taskId: string,
@@ -543,7 +556,10 @@ export async function reconcileJournaledExactCommit(
   capability: SideEffectCapability,
 ): Promise<ExactCommit> {
   const exact = parseExactCommitJournal(detail);
-  if (exact.parent !== expectedParent) throw new Error("COMMITTING journal parent does not match queue expectedHead");
+  if (exact.parent !== expectedParent) {
+    const ancestry = await git(repo, ["merge-base", "--is-ancestor", expectedParent, exact.parent]);
+    if (ancestry.code !== 0) throw new Error("COMMITTING journal parent is not descended from queue expectedHead");
+  }
   const head = await gitText(repo, ["rev-parse", "--verify", "HEAD^{commit}"], "Cannot inspect COMMITTING recovery HEAD");
   if (head === exact.parent) {
     await installExactCommit(repo, exact, capability);

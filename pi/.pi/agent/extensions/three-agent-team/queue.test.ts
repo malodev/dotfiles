@@ -225,6 +225,96 @@ test("bulkEnqueue is idempotent on exact replay even with stale revision", async
   assert.equal(replay.snapshot.entries.length, 2);
 });
 
+test("amendQueuedContracts atomically advances the head and frozen digests", async () => {
+  const { queue } = await fixture();
+  await queue.command(enqueue("one"));
+  await queue.command(enqueue("two", A, ["one"]));
+  const before = await queue.snapshot();
+  const command = {
+    type: "amendQueuedContracts" as const,
+    expectedHead: A,
+    newExpectedHead: B,
+    amendments: [{
+      taskId: "two",
+      expectedApprovedBriefDigest: D1,
+      expectedContractDigest: D2,
+      approvedBriefDigest: "3".repeat(64),
+      contractDigest: "4".repeat(64),
+    }],
+    expectedRevision: before.revision,
+  };
+  const amended = await queue.command(command);
+  assert.equal(amended.changed, true);
+  assert.equal(amended.snapshot.expectedHead, B);
+  assert.equal(amended.snapshot.entries[1].approvedBriefDigest, "3".repeat(64));
+  assert.equal(amended.snapshot.entries[1].contractDigest, "4".repeat(64));
+  assert.equal((await queue.command({ ...command, expectedRevision: before.revision })).changed, false);
+  await assert.rejects(queue.command({
+    ...command,
+    newExpectedHead: C,
+    expectedRevision: amended.snapshot.revision,
+  }), /expected HEAD/);
+});
+
+test("amendQueuedContracts starts a new epoch that can claim after completed history", async () => {
+  const { queue } = await fixture();
+  await queue.command(enqueue("completed"));
+  await queue.withDispatcher(async (session) => {
+    const claimed = await session.claimNext();
+    assert.ok(claimed);
+    await session.advance("completed", claimed.attempt.attemptId, "AUTHORIZING");
+    await session.advance("completed", claimed.attempt.attemptId, "AUTHORIZED");
+    await session.advance("completed", claimed.attempt.attemptId, "EXECUTING");
+    await session.advance("completed", claimed.attempt.attemptId, "VERIFIED");
+    await session.advance("completed", claimed.attempt.attemptId, "COMMITTING");
+    await session.complete("completed", claimed.attempt.attemptId, B);
+  });
+  await queue.command(enqueue("repaired", B));
+  const before = await queue.snapshot();
+  const repaired = await queue.command({
+    type: "amendQueuedContracts",
+    expectedHead: B,
+    newExpectedHead: C,
+    amendments: [{
+      taskId: "repaired",
+      expectedApprovedBriefDigest: D1,
+      expectedContractDigest: D2,
+      approvedBriefDigest: "3".repeat(64),
+      contractDigest: "4".repeat(64),
+    }],
+    expectedRevision: before.revision,
+  });
+  assert.deepEqual(repaired.snapshot.entries.map((entry) => entry.taskId), ["repaired"]);
+  await queue.withDispatcher(async (session) => {
+    const claimed = await session.claimNext();
+    assert.equal(claimed?.entry.taskId, "repaired");
+    assert.equal(claimed?.entry.authorizationHead, C);
+  });
+});
+
+test("amendQueuedContracts rejects claimed entries and digest drift", async () => {
+  const { queue } = await fixture();
+  await queue.command(enqueue("one"));
+  const before = await queue.snapshot();
+  const amendment = {
+    taskId: "one",
+    expectedApprovedBriefDigest: "f".repeat(64),
+    expectedContractDigest: D2,
+    approvedBriefDigest: "3".repeat(64),
+    contractDigest: "4".repeat(64),
+  };
+  await assert.rejects(queue.command({
+    type: "amendQueuedContracts", expectedHead: A, newExpectedHead: B,
+    amendments: [amendment], expectedRevision: before.revision,
+  }), /preimage mismatch/);
+  await queue.withDispatcher(async (session) => { await session.claimNext(); });
+  const claimed = await queue.snapshot();
+  await assert.rejects(queue.command({
+    type: "amendQueuedContracts", expectedHead: A, newExpectedHead: B,
+    amendments: [{ ...amendment, expectedApprovedBriefDigest: D1 }], expectedRevision: claimed.revision,
+  }), /unclaimed unauthorized/);
+});
+
 test("bulkEnqueue rejects stale revision for effective writes", async () => {
   const { queue } = await fixture();
   const e1 = enqueue("one");
