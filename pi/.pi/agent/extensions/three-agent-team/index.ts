@@ -21,6 +21,7 @@ import {
   completeTeamNewTaskId,
   completionParent,
   orderSuccessTests,
+  preReviewSuccessTests,
   parseReviewVerdict,
   parseStatus,
   parseSuccessTests,
@@ -34,8 +35,10 @@ import {
   setYamlScalar,
   taskPath,
   upsertYamlScalar,
+  type SuccessTest,
 } from "./core.ts";
 import {
+  hasTerminalEnvelopeDespiteMissingFinishReason,
   isContinuableLengthRoleResult,
   isRetryableStaleRoleResult,
   runRole,
@@ -61,10 +64,14 @@ import type { TaskSpec } from "./plan-manifest.ts";
 
 const STATUS_KEY = "three-agent-team";
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
-const CANONICAL_VALIDATOR = resolve(
+const CANONICAL_TEAM_ASSETS = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../../skills/init-three-agent-team/assets/validate_goal_contract.py",
+  "../../skills/init-three-agent-team/assets",
 );
+const CANONICAL_VALIDATOR = resolve(CANONICAL_TEAM_ASSETS, "validate_goal_contract.py");
+const CANONICAL_ARCHITECT_PROMPT = resolve(CANONICAL_TEAM_ASSETS, "team-workflow.md");
+const CANONICAL_BUILDER_PROMPT = resolve(CANONICAL_TEAM_ASSETS, "team-builder.md");
+const CANONICAL_REVIEWER_PROMPT = resolve(CANONICAL_TEAM_ASSETS, "team-reviewer.md");
 
 interface ActiveRun {
   taskId: string;
@@ -149,6 +156,15 @@ async function currentHead(repo: string): Promise<string> {
   const result = await shell("git rev-parse HEAD", repo, undefined, 60_000);
   const head = result.stdout.trim();
   if (result.code !== 0 || !/^[0-9a-f]{40}$/.test(head)) throw new Error("Repository has no valid HEAD commit");
+  return head;
+}
+
+export async function currentCompletionParent(repo: string, authorizationParent: string): Promise<string> {
+  const head = await currentHead(repo);
+  const ancestry = await shell(`git merge-base --is-ancestor ${authorizationParent} ${head}`, repo, undefined, 60_000);
+  if (ancestry.code !== 0) {
+    throw new Error(`Completion refuses non-descendant HEAD ${head}; authorization head ${authorizationParent} must remain an ancestor`);
+  }
   return head;
 }
 
@@ -241,7 +257,7 @@ function recoveryDisposition(plan: string): "RESUME" | "ESCALATE" | undefined {
 }
 
 function roleFailure(result: RoleResult): string | undefined {
-  if (result.error) return result.error;
+  if (result.error && !hasTerminalEnvelopeDespiteMissingFinishReason(result)) return result.error;
   if (result.exitCode !== 0) return `exit code ${result.exitCode}`;
   return undefined;
 }
@@ -408,12 +424,12 @@ export function taskArgumentCompletions(cwd: string, prefix: string): TaskComple
 
 function architectKickoff(taskId: string, request: string): string {
   return `<!-- three-agent-team-architect-task: ${taskId} -->
-Act only as Architect. Discuss and complete the existing strict templates for task ${taskId}. Preserve every required heading and structured ST-NN field in team/tasks/${taskId}/brief.md; update the full status template to match. Resolve all angle-bracket placeholders and AGENTS.md project-command placeholders. Run the pre-go validator. Do not implement, invoke roles, create replacement files, or claim readiness unless validation passes. The owner authorizes only with /team-go ${taskId}. Request: ${request}`;
+Act only as Architect. Discuss and complete the existing strict templates for task ${taskId}. Preserve every required heading and structured ST-NN field in team/tasks/${taskId}/brief.md; update the full status template to match. Resolve all angle-bracket placeholders and AGENTS.md project-command placeholders. Do not invoke or rely on the repository-local validator; the extension will run its trusted bundled pre-go validator automatically and return exact corrections if needed. Do not implement, invoke roles, create replacement files, or claim readiness yourself. The owner authorizes only with /team-go ${taskId}. Request: ${request}`;
 }
 
 function architectRepairKickoff(taskId: string): string {
   return `<!-- three-agent-team-architect-task: ${taskId} -->
-Act only as Architect performing a mechanical Goal Contract repair for task ${taskId}. Read its existing brief.md and status.yaml, then run \`python team/validate_goal_contract.py team/tasks/${taskId} --phase pre-go\`. Correct every reported error by editing only those two existing files. Do not discuss, implement production code, invoke roles, or declare readiness until you have rerun that exact command and it exits 0. Preserve the strict schema and owner authorization PENDING.`;
+Act only as Architect performing a mechanical Goal Contract repair for task ${taskId}. Read its existing brief.md and status.yaml and correct evident structural errors by editing only those two existing files. Do not invoke or rely on the repository-local validator; the extension will run its trusted bundled pre-go validator automatically after your turn and return exact corrections if needed. Do not discuss, implement production code, invoke roles, or declare readiness yourself. Preserve the strict schema and owner authorization PENDING.`;
 }
 
 function architectUnblockKickoff(taskId: string, ownerNotes: string): string {
@@ -426,7 +442,7 @@ This is the discussion phase. Do not implement production code, edit brief.md/st
 
 function architectUnblockFinalizeKickoff(taskId: string): string {
   return `<!-- three-agent-team-unblock-task: ${taskId} -->
-The owner has said exactly \`finalize recovery\`. End the discussion and write team/tasks/${taskId}/recovery-plan.md. Do not implement production code or edit brief.md/status.yaml.
+The owner has said exactly \`finalize recovery\`. End the discussion and write team/tasks/${taskId}/recovery-plan.md. Do not implement production code or edit status.yaml. When the owner has selected a verification direction (for example, existing automated tests instead of physical observation), autonomously derive the exact focused commands from the repository, run every safe non-writing replacement command, and apply the smallest coherent correction to success-test titles, Command fields, expected evidence, write declarations, and the Verification commands list. The owner does not need to dictate exact command strings or field-by-field edits. If the corrected tests remove every hardware/system-writing test, align only the \`Hardware/system writes\` and \`Allowed hardware/system operations\` authority fields to \`prohibited\` and \`none\`. If no verification direction was selected or the correction would change the goal, production behavior, scope, architecture, or completion policy, use ESCALATE and ask one short owner question instead. Record every correction and command result in the recovery plan. Never instruct Builder to edit brief.md or status.yaml, invoke Reviewer directly, commit, reset, checkout, or rewrite history; the extension owns state transitions, role sequencing, and final completion, while any existing forward commit is preserved and reviewed.
 
 If recovery stays inside the existing authorized Goal Contract and needs no new owner decision, use exactly:
 # Recovery Plan
@@ -620,22 +636,44 @@ async function saveReview(taskDir: string, cycle: number, output: string, capabi
   return reviewPath;
 }
 
-async function runVerification(repo: string, taskDir: string, signal: AbortSignal, setProgress: (text: string) => void, capability?: SideEffectCapability): Promise<void> {
-  const brief = await readFile(resolve(taskDir, "brief.md"), "utf8");
-  const tests = orderSuccessTests(parseSuccessTests(brief));
-  const completed = new Set<string>();
-  const logPath = resolve(taskDir, "verification.log");
-  if (capability) {
-    await atomicRepositoryWrite(logPath, `Verification started ${new Date().toISOString()}\n`, capability);
-  } else {
-    await writeFile(logPath, `Verification started ${new Date().toISOString()}\n`, "utf8");
+export class SuccessTestCommandFailure extends Error {
+  readonly test: SuccessTest;
+  readonly actualExitCode: number;
+  readonly logPath: string;
+  readonly commandUnavailable: boolean;
+
+  constructor(message: string, test: SuccessTest, actualExitCode: number, logPath: string, commandUnavailable: boolean) {
+    super(message);
+    this.name = "SuccessTestCommandFailure";
+    this.test = test;
+    this.actualExitCode = actualExitCode;
+    this.logPath = logPath;
+    this.commandUnavailable = commandUnavailable;
   }
+}
+
+async function runSuccessTests(
+  repo: string,
+  taskDir: string,
+  tests: SuccessTest[],
+  logName: string,
+  phaseLabel: string,
+  signal: AbortSignal,
+  setProgress: (text: string) => void,
+  capability?: SideEffectCapability,
+): Promise<void> {
+  const completed = new Set<string>();
+  const logPath = resolve(taskDir, logName);
+  const header = `${phaseLabel} started ${new Date().toISOString()}\n`;
+  if (capability) await atomicRepositoryWrite(logPath, header, capability);
+  else await writeFile(logPath, header, "utf8");
+
   for (const test of tests) {
     if (signal.aborted) throw new Error("workflow cancelled");
     for (const prerequisite of test.prerequisites) {
-      if (!completed.has(prerequisite)) throw new Error(`${test.id} prerequisite did not complete: ${prerequisite}`);
+      if (!completed.has(prerequisite)) throw new Error(`${test.id} prerequisite did not complete in ${phaseLabel.toLowerCase()}: ${prerequisite}`);
     }
-    setProgress(`VERIFYING ${test.id}`);
+    setProgress(`${phaseLabel.toUpperCase()} ${test.id}`);
     const result = await shell(test.command, repo, signal);
     const appendLog = `\n[${new Date().toISOString()}] Test ${test.id}\nCOMMAND:\n${test.command}\n\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}\nEXIT CODE: ${result.code}\n`;
     if (capability) {
@@ -645,10 +683,91 @@ async function runVerification(repo: string, taskDir: string, signal: AbortSigna
       await appendFile(logPath, appendLog, "utf8");
     }
     if (result.code !== test.expectedExitCode) {
-      throw new Error(`${test.id} expected exit ${test.expectedExitCode}, got ${result.code}. See ${logPath}`);
+      const commandUnavailable = result.code === 126 || result.code === 127;
+      const message = commandUnavailable
+        ? `${test.id} command is unavailable (exit ${result.code}). Goal Contract commands must be executable shell commands, not prose instructions. See ${logPath}`
+        : `${test.id} expected exit ${test.expectedExitCode}, got ${result.code}. See ${logPath}`;
+      throw new SuccessTestCommandFailure(message, test, result.code, logPath, commandUnavailable);
     }
     completed.add(test.id);
   }
+}
+
+export async function runPreReviewVerification(
+  repo: string,
+  taskDir: string,
+  signal: AbortSignal,
+  setProgress: (text: string) => void,
+  capability?: SideEffectCapability,
+  logName = "pre-review-verification.log",
+): Promise<void> {
+  const brief = await readFile(resolve(taskDir, "brief.md"), "utf8");
+  const tests = preReviewSuccessTests(parseSuccessTests(brief));
+  await runSuccessTests(repo, taskDir, tests, logName, "Pre-review verification", signal, setProgress, capability);
+}
+
+function machineReviewForTestFailure(failure: SuccessTestCommandFailure): string {
+  const correction = failure.commandUnavailable
+    ? "create or repair the intended executable command; if the Command field is prose rather than a command, report that contract defect without rewriting the authorized brief"
+    : "fix the implementation or test while preserving the authorized Goal Contract";
+  return [
+    "# Review",
+    "",
+    "## Verdict",
+    "CHANGES_REQUESTED",
+    "",
+    "## Brief compliance",
+    `The extension executed the exact non-writing command for ${failure.test.id} before model review; it did not reach the expected exit code.`,
+    "",
+    "## Actual changed files",
+    "See the Builder report and authorization-head diff.",
+    "",
+    "## Unreported or unexpected changes",
+    "None determined by this machine gate.",
+    "",
+    "## Must fix",
+    `- \`${failure.test.id}\` — expected exit ${failure.test.expectedExitCode}, got ${failure.actualExitCode} — ${correction}; exact output: \`${failure.logPath}\``,
+    "",
+    "## Should fix",
+    "None.",
+    "",
+    "## Test evidence",
+    `Exact command: \`${failure.test.command}\``,
+    `Captured output: \`${failure.logPath}\``,
+    "",
+    "## Security observations",
+    "No hardware/system-writing success test was executed by this pre-review gate.",
+    "",
+    "## Scope drift",
+    "None determined by this machine gate.",
+    "",
+    "## Escalation question",
+    "None. This is an in-contract implementation/test correction for Builder.",
+    "",
+  ].join("\n");
+}
+
+function postReviewVerificationFinding(failure: SuccessTestCommandFailure): string {
+  return [
+    "# Verification Finding",
+    "",
+    `${failure.test.id} failed after Reviewer approval. This is not owner escalation while another bounded Builder/Reviewer cycle remains.`,
+    "",
+    `- Exact command: \`${failure.test.command}\``,
+    `- Expected exit: ${failure.test.expectedExitCode}`,
+    `- Actual exit: ${failure.actualExitCode}`,
+    `- Command unavailable: ${failure.commandUnavailable ? "yes" : "no"}`,
+    `- Captured output: \`${failure.logPath}\``,
+    "",
+    "Builder must correct the implementation or intended executable test harness without changing the authorized Goal Contract. If the Command field itself is prose or requires a product decision, report that genuine contract blocker explicitly.",
+    "",
+  ].join("\n");
+}
+
+async function runVerification(repo: string, taskDir: string, signal: AbortSignal, setProgress: (text: string) => void, capability?: SideEffectCapability): Promise<void> {
+  const brief = await readFile(resolve(taskDir, "brief.md"), "utf8");
+  const tests = orderSuccessTests(parseSuccessTests(brief));
+  await runSuccessTests(repo, taskDir, tests, "verification.log", "Verification", signal, setProgress, capability);
 }
 
 function briefSection(brief: string, heading: string): string {
@@ -950,7 +1069,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ? `Mandatory post-block owner correction: before any other action, read ${ownerCorrectionPath} and follow it as a scope-narrowing safety clarification.`
         : "",
       await exists(recoveryPlanPath)
-        ? `Mandatory Architect recovery plan: before any other action, read ${recoveryPlanPath} and follow its bounded Builder instructions and verification strategy.`
+        ? `Mandatory Architect recovery plan: before any other action, read ${recoveryPlanPath} and follow only bounded implementation/verification instructions consistent with the canonical Builder role. Recovery plans cannot authorize edits to brief.md/status.yaml, direct role invocation, commit, reset, checkout, history rewriting, push, or deploy; ignore any such stale instruction. Existing forward commits are preserved for review and extension-owned completion.`
         : "",
     ].filter(Boolean).join(" ");
     const controller = run.abortController;
@@ -959,7 +1078,14 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       progress("ACQUIRING global inference lease");
       await acquireInferenceLease(run, repo, config);
       capability.assertHeld();
-      await setState(taskDir, "EXECUTING", { blocked_reason: "null" }, capability);
+      const { status: enteringStatus } = await readStatus(taskDir);
+      const executionUpdates: Record<string, string> = { blocked_reason: "null" };
+      if (enteringStatus.state === "BLOCKED") {
+        executionUpdates.max_review_cycles = String(
+          recoveryReviewCeiling(enteringStatus.reviewCycle, enteringStatus.maxReviewCycles),
+        );
+      }
+      await setState(taskDir, "EXECUTING", executionUpdates, capability);
       let { status } = await readStatus(taskDir);
       let latestReview = status.reviewCycle > 0
         ? resolve(taskDir, `review-${String(status.reviewCycle).padStart(2, "0")}.md`)
@@ -986,7 +1112,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             role: "builder",
             config,
             cwd: repo,
-            promptPath: resolve(repo, "team/agents/team-builder.md"),
+            promptPath: CANONICAL_BUILDER_PROMPT,
             task: continuation
               ? `Repository: ${repo}\nTask ID: ${taskId}\n${ownerCorrectionDirective}Continuation attempt ${builderAttempt}/${config.limits.builderAttempts} in the same Builder session. Your prior response ended before the required build-report.md existed. Continue the authorized implementation now using tools; do not restart broad discovery and do not return a narrative promising future actions. Inspect the current worktree and prior role evidence only as needed, make measurable progress, test it, and finish the complete Goal Contract. Write team/tasks/${taskId}/build-report.md only when all implementation and required Builder verification are complete.${latestReview ? ` Address the latest review at ${latestReview}.` : ""}`
               : `Repository: ${repo}\nTask ID: ${taskId}\n${ownerCorrectionDirective}${latestReview ? `Latest review: ${latestReview}\n` : ""}Follow the Builder role contract exactly. Do not end with a promise to use another tool: keep using tools until the complete implementation and build-report.md are finished.`,
@@ -1016,10 +1142,29 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
           throw new Error(`Builder did not complete build-report.md within ${config.limits.builderAttempts} cumulative attempts. Last evidence: ${builderRunPath}`);
         }
         capability.assertHeld();
-        await setState(taskDir, "REVIEWING", { latest_build_report: `team/tasks/${taskId}/build-report.md` }, capability);
+        await updateTaskStatus(taskDir, { latest_build_report: `team/tasks/${taskId}/build-report.md` }, capability);
         await validate(repo, taskDir, "execution", controller.signal);
 
         const cycle = status.reviewCycle + 1;
+        const preReviewLogName = `pre-review-verification-${String(cycle).padStart(2, "0")}.log`;
+        const preReviewLogPath = `team/tasks/${taskId}/${preReviewLogName}`;
+        try {
+          await runPreReviewVerification(repo, taskDir, controller.signal, progress, capability, preReviewLogName);
+        } catch (error) {
+          if (!(error instanceof SuccessTestCommandFailure)) throw error;
+          const reviewPath = await saveReview(taskDir, cycle, machineReviewForTestFailure(error), capability);
+          await updateTaskStatus(taskDir, {
+            review_cycle: String(cycle),
+            latest_review: `team/tasks/${taskId}/${basename(reviewPath)}`,
+          }, capability);
+          latestReview = reviewPath;
+          status = (await readStatus(taskDir)).status;
+          continue;
+        }
+
+        await setState(taskDir, "REVIEWING", {}, capability);
+        await validate(repo, taskDir, "execution", controller.signal);
+
         const reviewerSession = roleSession(repo, taskId, "reviewer", cycle);
         await mkdir(reviewerSession.sessionDir, { recursive: true });
         let reviewerAttempt = await countRoleRuns(taskDir, "reviewer", cycle);
@@ -1034,10 +1179,10 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             role: "reviewer",
             config,
             cwd: repo,
-            promptPath: resolve(repo, "team/agents/team-reviewer.md"),
+            promptPath: CANONICAL_REVIEWER_PROMPT,
             task: reviewerAttempt > 1
-              ? `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\n${ownerCorrectionDirective}Continuation attempt ${reviewerAttempt}/${config.limits.reviewerAttempts} in the same read-only Reviewer session. Your previous response did not contain the exact complete review verdict. Continue inspecting the complete authorization-head diff as needed, then return the full required review report with an exact ## Verdict heading. Do not promise future tool calls.`
-              : `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\n${ownerCorrectionDirective}Follow the Reviewer role contract exactly, inspect the complete authorization-head diff independently, and return the complete review report with an exact ## Verdict heading.`,
+              ? `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\nPre-review exact-command evidence: ${preReviewLogPath}\n${ownerCorrectionDirective}Continuation attempt ${reviewerAttempt}/${config.limits.reviewerAttempts} in the same read-only Reviewer session. Your previous response did not contain the exact complete review verdict. Continue inspecting the complete authorization-head diff and exact-command evidence as needed, then return the full required review report with an exact ## Verdict heading. Do not promise future tool calls.`
+              : `Repository: ${repo}\nTask ID: ${taskId}\nReview cycle: ${cycle}\nPre-review exact-command evidence: ${preReviewLogPath}\n${ownerCorrectionDirective}Follow the Reviewer role contract exactly, inspect the complete authorization-head diff and exact-command evidence independently, and return the complete review report with an exact ## Verdict heading. Do not substitute broader or surrogate tests for a declared success-test command.`,
             signal: controller.signal,
             onProgress: progress,
             ...reviewerSession,
@@ -1068,13 +1213,27 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         }, capability);
         status = (await readStatus(taskDir)).status;
         if (verdict === "APPROVED") {
-          const expectedParent = completionParent(status, run.expectedParent);
+          const authorizationParent = completionParent(status, run.expectedParent);
+          const expectedParent = await currentCompletionParent(repo, authorizationParent);
           capability.assertHeld();
           run.reviewedTree = await freezeReviewedTree(repo, expectedParent, capability);
           await setState(taskDir, "VERIFYING", {}, capability);
           await validate(repo, taskDir, "execution", controller.signal);
           capability.assertHeld();
-          await runVerification(repo, taskDir, controller.signal, progress, capability);
+          try {
+            await runVerification(repo, taskDir, controller.signal, progress, capability);
+          } catch (error) {
+            if (!(error instanceof SuccessTestCommandFailure)) throw error;
+            const findingName = `verification-failure-${String(cycle).padStart(2, "0")}.md`;
+            const findingPath = resolve(taskDir, findingName);
+            await atomicRepositoryWrite(findingPath, postReviewVerificationFinding(error), capability);
+            latestReview = findingPath;
+            await setState(taskDir, "EXECUTING", {
+              latest_review: `team/tasks/${taskId}/${findingName}`,
+            }, capability);
+            status = (await readStatus(taskDir)).status;
+            continue;
+          }
           await run.queuedExecution?.markVerified(JSON.stringify({ reviewedTree: run.reviewedTree }));
           const completedAt = new Date().toISOString();
           progress("WRITING completion report");
@@ -1837,6 +1996,27 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         return { action: "handled" };
       }
     }
+    if (event.source === "interactive" && !activeUnblockDiscussion && event.text.trim().toLowerCase() === "finalize recovery") {
+      try {
+        const taskId = await findAuthorizedNonterminalTask(ctx.cwd);
+        if (!taskId) throw new Error("No authorized nonterminal task is available for recovery finalization.");
+        const taskDir = taskPath(ctx.cwd, taskId);
+        const { status } = await readStatus(taskDir);
+        if (status.state !== "BLOCKED") throw new Error(`Task ${taskId} is ${status.state}, not BLOCKED.`);
+        if (!(await exists(resolve(taskDir, "recovery-discussion.md")))) {
+          throw new Error(`Task ${taskId} has no persisted recovery discussion; use /team-unblock ${taskId} first.`);
+        }
+        const recovery: PendingUnblockRecovery = { repo: ctx.cwd, taskId };
+        await ensureRecoveryExecutionLock(recovery, ctx);
+        activeUnblockDiscussion = recovery;
+        authorizedInteractiveTaskId = taskId;
+        pendingArchitectStopReason = undefined;
+        await appendRecoveryDiscussion(taskDir, taskId, "REBOUND_AFTER_RELOAD", "- Exact owner finalization request rebound the persisted BLOCKED recovery discussion after runtime reload.");
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "warning");
+        return { action: "handled" };
+      }
+    }
     if (event.source === "interactive" && activeUnblockDiscussion && event.text.trim().toLowerCase() === "finalize recovery") {
       const recovery = activeUnblockDiscussion;
       const taskDir = taskPath(recovery.repo, recovery.taskId);
@@ -2189,8 +2369,13 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
     const lifecycleConstraint = authorizedInteractiveTaskId
       ? `Task ${authorizedInteractiveTaskId} is already authorized. Direct interactive role work is prohibited; use only the extension lifecycle commands.`
       : "Architect may discuss and write a structurally valid contract, but must never invoke subagent directly or treat plain `go` as authorization. Owner execution uses `/team-go <task-id>`.";
+    const architectPolicy = !recoveryTurn && (architectTask || pendingArchitectValidation)
+      ? (await readFile(CANONICAL_ARCHITECT_PROMPT, "utf8")).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
+      : "";
     return {
-      systemPrompt: event.systemPrompt + `\n\nThree-agent runtime is extension-controlled. ${lifecycleConstraint}`
+      systemPrompt: event.systemPrompt
+        + `\n\nThree-agent runtime is extension-controlled. ${lifecycleConstraint}`
+        + (architectPolicy ? `\n\nCanonical Architect runtime policy:\n${architectPolicy}` : ""),
     };
   });
 

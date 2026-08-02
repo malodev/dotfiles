@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +21,7 @@ import {
   completionParent,
   localTaskDatePrefix,
   orderSuccessTests,
+  preReviewSuccessTests,
   parseReviewVerdict,
   parseStatus,
   parseSuccessTests,
@@ -30,7 +32,7 @@ import {
   releaseInteractiveGuard,
   releaseOwnedSlot,
 } from "./core.ts";
-import threeAgentTeamExtension, { archiveTask, completionReportMessage, taskArgumentCompletions } from "./index.ts";
+import threeAgentTeamExtension, { archiveTask, completionReportMessage, currentCompletionParent, runPreReviewVerification, SuccessTestCommandFailure, taskArgumentCompletions } from "./index.ts";
 import { acquireAdvisoryLock } from "./durable-state.ts";
 import {
   loadOrCreateTaskConfig,
@@ -38,7 +40,9 @@ import {
   roleModel,
 } from "./config.ts";
 import {
+  MISSING_FINISH_REASON_ERROR,
   STALE_STREAM_ERROR,
+  hasTerminalEnvelopeDespiteMissingFinishReason,
   isContinuableLengthRoleResult,
   isRetryableStaleRoleResult,
   runRole,
@@ -274,10 +278,13 @@ test("builds a guarded team-grill-me skill prompt", () => {
   assert.throws(() => parseTeamTaskId("one two", "team-grill-me"), /exactly one task ID/);
 });
 
-test("approved recovery guarantees exactly one available review cycle at the ceiling", () => {
+test("approved recovery guarantees one available review cycle only when capacity is exhausted", async () => {
   assert.equal(recoveryReviewCeiling(5, 5), 6);
   assert.equal(recoveryReviewCeiling(3, 5), 5);
   assert.throws(() => recoveryReviewCeiling(-1, 5), /Invalid review-cycle values/);
+
+  const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(source, /enteringStatus\.state === "BLOCKED"[\s\S]*recoveryReviewCeiling\(enteringStatus\.reviewCycle, enteringStatus\.maxReviewCycles\)/);
 });
 
 test("classifies complete, legacy, and partial authorization snapshots", () => {
@@ -347,6 +354,20 @@ test("centralizes active-run admission for Architect session commands", async ()
 
   const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
   assert.match(source, /python \$\{JSON\.stringify\(CANONICAL_VALIDATOR\)\}/, "runtime validation must use the trusted bundled validator");
+  assert.match(source, /readFile\(CANONICAL_ARCHITECT_PROMPT/, "Architect must use the trusted bundled policy");
+  assert.match(source, /promptPath: CANONICAL_BUILDER_PROMPT/, "Builder must use the trusted bundled prompt");
+  assert.match(source, /promptPath: CANONICAL_REVIEWER_PROMPT/, "Reviewer must use the trusted bundled prompt");
+  assert.doesNotMatch(source, /promptPath: resolve\(repo, "team\/agents\/team-(?:builder|reviewer)\.md"\)/, "runtime must not load stale repository role prompts");
+  assert.doesNotMatch(source, /python team\/validate_goal_contract\.py/, "runtime instructions must not invoke a stale repository validator");
+  assert.ok(source.indexOf("await runPreReviewVerification") < source.indexOf('role: "reviewer"'), "exact offline commands must run before Reviewer");
+  assert.match(source, /result\.code === 126 \|\| result\.code === 127/);
+  assert.match(source, /machineReviewForTestFailure/);
+  assert.match(source, /verification-failure-\$\{String\(cycle\)/);
+  assert.match(source, /postReviewVerificationFinding/);
+  assert.match(source, /owner does not need to dictate exact command strings or field-by-field edits/);
+  assert.match(source, /Recovery plans cannot authorize edits to brief\.md\/status\.yaml, direct role invocation, commit, reset, checkout, history rewriting/);
+  assert.match(source, /REBOUND_AFTER_RELOAD/);
+  assert.match(source, /has no persisted recovery discussion; use \/team-unblock/);
   const idleCommands = ["team-new", "team-grill-me", "team-unblock", "team-repair", "team-go", "team-resume"];
   assert.match(source, /const recoveryTask = pendingUnblockRecovery\?\.taskId \?\? activeUnblockDiscussion\?\.taskId/);
   const settledRecovery = source.slice(source.indexOf('pi.on("agent_settled"'));
@@ -366,6 +387,21 @@ test("centralizes active-run admission for Architect session commands", async ()
   }
 });
 
+test("bundled role policy cannot reintroduce repository-local validation blockers", async () => {
+  const architect = await readFile(new URL("../../skills/init-three-agent-team/assets/team-workflow.md", import.meta.url), "utf8");
+  const builder = await readFile(new URL("../../skills/init-three-agent-team/assets/team-builder.md", import.meta.url), "utf8");
+  const reviewer = await readFile(new URL("../../skills/init-three-agent-team/assets/team-reviewer.md", import.meta.url), "utf8");
+  assert.doesNotMatch(architect, /python team\/validate_goal_contract\.py/);
+  assert.doesNotMatch(builder, /python team\/validate_goal_contract\.py/);
+  assert.doesNotMatch(reviewer, /python team\/validate_goal_contract\.py/);
+  assert.match(architect, /extension automatically runs its trusted bundled pre-go validator/);
+  assert.match(builder, /authorization_head.*ancestor/);
+  assert.match(builder, /Do not modify `brief\.md`, `status\.yaml`/);
+  assert.match(reviewer, /authorization_head.*ancestor/);
+  assert.match(reviewer, /expected extension-owned audit evidence/);
+  assert.match(reviewer, /untracked files outside that task directory as unexpected/);
+});
+
 test("wraps workflows and interactive turns in renewable inference leases", async () => {
   const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
   assert.match(source, /await acquireInferenceLease\(run, repo, config\)/);
@@ -379,7 +415,7 @@ test("wraps workflows and interactive turns in renewable inference leases", asyn
   assert.match(source, /session_shutdown[\s\S]*?await releaseInferenceLease\(workflow/);
 });
 
-test("aborts and provider-gates an interactive turn when lease acquisition fails", async () => {
+test("aborts a failed interactive lease without installing a permanent provider gate", async () => {
   const raw = JSON.parse(configText);
   raw.lifecycle.acquireTeamCommand = "false";
   raw.lifecycle.renewTeamCommand = "true";
@@ -414,11 +450,10 @@ test("aborts and provider-gates an interactive turn when lease acquisition fails
     /Could not acquire the global inference lease/,
   );
   assert.equal(aborts, 1);
-  assert.throws(
+  assert.doesNotThrow(
     () => handlers.get("before_provider_request")![0]({ payload: {} }, ctx),
-    /no healthy global inference lease/,
   );
-  assert.equal(aborts, 2);
+  assert.equal(aborts, 1);
 });
 
 test("documents every registered team command", async () => {
@@ -450,15 +485,74 @@ test("allows grilling only for the matching unauthorized DISCUSSING task", () =>
 });
 
 test("orders success tests by prerequisites", () => {
-  const ordered = orderSuccessTests(parseSuccessTests(brief));
+  const tests = parseSuccessTests(brief);
+  const ordered = orderSuccessTests(tests);
   assert.deepEqual(ordered.map((item) => item.id), ["ST-01", "ST-02"]);
+  assert.deepEqual(preReviewSuccessTests(tests).map((item) => item.id), ["ST-01"]);
 });
 
-test("completion is parented at authorization head rather than discussion baseline", () => {
+test("pre-review gate runs only prerequisite-safe non-writing commands and classifies exit 127", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "three-agent-pre-review-"));
+  const taskDir = join(repo, "team", "tasks", "sample");
+  await mkdir(taskDir, { recursive: true });
+  const renderBrief = (offlineCommand: string) => `# Goal Contract: sample
+
+## Success tests
+### ST-01: offline
+- Command: \`${offlineCommand}\`
+- Expected exit code: \`0\`
+- Expected evidence: offline command passes
+- Writes hardware/system state: \`no\`
+- Prerequisites: \`none\`
+
+### ST-02: hardware
+- Command: \`exit 99\`
+- Expected exit code: \`0\`
+- Expected evidence: hardware command passes
+- Writes hardware/system state: \`yes\`
+- Prerequisites: \`ST-01\`
+
+## Non-goals
+none
+`;
+  await writeFile(join(taskDir, "brief.md"), renderBrief("printf offline-ok"));
+  await runPreReviewVerification(repo, taskDir, new AbortController().signal, () => {});
+  const log = await readFile(join(taskDir, "pre-review-verification.log"), "utf8");
+  assert.match(log, /offline-ok/);
+  assert.doesNotMatch(log, /exit 99/);
+
+  await writeFile(join(taskDir, "brief.md"), renderBrief("definitely-missing-command argument"));
+  await assert.rejects(
+    runPreReviewVerification(repo, taskDir, new AbortController().signal, () => {}),
+    (error: unknown) => error instanceof SuccessTestCommandFailure && error.commandUnavailable && error.actualExitCode === 127,
+  );
+});
+
+test("completion preserves forward commits but rejects a rewind before authorization", async () => {
   const authorizationHead = "b".repeat(40);
   assert.equal(completionParent({ authorizationHead }), authorizationHead);
   assert.equal(completionParent({ authorizationHead }, "c".repeat(40)), "c".repeat(40));
   assert.throws(() => completionParent({ authorizationHead: null }), /authorization head/);
+
+  const repo = await mkdtemp(join(tmpdir(), "three-agent-forward-head-"));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+  git("init", "-q");
+  git("config", "user.name", "Test");
+  git("config", "user.email", "test@example.com");
+  await writeFile(join(repo, "file.txt"), "baseline\n");
+  git("add", "file.txt");
+  git("commit", "-qm", "baseline");
+  const baseline = git("rev-parse", "HEAD");
+  await writeFile(join(repo, "file.txt"), "authorized\n");
+  git("commit", "-qam", "authorization");
+  const authorization = git("rev-parse", "HEAD");
+  await writeFile(join(repo, "file.txt"), "builder commit\n");
+  git("commit", "-qam", "builder commit");
+  const forward = git("rev-parse", "HEAD");
+
+  assert.equal(await currentCompletionParent(repo, authorization), forward);
+  git("update-ref", "--no-deref", "HEAD", baseline);
+  await assert.rejects(currentCompletionParent(repo, authorization), /non-descendant HEAD/);
 });
 
 test("requires exact review verdict heading", () => {
@@ -537,6 +631,27 @@ test("retries only exact-model tool-productive stale streams", () => {
   assert.equal(isRetryableStaleRoleResult({ ...result, responseProvider: undefined }), false);
   assert.equal(isRetryableStaleRoleResult({ ...result, responseModel: "wrong/model" }), false);
   assert.equal(isRetryableStaleRoleResult({ ...result, error: "different failure" }), false);
+});
+
+test("accepts a missing finish signal only with an otherwise exact terminal role envelope", () => {
+  const result: RoleResult = {
+    role: "builder",
+    requestedModel: "pi-llama/pi/qwen",
+    responseProvider: "pi-llama",
+    responseModel: "pi/qwen",
+    stopReason: "stop",
+    output: "Build complete; build-report.md written.",
+    stderr: "",
+    exitCode: 0,
+    toolCount: 3,
+    error: MISSING_FINISH_REASON_ERROR,
+  };
+  assert.equal(hasTerminalEnvelopeDespiteMissingFinishReason(result), true);
+  assert.equal(hasTerminalEnvelopeDespiteMissingFinishReason({ ...result, stopReason: undefined }), false);
+  assert.equal(hasTerminalEnvelopeDespiteMissingFinishReason({ ...result, exitCode: 1 }), false);
+  assert.equal(hasTerminalEnvelopeDespiteMissingFinishReason({ ...result, toolCount: 0 }), false);
+  assert.equal(hasTerminalEnvelopeDespiteMissingFinishReason({ ...result, output: "" }), false);
+  assert.equal(hasTerminalEnvelopeDespiteMissingFinishReason({ ...result, responseModel: "wrong/model" }), false);
 });
 
 test("continues exact-model length stops only after measurable progress", () => {

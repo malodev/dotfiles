@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { expectedIdentity, roleModel, writeChildAgentConfig, type TeamConfig } from "./config.ts";
 
 export const STALE_STREAM_ERROR = "role produced no process event before the configured inactivity deadline";
+export const MISSING_FINISH_REASON_ERROR = "Stream ended without finish_reason";
 const ROLE_LAUNCHER = fileURLToPath(new URL("./role-launcher.py", import.meta.url));
 
 export interface RoleProcessIdentity {
@@ -39,6 +40,15 @@ export function isRetryableStaleRoleResult(result: RoleResult): boolean {
   return result.error === STALE_STREAM_ERROR
     && exactRequestedIdentity(result)
     && result.toolCount > 0;
+}
+
+export function hasTerminalEnvelopeDespiteMissingFinishReason(result: RoleResult): boolean {
+  return result.error === MISSING_FINISH_REASON_ERROR
+    && result.exitCode === 0
+    && result.stopReason === "stop"
+    && exactRequestedIdentity(result)
+    && result.toolCount > 0
+    && result.output.trim().length > 0;
 }
 
 export function isContinuableLengthRoleResult(result: RoleResult): boolean {

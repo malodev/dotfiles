@@ -330,6 +330,22 @@ export function orderSuccessTests(tests: SuccessTest[]): SuccessTest[] {
   return ordered;
 }
 
+/**
+ * Select offline tests that can run before review without crossing a declared
+ * hardware/system-write prerequisite. Tests that intentionally inspect state
+ * after a writing test remain final-verification-only.
+ */
+export function preReviewSuccessTests(tests: SuccessTest[]): SuccessTest[] {
+  const eligible = new Set<string>();
+  const selected: SuccessTest[] = [];
+  for (const test of orderSuccessTests(tests)) {
+    if (test.writesState || !test.prerequisites.every((id) => eligible.has(id))) continue;
+    eligible.add(test.id);
+    selected.push(test);
+  }
+  return selected;
+}
+
 export function parseReviewVerdict(review: string): "APPROVED" | "CHANGES_REQUESTED" | "ESCALATE" {
   const match = review.match(/^## Verdict\s*\n\s*(APPROVED|CHANGES_REQUESTED|ESCALATE)\s*$/m);
   if (!match) throw new Error("Reviewer output has no valid ## Verdict");
