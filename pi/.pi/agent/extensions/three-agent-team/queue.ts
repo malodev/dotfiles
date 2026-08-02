@@ -132,6 +132,20 @@ export interface BulkEnqueueCommand {
   expectedRevision?: number;
 }
 
+export interface AmendQueuedContractsCommand {
+  type: "amendQueuedContracts";
+  expectedHead: string;
+  newExpectedHead: string;
+  amendments: Array<{
+    taskId: string;
+    expectedApprovedBriefDigest: string;
+    expectedContractDigest: string;
+    approvedBriefDigest: string;
+    contractDigest: string;
+  }>;
+  expectedRevision: number;
+}
+
 /**
  * Atomic import enrollment.  Stricter than bulkEnqueue:
  *  - Requires the exact preimage queue state (revision, expectedHead, paused,
@@ -156,6 +170,7 @@ export interface BulkImportEnqueueCommand {
 export type QueueCommand =
   | EnqueueCommand
   | BulkEnqueueCommand
+  | AmendQueuedContractsCommand
   | BulkImportEnqueueCommand
   | { type: "pause"; expectedRevision?: number }
   | { type: "continue"; expectedRevision?: number }
@@ -682,6 +697,65 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       snapshot.nextSequence += newEntries.length;
       snapshot.expectedHead ??= expectedHead;
       snapshot.entries.push(...newEntries);
+      return { changed: true, snapshot: await persist(snapshot, lock) };
+    }
+    if (input.type === "amendQueuedContracts") {
+      const expectedHead = sha(input.expectedHead, SHA1, "amendQueuedContracts.expectedHead");
+      const newExpectedHead = sha(input.newExpectedHead, SHA1, "amendQueuedContracts.newExpectedHead");
+      if (!input.amendments.length) throw new Error("Queued contract amendment requires at least one task");
+      const seen = new Set<string>();
+      const parsed = input.amendments.map((amendment, index) => {
+        taskId(amendment.taskId, `amendQueuedContracts[${index}].taskId`);
+        if (seen.has(amendment.taskId)) throw new Error(`Duplicate queued contract amendment for ${amendment.taskId}`);
+        seen.add(amendment.taskId);
+        return {
+          ...amendment,
+          expectedApprovedBriefDigest: sha(amendment.expectedApprovedBriefDigest, SHA256, `amendQueuedContracts[${index}].expectedApprovedBriefDigest`),
+          expectedContractDigest: sha(amendment.expectedContractDigest, SHA256, `amendQueuedContracts[${index}].expectedContractDigest`),
+          approvedBriefDigest: sha(amendment.approvedBriefDigest, SHA256, `amendQueuedContracts[${index}].approvedBriefDigest`),
+          contractDigest: sha(amendment.contractDigest, SHA256, `amendQueuedContracts[${index}].contractDigest`),
+        };
+      });
+      const postimage = snapshot.expectedHead === newExpectedHead && parsed.every((amendment) => {
+        const entry = snapshot.entries.find((candidate) => candidate.taskId === amendment.taskId);
+        return entry?.state === "QUEUED" && entry.attempts.length === 0
+          && entry.approvedBriefDigest === amendment.approvedBriefDigest
+          && entry.contractDigest === amendment.contractDigest;
+      });
+      const historicalEntriesRemain = snapshot.entries.some((entry) => entry.state === "COMPLETED" || entry.state === "DEQUEUED");
+      if (postimage && !historicalEntriesRemain) return { changed: false, snapshot: clone(snapshot) };
+
+      assertRevision(snapshot, input.expectedRevision);
+      if (snapshot.dispatcherLease) throw new Error("Cannot amend queued contracts while a dispatcher lease is active");
+      if (snapshot.expectedHead !== expectedHead) throw new Error(`Queue amendment expected HEAD ${expectedHead}, not ${snapshot.expectedHead}`);
+      for (const amendment of parsed) {
+        const entry = snapshot.entries.find((candidate) => candidate.taskId === amendment.taskId);
+        if (!entry) throw new Error(`Queued contract amendment task not found: ${amendment.taskId}`);
+        if (entry.state !== "QUEUED" || entry.attempts.length !== 0 || entry.authorizationHead !== null) {
+          throw new Error(`Queued contract amendment requires an unclaimed unauthorized entry: ${amendment.taskId}`);
+        }
+        if (entry.approvedBriefDigest !== amendment.expectedApprovedBriefDigest || entry.contractDigest !== amendment.expectedContractDigest) {
+          throw new Error(`Queued contract amendment preimage mismatch for ${amendment.taskId}`);
+        }
+      }
+      for (const amendment of parsed) {
+        const entry = snapshot.entries.find((candidate) => candidate.taskId === amendment.taskId)!;
+        entry.approvedBriefDigest = amendment.approvedBriefDigest;
+        entry.contractDigest = amendment.contractDigest;
+      }
+      // Advancing HEAD outside task completion starts a new queue epoch. Keep
+      // only nonterminal entries so the first repaired task can bind its
+      // authorization head to the repair commit without breaking the exact
+      // completed-task chain from the prior epoch.
+      const retainedIds = new Set(
+        snapshot.entries
+          .filter((entry) => entry.state !== "COMPLETED" && entry.state !== "DEQUEUED")
+          .map((entry) => entry.taskId),
+      );
+      snapshot.entries = snapshot.entries
+        .filter((entry) => retainedIds.has(entry.taskId))
+        .map((entry) => ({ ...entry, dependsOn: entry.dependsOn.filter((dependency) => retainedIds.has(dependency)) }));
+      snapshot.expectedHead = newExpectedHead;
       return { changed: true, snapshot: await persist(snapshot, lock) };
     }
     if (input.type === "bulkImportEnqueue") {

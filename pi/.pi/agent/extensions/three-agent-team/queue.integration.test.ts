@@ -487,7 +487,7 @@ test("production executor journals exact phases and installs only the reviewed t
   assert.equal(await readFile(resolve(repo, "implementation.txt"), "utf8"), "reviewed implementation\n");
 });
 
-test("stale COMMITTING journal rolls forward only the exact installed commit", async () => {
+test("stale COMMITTING journal accepts an exact completion parent descended from queue authorization", async () => {
   const { repo, state, task, validator } = await gitRepository();
   const { queue } = await enrollSample(repo, state, validator);
   let completion = "";
@@ -499,10 +499,14 @@ test("stale COMMITTING journal rolls forward only the exact installed commit", a
       await authorizeQueuedEntry(repo, claimed!.entry, claimed!.attempt.attemptId, session, lock, state, validator);
       await session.advance("sample", claimed!.attempt.attemptId, "EXECUTING");
       await writeFile(resolve(repo, "implementation.txt"), "journaled implementation\n");
-      const reviewedTree = await freezeReviewedTree(repo, claimed!.entry.authorizationHead!, lock);
+      await run(repo, "git", "add", "implementation.txt");
+      await run(repo, "git", "commit", "-qm", "builder forward commit");
+      const forwardParent = await run(repo, "git", "rev-parse", "HEAD");
+      assert.notEqual(forwardParent, claimed!.entry.authorizationHead);
+      const reviewedTree = await freezeReviewedTree(repo, forwardParent, lock);
       await session.advance("sample", claimed!.attempt.attemptId, "VERIFIED", JSON.stringify({ reviewedTree }));
       await atomicRepositoryWrite(resolve(task, "completion-report.md"), "journaled evidence\n", lock);
-      const exact = await completeExactCommit(repo, "sample", claimed!.entry.authorizationHead!, reviewedTree, await expectedEvidence(repo, "sample"), lock);
+      const exact = await completeExactCommit(repo, "sample", forwardParent, reviewedTree, await expectedEvidence(repo, "sample"), lock);
       completion = exact.commitSha;
       await session.advance("sample", claimed!.attempt.attemptId, "COMMITTING", JSON.stringify({
         tree: exact.treeSha, parent: exact.parent, subject: exact.subject, commit: exact.commitSha,
