@@ -66,6 +66,20 @@ test("parsePlanManifest accepts minimal valid manifest", () => {
   assert.deepEqual(manifest.tasks[0].dependsOn, []);
 });
 
+test("parsePlanManifest rejects prose commands without rejecting planned project executables", () => {
+  const proseTask = makeMinimalTask("2026-07-28-task-one");
+  (proseTask.success_tests as Array<Record<string, unknown>>)[0].command = "DISPLAY=:0 Click Apply in GUI";
+  assert.throws(() => parsePlanManifest(makeValidManifest([proseTask])), /looks like prose.*expected_evidence/);
+
+  const plannedTask = makeMinimalTask("2026-07-28-task-one");
+  (plannedTask.success_tests as Array<Record<string, unknown>>)[0].command = "project-cli verify --offline";
+  assert.doesNotThrow(() => parsePlanManifest(makeValidManifest([plannedTask])));
+
+  const pathTask = makeMinimalTask("2026-07-28-task-one");
+  (pathTask.success_tests as Array<Record<string, unknown>>)[0].command = "./scripts/future-check --offline";
+  assert.doesNotThrow(() => parsePlanManifest(makeValidManifest([pathTask])));
+});
+
 test("parsePlanManifest accepts manifest with dependencies", () => {
   const tasks = [
     makeMinimalTask("2026-07-28-task-one"),

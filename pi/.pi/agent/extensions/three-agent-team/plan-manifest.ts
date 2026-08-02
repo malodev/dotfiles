@@ -7,6 +7,21 @@
 
 import { parse } from "yaml";
 
+const PROSE_COMMAND_HEADS = new Set([
+  "check", "click", "confirm", "ensure", "inspect", "move", "observe",
+  "open", "select", "switch", "verify",
+]);
+
+function assertCommandShape(command: string, context: string): void {
+  let remainder = command.trim();
+  const assignment = /^[A-Za-z_][A-Za-z0-9_]*=(?:"(?:[^"\\]|\\.)*"|'[^']*'|\S+)\s+/;
+  while (assignment.test(remainder)) remainder = remainder.replace(assignment, "");
+  const head = remainder.split(/\s+/, 1)[0]?.replace(/^["']|["']$/g, "") ?? "";
+  if (head && !head.includes("/") && PROSE_COMMAND_HEADS.has(head.toLowerCase()) && remainder.includes(" ")) {
+    throw new Error(`${context}.command looks like prose beginning with '${head}', not an executable shell command; put manual actions in expected_evidence`);
+  }
+}
+
 export interface SuccessTest {
   id: string;
   title: string;
@@ -376,6 +391,7 @@ function validateSuccessTest(raw: Record<string, unknown>, taskContext: string, 
 
   const title = requireNonEmptyString(raw, "title", context);
   const command = requireNonEmptyString(raw, "command", context);
+  assertCommandShape(command, context);
   const expectedEvidence = requireNonEmptyString(raw, "expected_evidence", context);
 
   const exitCode = raw.expected_exit_code;
