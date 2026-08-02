@@ -57,6 +57,8 @@ MANAGED_FILES=(
   "git/.gitconfig|$HOME/.gitconfig|$HOME/.gitconfig_local"
   "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland_local.conf"
   "hyprland/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors_local.conf"
+  # models.json uses merge-models.sh instead of sentinel (JSON can't source)
+  "pi/.pi/agent/models.json|$HOME/.pi/agent/models.json|$HOME/.pi/agent/models_local.json"
 )
 
 #-------------------------------------------------------------------------
@@ -108,6 +110,14 @@ for entry in "${MANAGED_FILES[@]}"; do
 
   [[ ! -f "$home_path" ]] && continue
   [[ ! -f "$repo_path" ]] && { warn "$repo_rel missing from repo — skipping"; continue; }
+
+  # models.json uses merge-models.sh instead of sentinel
+  if [[ "$name" == "models.json" ]]; then
+    if [[ "$MODE" == "interactive" ]]; then
+      printf '%-40s \033[1;36mmerge-based\033[0m\n' "$name"
+    fi
+    continue
+  fi
 
   last_line="$(tail -n 1 "$home_path" 2>/dev/null || true)"
 
