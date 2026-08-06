@@ -44,6 +44,22 @@ def _config_home() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 
 
+def _ram_copy_progress() -> str | None:
+    """Best-effort read of the byte-progress ram-disk-up.sh reports while
+    copying the model into tmpfs. Absent whenever no copy is in flight.
+    The writer updates this every second; anything older is stale (e.g. a
+    crash that skipped cleanup) and must not bleed into an unrelated later
+    transition, so ignore it rather than trust it indefinitely."""
+    path = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "ds4-ram-copy.progress"
+    try:
+        if time.time() - path.stat().st_mtime > 3:
+            return None
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
 def _state_home() -> Path:
     return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
 
@@ -67,6 +83,8 @@ class ManagerConfig:
     maximum_ttl: int
     default_ttl: int
     service_timeout: int
+    ds4_unit: str
+    ds4_health_url: str
 
     @classmethod
     def load(cls, path: Path | None = None) -> "ManagerConfig":
@@ -92,6 +110,8 @@ class ManagerConfig:
             int(lease.get("maximum_ttl_seconds", 3600)),
             int(lease.get("default_ttl_seconds", 300)),
             int(services.get("transition_timeout_seconds", 180)),
+            str(services.get("ds4_unit", "ds4-server.service")),
+            str(services.get("ds4_health_url", "http://127.0.0.1:8000/v1/models")),
         )
         if not (1 <= config.minimum_ttl <= config.default_ttl <= config.maximum_ttl):
             raise RuntimeError("Lease TTL configuration is inconsistent")
@@ -113,7 +133,7 @@ class StateStore:
             return {"version": 1, "mode": "unknown", "lease": None, "updated_at": _utc()}
         except (OSError, json.JSONDecodeError) as error:
             raise RuntimeError(f"Cannot read manager state {self.path}: {error}") from error
-        if value.get("version") != 1 or value.get("mode") not in {"unknown", "team", "studio", "stop", "maintenance"}:
+        if value.get("version") != 1 or value.get("mode") not in {"unknown", "team", "studio", "ds4", "stop", "maintenance"}:
             raise RuntimeError("Manager state has an unsupported schema")
         lease = value.get("lease")
         if lease is not None:
@@ -147,6 +167,13 @@ class StateStore:
 class ServiceController:
     def __init__(self, config: ManagerConfig):
         self.config = config
+        # Plain attribute, not lock-protected: readers only need a coarse,
+        # possibly-stale progress string for a human-facing status line, and
+        # single-attribute assignment is already atomic under the GIL. This
+        # lets /v1/transition report live progress without contending with
+        # the asyncio.Lock that set_mode()/acquire()/release() hold for the
+        # entire duration of a transition.
+        self.progress: str | None = None
 
     async def _run(self, *args: str) -> tuple[int, str, str]:
         process = await asyncio.create_subprocess_exec(
@@ -172,6 +199,7 @@ class ServiceController:
         raise ManagerError(503, f"Could not determine state of {unit} (exit {code}): {stderr or stdout}")
 
     async def _stop(self, unit: str) -> None:
+        self.progress = f"stopping {unit}"
         code, stdout, stderr = await self._run("systemctl", "--user", "stop", unit)
         if code != 0:
             raise ManagerError(503, f"Could not stop {unit}: {stderr or stdout}")
@@ -184,11 +212,13 @@ class ServiceController:
         raise ManagerError(503, f"Timed out stopping {unit}")
 
     async def _start(self, unit: str) -> None:
+        self.progress = f"starting {unit}"
         code, stdout, stderr = await self._run("systemctl", "--user", "start", unit)
         if code != 0:
             raise ManagerError(503, f"Could not start {unit}: {stderr or stdout}")
 
     async def _router_ready(self) -> None:
+        self.progress = "waiting for the router to become ready"
         try:
             if self.config.router_api_key_file.stat().st_mode & 0o077:
                 raise ManagerError(503, "Router API credential must not be accessible by group/other")
@@ -208,29 +238,64 @@ class ServiceController:
                 await asyncio.sleep(1)
         raise ManagerError(503, "Router did not become ready")
 
+    async def _ds4_ready(self) -> None:
+        self.progress = "waiting for ds4 to become ready"
+        deadline = time.monotonic() + self.config.service_timeout
+        while time.monotonic() < deadline:
+            request = urllib.request.Request(self.config.ds4_health_url)
+            try:
+                def probe() -> None:
+                    with urllib.request.urlopen(request, timeout=2):
+                        pass
+                await asyncio.to_thread(probe)
+                return
+            except (OSError, urllib.error.URLError):
+                await asyncio.sleep(1)
+        raise ManagerError(503, "ds4 did not become ready")
+
     async def switch(self, mode: str) -> None:
         try:
             await asyncio.wait_for(self._switch(mode), self.config.service_timeout)
         except TimeoutError as error:
             raise ManagerError(503, f"Timed out transitioning inference mode to {mode}") from error
+        finally:
+            self.progress = None
 
     async def _switch(self, mode: str) -> None:
         if mode == "team":
             await self._stop(self.config.studio_unit)
+            await self._stop(self.config.ds4_unit)
             await self._start(self.config.router_unit)
             await self._router_ready()
-            if await self.active(self.config.router_unit) != "active" or await self.active(self.config.studio_unit) != "inactive":
-                raise ManagerError(503, "Team transition did not reach router=active and studio=inactive")
+            if (await self.active(self.config.router_unit) != "active"
+                    or await self.active(self.config.studio_unit) != "inactive"
+                    or await self.active(self.config.ds4_unit) != "inactive"):
+                raise ManagerError(503, "Team transition did not reach router=active, studio=inactive, ds4=inactive")
         elif mode == "studio":
             await self._stop(self.config.router_unit)
+            await self._stop(self.config.ds4_unit)
             await self._start(self.config.studio_unit)
-            if await self.active(self.config.router_unit) != "inactive" or await self.active(self.config.studio_unit) != "active":
-                raise ManagerError(503, "Studio transition did not reach router=inactive and studio=active")
+            if (await self.active(self.config.router_unit) != "inactive"
+                    or await self.active(self.config.studio_unit) != "active"
+                    or await self.active(self.config.ds4_unit) != "inactive"):
+                raise ManagerError(503, "Studio transition did not reach router=inactive, studio=active, ds4=inactive")
+        elif mode == "ds4":
+            await self._stop(self.config.router_unit)
+            await self._stop(self.config.studio_unit)
+            await self._start(self.config.ds4_unit)
+            await self._ds4_ready()
+            if (await self.active(self.config.router_unit) != "inactive"
+                    or await self.active(self.config.studio_unit) != "inactive"
+                    or await self.active(self.config.ds4_unit) != "active"):
+                raise ManagerError(503, "ds4 transition did not reach router=inactive, studio=inactive, ds4=active")
         elif mode in {"stop", "maintenance"}:
             await self._stop(self.config.router_unit)
             await self._stop(self.config.studio_unit)
-            if await self.active(self.config.router_unit) != "inactive" or await self.active(self.config.studio_unit) != "inactive":
-                raise ManagerError(503, f"{mode.capitalize()} transition did not leave both services inactive")
+            await self._stop(self.config.ds4_unit)
+            if (await self.active(self.config.router_unit) != "inactive"
+                    or await self.active(self.config.studio_unit) != "inactive"
+                    or await self.active(self.config.ds4_unit) != "inactive"):
+                raise ManagerError(503, f"{mode.capitalize()} transition did not leave all services inactive")
         else:
             raise ManagerError(400, f"Unsupported mode: {mode}")
 
@@ -238,6 +303,7 @@ class ServiceController:
         return {
             "router": await self.active(self.config.router_unit),
             "studio": await self.active(self.config.studio_unit),
+            "ds4": await self.active(self.config.ds4_unit),
         }
 
 
@@ -281,12 +347,12 @@ class InferenceManager:
         mode = body.get("mode", "team")
         if not isinstance(owner, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:@/+\-]{0,239}", owner):
             raise ManagerError(400, "owner must use only audit-safe letters, digits, and ._:@/+- characters")
-        if mode not in {"team", "maintenance"}:
-            raise ManagerError(400, "Lease mode must be team or maintenance")
+        if mode not in {"team", "ds4", "maintenance"}:
+            raise ManagerError(400, "Lease mode must be team, ds4, or maintenance")
         expected_restore_mode = body.get("expected_restore_mode")
-        if mode == "maintenance" and expected_restore_mode not in {"team", "studio", "stop"}:
-            raise ManagerError(400, "Maintenance leases require expected_restore_mode=team, studio, or stop")
-        if mode == "team" and expected_restore_mode is not None:
+        if mode == "maintenance" and expected_restore_mode not in {"team", "studio", "ds4", "stop"}:
+            raise ManagerError(400, "Maintenance leases require expected_restore_mode=team, studio, ds4, or stop")
+        if mode in {"team", "ds4"} and expected_restore_mode is not None:
             raise ManagerError(400, "expected_restore_mode is valid only for maintenance leases")
         ttl = self._ttl(body.get("ttl_seconds"))
         raw_id = body.get("lease_id") or secrets.token_urlsafe(32)
@@ -373,8 +439,8 @@ class InferenceManager:
 
     async def release(self, raw_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         requested_restore_mode = (body or {}).get("restore_mode")
-        if requested_restore_mode is not None and requested_restore_mode not in {"team", "studio", "stop"}:
-            raise ManagerError(400, "restore_mode must be team, studio, or stop")
+        if requested_restore_mode is not None and requested_restore_mode not in {"team", "studio", "ds4", "stop"}:
+            raise ManagerError(400, "restore_mode must be team, studio, ds4, or stop")
         async with self.lock:
             state = self.store.load()
             self._expire(state)
@@ -389,7 +455,7 @@ class InferenceManager:
             restore_mode = requested_restore_mode
             if lease["mode"] == "maintenance":
                 captured_restore_mode = lease.get("restore_mode")
-                if captured_restore_mode not in {"team", "studio", "stop"}:
+                if captured_restore_mode not in {"team", "studio", "ds4", "stop"}:
                     raise ManagerError(409, "Maintenance lease lacks a captured restore mode")
                 if requested_restore_mode is not None and requested_restore_mode != captured_restore_mode:
                     raise ManagerError(409, "Requested restore mode does not match the atomically captured mode")
@@ -420,8 +486,8 @@ class InferenceManager:
 
     async def set_mode(self, body: dict[str, Any]) -> dict[str, Any]:
         mode = body.get("mode")
-        if mode not in {"team", "studio", "stop"}:
-            raise ManagerError(400, "mode must be team, studio, or stop")
+        if mode not in {"team", "studio", "ds4", "stop"}:
+            raise ManagerError(400, "mode must be team, studio, ds4, or stop")
         async with self.lock:
             state = self.store.load()
             self._expire(state)
@@ -440,9 +506,10 @@ class InferenceManager:
 
 
 class HTTPServer:
-    def __init__(self, manager: InferenceManager, token: str):
+    def __init__(self, manager: InferenceManager, token: str, model_token: str | None = None):
         self.manager = manager
         self.token = token
+        self.model_token = model_token
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, trusted_local: bool) -> None:
         status = 500
@@ -468,7 +535,11 @@ class HTTPServer:
                 headers[normalized_key] = value.strip()
             if "transfer-encoding" in headers:
                 raise ManagerError(400, "Transfer-Encoding is not supported")
-            if not trusted_local and not secrets.compare_digest(headers.get("authorization", ""), f"Bearer {self.token}"):
+            if path == "/v1/model-auth":
+                if not self.model_token or not secrets.compare_digest(headers.get("authorization", ""), f"Bearer {self.model_token}"):
+                    LOG.warning("model_authentication_failed peer=%r", writer.get_extra_info("peername"))
+                    raise ManagerError(401, "Invalid model credential")
+            elif not trusted_local and not secrets.compare_digest(headers.get("authorization", ""), f"Bearer {self.token}"):
                 LOG.warning("authentication_failed peer=%r", writer.get_extra_info("peername"))
                 raise ManagerError(401, "Invalid control credential")
             length = int(headers.get("content-length", "0"))
@@ -497,8 +568,21 @@ class HTTPServer:
         await writer.wait_closed()
 
     async def route(self, method: str, path: str, body: dict[str, Any], trusted_local: bool) -> tuple[int, dict[str, Any]]:
+        if path == "/v1/model-auth":
+            # Reached only once handle() has already validated the model bearer above.
+            return 200, {"message": "authorized"}
         if method == "GET" and path == "/v1/status":
             return 200, await self.manager.status()
+        if method == "GET" and path == "/v1/transition":
+            # Deliberately not routed through InferenceManager.status(): that
+            # method takes the same lock set_mode()/acquire()/release() hold
+            # for the whole transition, so it would block here until the
+            # transition finished instead of reporting live progress.
+            progress = self.manager.services.progress
+            copy_progress = _ram_copy_progress()
+            if progress and copy_progress:
+                progress = f"{progress}: {copy_progress}"
+            return 200, {"progress": progress}
         if method == "POST" and path == "/v1/leases":
             if body.get("mode") == "maintenance" and not trusted_local:
                 raise ManagerError(403, "Maintenance leases are available only through the local Unix socket")
@@ -541,7 +625,7 @@ def _load_distinct_service_tokens(config: ManagerConfig) -> tuple[str, str]:
 
 
 async def serve(config: ManagerConfig) -> None:
-    token, _model_token = _load_distinct_service_tokens(config)
+    token, model_token = _load_distinct_service_tokens(config)
     config.unix_socket.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if config.unix_socket.exists():
         # A stale socket is safe to replace only after proving no manager listens.
@@ -551,7 +635,7 @@ async def serve(config: ManagerConfig) -> None:
         config.unix_socket.unlink()
     manager = InferenceManager(config)
     await manager.startup()
-    http = HTTPServer(manager, token)
+    http = HTTPServer(manager, token, model_token)
     unix_server = await asyncio.start_unix_server(lambda r, w: http.handle(r, w, True), path=config.unix_socket)
     os.chmod(config.unix_socket, 0o600)
     tcp_server = await asyncio.start_server(lambda r, w: http.handle(r, w, False), config.tcp_host, config.tcp_port)

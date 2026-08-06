@@ -11,6 +11,8 @@ router_unit = "pi-llama-router.service"
 studio_unit = "unsloth.service"
 router_health_url = "http://127.0.0.1:46757/v1/models"
 router_api_key_file = "~/.pi-inference/credentials/model-api-key"
+ds4_unit = "ds4-server.service"
+ds4_health_url = "http://127.0.0.1:8000/v1/models"
 transition_timeout_seconds = 180
 
 [lease]

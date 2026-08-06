@@ -16,13 +16,14 @@ import socket
 import ssl
 import sys
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 
 class ClientError(RuntimeError):
@@ -299,6 +300,45 @@ def _print(result: dict[str, Any], json_output: bool) -> None:
         print(json.dumps(result, indent=2, sort_keys=True))
 
 
+def _run_with_progress(client: "ControlClient", label: str, action: Callable[[], dict[str, Any]], quiet: bool = False) -> dict[str, Any]:
+    """Run a slow control-plane request (a mode switch can take up to ~90s
+    for a cold ds4 RAM-disk start) while polling /v1/transition in parallel
+    for live progress. That endpoint is deliberately lock-free server-side
+    so polling it doesn't itself wait behind the in-flight request."""
+    stop_event = threading.Event()
+    outcome: dict[str, Any] = {}
+    failure: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            outcome["result"] = action()
+        except BaseException as error:  # re-raised on the main thread below
+            failure.append(error)
+        finally:
+            stop_event.set()
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    if not quiet:
+        print(f"pi-inference: {label}...", file=sys.stderr)
+    previous: Optional[str] = None
+    while not stop_event.wait(1.0):
+        if quiet:
+            continue
+        try:
+            transition = client.request("GET", "/v1/transition")
+        except ClientError:
+            continue
+        progress = transition.get("progress")
+        if progress and progress != previous:
+            print(f"pi-inference:   {progress}...", file=sys.stderr)
+        previous = progress
+    thread.join()
+    if failure:
+        raise failure[0]
+    return outcome["result"]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pi-inference")
     parser.add_argument("--config", type=Path)
@@ -310,17 +350,17 @@ def build_parser() -> argparse.ArgumentParser:
     credential.add_argument("--replace", action="store_true", help="replace an existing credential (requires --install)")
     credential.add_argument("name", choices=["model-api", "control-api"])
     acquire = sub.add_parser("acquire")
-    acquire.add_argument("--mode", choices=["team", "maintenance"], default="team")
+    acquire.add_argument("--mode", choices=["team", "ds4", "maintenance"], default="team")
     acquire.add_argument("--owner")
-    acquire.add_argument("--expected-restore-mode", choices=["team", "studio", "stop"])
+    acquire.add_argument("--expected-restore-mode", choices=["team", "studio", "ds4", "stop"])
     acquire.add_argument("--ttl", type=int, default=None)
     renew = sub.add_parser("renew")
     renew.add_argument("--owner")
     renew.add_argument("--ttl", type=int, default=None)
     release = sub.add_parser("release")
     release.add_argument("--owner")
-    release.add_argument("--restore-mode", choices=["team", "studio", "stop"])
-    for mode in ("team", "studio", "stop"):
+    release.add_argument("--restore-mode", choices=["team", "studio", "ds4", "stop"])
+    for mode in ("team", "studio", "ds4", "stop"):
         sub.add_parser(mode)
     return parser
 
@@ -366,7 +406,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                 }
                 if args.expected_restore_mode is not None:
                     request_body["expected_restore_mode"] = args.expected_restore_mode
-                result = client.request("POST", "/v1/leases", request_body)
+                result = _run_with_progress(
+                    client, f"acquiring {args.mode} lease",
+                    lambda: client.request("POST", "/v1/leases", request_body),
+                    quiet=args.json,
+                )
                 _write_private_json(_lease_path(owner), {"owner": owner, "lease_id": result["lease_id"], "manager": config.remote_url})
         elif args.command == "renew":
             owner = _owner(args)
@@ -381,10 +425,19 @@ def main(argv: Optional[list[str]] = None) -> int:
                 lease = _load_lease(owner)
                 _assert_lease_manager(lease, config)
                 body = {"restore_mode": args.restore_mode} if args.restore_mode else None
-                result = client.request("DELETE", f"/v1/leases/{lease['lease_id']}", body)
+                label = f"releasing lease, restoring {args.restore_mode} mode" if args.restore_mode else "releasing lease"
+                result = _run_with_progress(
+                    client, label,
+                    lambda: client.request("DELETE", f"/v1/leases/{lease['lease_id']}", body),
+                    quiet=args.json,
+                )
                 _remove_lease(owner)
         else:
-            result = client.request("POST", "/v1/mode", {"mode": args.command})
+            result = _run_with_progress(
+                client, f"switching to {args.command} mode",
+                lambda: client.request("POST", "/v1/mode", {"mode": args.command}),
+                quiet=args.json,
+            )
         _print(result, args.json)
         return 0
     except (ClientError, ValueError, KeyError) as error:

@@ -6,17 +6,17 @@ The R9700 has one inference owner at a time. Model traffic and lifecycle control
 
 ```text
 Pi / three-agent extension
-  ├─ model traffic ─────► https://llm.malo.tn.it/v1
+  ├─ model traffic ─────► https://llm.malo.tn.it/v1  (or https://ds4.malo.tn.it/v1)
   └─ lifecycle traffic ─► pi-inference
                             ├─ local Unix socket, or
                             └─ https://inference.malo.tn.it/v1
                                       │
                                pi-inference-manager
                                       │
-                         unsloth.service / pi-llama-router.service
+              unsloth.service / pi-llama-router.service / ds4-server.service
 ```
 
-The manager grants one renewable host-global lease. This prevents local and remote Pi sessions from switching or using the single GPU concurrently.
+The manager grants one renewable host-global lease. This prevents local and remote Pi sessions from switching or using the single GPU concurrently, across all three modes (`team`, `studio`, `ds4`).
 
 Remote control authentication is HTTPS plus a dedicated high-entropy control bearer. The model API uses a different bearer. Never reuse one credential for both roles.
 
@@ -152,6 +152,14 @@ pi-inference renew --owner "$owner" --ttl 300
 pi-inference release --owner "$owner"
 ```
 
+`ds4` works the same way as `team` — acquire it to get exclusive DeepSeek V4 Flash access via `https://ds4.malo.tn.it/v1`:
+
+```bash
+pi-inference acquire --mode ds4 --owner "$owner" --ttl 300
+# Call https://ds4.malo.tn.it/v1 while the lease is healthy.
+pi-inference release --owner "$owner" --restore-mode team
+```
+
 Use a trap or `finally` block for release. A crashed client remains fenced only until the bounded lease TTL expires.
 
 Useful commands:
@@ -163,7 +171,18 @@ pi-inference renew --owner host:repo:task --ttl 300
 pi-inference release --owner host:repo:task
 ```
 
-Manual `team`, `studio`, and `stop` switches are refused while any lease is active.
+Manual `team`, `studio`, `ds4`, and `stop` switches are refused while any lease is active.
+
+`team`, `studio`, `ds4`, and `stop` switches (via `pi-inference <mode>`, `acquire`, or `release --restore-mode`) can take up to the manager's `transition_timeout_seconds` (default 180s) — a cold `ds4` start reallocates and repopulates an 81 GB RAM disk before the model is ready to serve. Rather than block silently, the CLI polls a lock-free `GET /v1/transition` endpoint every second and prints whatever step is in progress to stderr:
+
+```text
+$ pi-inference ds4
+pi-inference: switching to ds4 mode...
+pi-inference:   waiting for ds4 to become ready...
+Inference mode is ds4
+```
+
+`--json` suppresses this chatter for scripted/piped use. `/v1/transition` deliberately does not take the manager's lease lock — `GET /v1/status` does, so polling *that* during a transition would just block until the transition finished, defeating the purpose.
 
 ## Shared and host-only Stow packages
 
@@ -262,6 +281,35 @@ pi-inference status
 # Expected: authenticated manager JSON
 ```
 
+### Model-data vhosts (`llm.malo.tn.it`, `ds4.malo.tn.it`)
+
+Separate from the control vhost above — these carry model traffic, not lifecycle control. Same wildcard cert, same install/symlink/`nginx -t`/reload pattern:
+
+```text
+pi-inference-host/.config/nginx/llm-pi.conf     → llm.malo.tn.it  → pi-llama-router :46757
+pi-inference-host/.config/nginx/ds4-malo.conf   → ds4.malo.tn.it  → ds4-server      :8000
+```
+
+```bash
+sudo install -m 0644 ~/dotfiles/pi-inference-host/.config/nginx/ds4-malo.conf \
+  /etc/nginx/sites-available/ds4-malo.conf
+sudo ln -s /etc/nginx/sites-available/ds4-malo.conf /etc/nginx/sites-enabled/ds4-malo.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+The two vhosts authenticate differently. `llama-server` (behind `llm.malo.tn.it`) validates its own `--api-key-file`, so nginx does no auth work there. `ds4-server` (behind `ds4.malo.tn.it`) has no built-in authentication, so that vhost gates itself: an `auth_request /internal/model-auth` subrequest hits the manager's `GET /v1/model-auth` endpoint, which validates the request's `Authorization` header against the *same* model API key used for `llm.malo.tn.it` (constant-time compare, no new credential to provision). A missing/invalid bearer gets a `401` before ever reaching ds4-server; a valid bearer while the host isn't in `ds4` mode gets a `503` from ds4-server being unreachable, not a hang.
+
+Verify:
+
+```bash
+key="$(pi-inference credential model-api)"
+curl -sS -o /dev/null -w '%{http_code}\n' https://ds4.malo.tn.it/v1/models
+# Expected: 401 (no bearer)
+curl -sS -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $key" https://ds4.malo.tn.it/v1/models
+# Expected: 200 once `pi-inference ds4` is active, 503 otherwise
+```
+
 ## Durable state and restart behavior
 
 Manager state is atomically stored in systemd's private user state directory, normally:
@@ -276,7 +324,7 @@ Client lease records are mode `0600` beneath:
 ~/.pi-inference/state/client-leases/
 ```
 
-The manager stores only a SHA-256 hash of each opaque lease ID. On restart, an unexpired team lease restores team mode before requests are served. A local-only maintenance lease instead restores maintenance mode, keeping both Studio and the router stopped while host runtime work is in progress. Remote HTTPS clients cannot acquire maintenance leases. A hard client crash is fenced until TTL expiry; a new process does not adopt an unrelated previous owner.
+The manager stores only a SHA-256 hash of each opaque lease ID. On restart, an unexpired lease restores its mode (`team` or `ds4`) before requests are served. A local-only maintenance lease instead restores maintenance mode, keeping the router, Studio, and ds4-server all stopped while host runtime work is in progress. Remote HTTPS clients cannot acquire maintenance leases. A hard client crash is fenced until TTL expiry; a new process does not adopt an unrelated previous owner.
 
 ## Migration and rollback
 
