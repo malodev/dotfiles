@@ -262,12 +262,13 @@ stow nvim-malo
 
 # Shared Pi client configuration (local or remote machine)
 stow pi
-
-# GPU host only — never stow this package on ordinary clients
-stow pi-inference-host
 ```
 
-`pi-inference-host` contains the R9700 service manager and must be selected explicitly only on that host. See `docs/PI_INFERENCE_CONTROL_PLANE.md`; do not include this host-only package in a blanket client deployment. New remote inference clients need outbound HTTPS only; use `scripts/pi-inference-client-setup` for dry-run-first Stow deployment, private bearer installation, and end-to-end verification.
+The R9700 service manager (`pi-inference-host`) is GPU-host-only and lives outside this
+repo, in `~/Develop/MACHINE_LEARNING/local-models/pi-inference-host/` — see
+`local-models/PI_INFERENCE_CONTROL_PLANE.md` for its deployment. New remote inference
+clients need outbound HTTPS only; use `scripts/pi-inference-client-setup` for dry-run-first
+Stow deployment, private bearer installation, and end-to-end verification.
 
 Run these from the `~/.dotfiles` directory. This **only creates symlinks** — no packages or binaries are installed.
 
