@@ -322,6 +322,8 @@ def _run_with_progress(client: "ControlClient", label: str, action: Callable[[],
     if not quiet:
         print(f"pi-inference: {label}...", file=sys.stderr)
     previous: Optional[str] = None
+    printed_line = False
+    max_len = 0
     while not stop_event.wait(1.0):
         if quiet:
             continue
@@ -331,8 +333,15 @@ def _run_with_progress(client: "ControlClient", label: str, action: Callable[[],
             continue
         progress = transition.get("progress")
         if progress and progress != previous:
-            print(f"pi-inference:   {progress}...", file=sys.stderr)
+            line = f"pi-inference:   {progress}..."
+            max_len = max(max_len, len(line))
+            sys.stderr.write("\r" + line.ljust(max_len))
+            sys.stderr.flush()
+            printed_line = True
         previous = progress
+    if printed_line:
+        sys.stderr.write("\n")
+        sys.stderr.flush()
     thread.join()
     if failure:
         raise failure[0]
