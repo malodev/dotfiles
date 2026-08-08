@@ -68,20 +68,22 @@ between modules. Business logic lives in the modules above.
 
 ## Historic documentation
 
-[`docs/`](docs/) holds planning and implementation reports from the initial
-build phase, before the 2026-08-06 architecture review deepened the codebase.
-They describe a pre-deepening state — modules and interfaces may have changed
-or been replaced — but they remain the authoritative record of the design
-rationale behind `/team-import`, the durable queue, and the plan-import
-transaction model:
+[`docs/`](docs/) records the design rationale behind `/team-import`, the durable
+queue, and the plan-import transaction model. These date from the initial build
+phase, before the 2026-08-06 architecture review deepened the codebase — modules
+and interfaces may have changed — but the decisions they record are the
+authoritative source for why things work the way they do. Read them in order:
 
-- [`plan.md`](docs/plan.md) — original `/team-import` production-readiness
-  remediation blueprint
-- [`PLAN_IMPORT_PRODUCTION_FIX_PLAN.md`](docs/PLAN_IMPORT_PRODUCTION_FIX_PLAN.md) —
-  superseding production fix plan
-- [`PRODUCTION_READINESS_REMEDIATION_PLAN.md`](docs/PRODUCTION_READINESS_REMEDIATION_PLAN.md) —
-  pre-remediation verdict and concerns (all resolved)
-- [`PLAN_IMPORT_IMPLEMENTATION_REPORT.md`](docs/PLAN_IMPORT_IMPLEMENTATION_REPORT.md) —
-  post-remediation status report
-- [`QUEUE_IMPLEMENTATION_REPORT.md`](docs/QUEUE_IMPLEMENTATION_REPORT.md) —
-  initial queue worktree report
+1. [`PLAN_IMPORT_PRODUCTION_FIX_PLAN.md`](docs/PLAN_IMPORT_PRODUCTION_FIX_PLAN.md) —
+   the initial production fix plan that declared the v1 implementation not
+   production-ready
+2. [`plan.md`](docs/plan.md) — remediating blueprint, addressing each gap
+   identified in #1
+3. [`PRODUCTION_READINESS_REMEDIATION_PLAN.md`](docs/PRODUCTION_READINESS_REMEDIATION_PLAN.md) —
+   independent review verdict: NOT PRODUCTION-READY, critical gaps found
+4. [`QUEUE_IMPLEMENTATION_REPORT.md`](docs/QUEUE_IMPLEMENTATION_REPORT.md) —
+   parallel track: durable queue worktree, fenced deferred authorization,
+   exact-model Builder/Reviewer execution (not yet deployed at time of writing)
+5. [`PLAN_IMPORT_IMPLEMENTATION_REPORT.md`](docs/PLAN_IMPORT_IMPLEMENTATION_REPORT.md) —
+   final: all remediation applied, 139 tests passing, production invariants
+   strengthened
