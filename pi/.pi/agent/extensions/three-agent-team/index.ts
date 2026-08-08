@@ -1401,10 +1401,36 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ctx.ui.notify("No models available. Run /model to refresh the catalog.", "error");
         return;
       }
-      const models = buildModelList(allModels);
-
+      const allIds = buildModelList(allModels);
       const currentModel = `${profile.provider}/${profile.model}`;
-      const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, models);
+
+      // Step 1: type a filter query
+      const query = await ctx.ui.input(
+        `Filter ${role} models (${allIds.length} available, current: ${currentModel})`,
+        "type to filter, enter to see matches",
+      );
+      if (query === undefined) return; // cancelled
+
+      // Step 2: fuzzy-match and pick from filtered results
+      const lower = query.toLowerCase().trim();
+      let matches: string[];
+      if (!lower) {
+        matches = allIds.slice(0, 50);
+      } else {
+        matches = allIds
+          .filter((id) => id.toLowerCase().includes(lower))
+          .slice(0, 50);
+      }
+
+      if (matches.length === 0) {
+        ctx.ui.notify(`No models match "${query}"`, "error");
+        return;
+      }
+
+      const selected = await ctx.ui.select(
+        `Select ${role} model — ${matches.length} match${matches.length === 1 ? "" : "es"} for "${query}"`,
+        matches,
+      );
 
       if (!selected || selected === currentModel) return;
       await writeProjectOverride(ctx.cwd, role, selected);
