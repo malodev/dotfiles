@@ -54,6 +54,7 @@ Skills provide **agent-facing workflow instructions** ("read this plan, produce 
 ## Commands
 
 - `/team-config` — show the resolved role models, output limits, attempt ceilings, and timeouts.
+- `/team-models` — show effective per-project models (or `architect`/`builder`/`reviewer` to pick a model, `--reset` to restore host defaults).
 - `/team-new <task-id> -- <request>` — select the configured Architect, create strict task templates, and begin contract discussion.
 - `/team-grill-me <task-id>` — select the configured Architect and stress-test an unauthorized `DISCUSSING` contract.
 - `/team-repair <task-id>` — start a fresh Architect session to repair an invalid unauthorized contract.

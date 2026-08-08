@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "npm run test:node && npm run test:validator",
-    "test:node": "node --test core.test.ts git.test.ts amendment-manifest.test.ts queued-contract-amendment.test.ts session-state.test.ts recovery-finalization.test.ts queue.test.ts queue.integration.test.ts completion-seal.test.ts team-go-completion.test.ts plan-manifest.test.ts plan-import.test.ts plan-import-apply.test.ts plan-import-crash.test.ts plan-import-strictness.test.ts plan-import-handler.test.ts plan-import-crash-matrix.test.ts plan-import-sigkill-matrix.test.ts",
-    "test:unit": "node --test core.test.ts git.test.ts amendment-manifest.test.ts session-state.test.ts queue.test.ts plan-manifest.test.ts plan-import-strictness.test.ts",
+    "test:node": "node --test core.test.ts git.test.ts amendment-manifest.test.ts project-config.test.ts queued-contract-amendment.test.ts session-state.test.ts recovery-finalization.test.ts queue.test.ts queue.integration.test.ts completion-seal.test.ts team-go-completion.test.ts plan-manifest.test.ts plan-import.test.ts plan-import-apply.test.ts plan-import-crash.test.ts plan-import-strictness.test.ts plan-import-handler.test.ts plan-import-crash-matrix.test.ts plan-import-sigkill-matrix.test.ts",
+    "test:unit": "node --test core.test.ts git.test.ts amendment-manifest.test.ts project-config.test.ts session-state.test.ts queue.test.ts plan-manifest.test.ts plan-import-strictness.test.ts",
     "test:integration": "node --test queue.integration.test.ts queued-contract-amendment.test.ts completion-seal.test.ts team-go-completion.test.ts recovery-finalization.test.ts plan-import.test.ts plan-import-apply.test.ts plan-import-crash.test.ts plan-import-handler.test.ts",
     "test:production": "node --test plan-import-handler.test.ts plan-import-crash-matrix.test.ts plan-import-sigkill-matrix.test.ts",
     "test:crash-matrix": "node --test plan-import-crash-matrix.test.ts plan-import-sigkill-matrix.test.ts",

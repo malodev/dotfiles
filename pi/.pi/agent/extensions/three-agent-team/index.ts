@@ -67,6 +67,13 @@ import { parseTeamAmendArgs } from "./team-amend-command.ts";
 import { parseAmendmentManifest } from "./amendment-manifest.ts";
 import { applyQueuedContractAmendment } from "./queued-contract-amendment.ts";
 import {
+  readProjectOverrides,
+  writeProjectOverride,
+  resolveEffectiveConfig,
+  effectiveModel,
+  fetchAvailableModels,
+} from "./project-config.ts";
+import {
   assertImmediateQueueAvailable,
   createSessionState,
   type ActiveRun,
@@ -1190,8 +1197,8 @@ export async function finalizeRecovery(
         executor: async (execution) => {
           if (execution.taskId !== recoveryRun.taskId) throw new Error("Queued recovery task identity changed before execution");
           session.attachQueuedExecution(recoveryRun, execution);
-          const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
-          workflowOwnsRun = true;
+          const effective = resolveEffectiveConfig(configuredTeam, await readProjectOverrides(recovery.repo));
+          const taskConfig = await loadOrCreateTaskConfig(taskDir, effective);
           await runWorkflow(recovery.repo, execution.taskId, ctx, taskConfig, recoveryRun, session, sendMessage);
         },
       });
@@ -1209,7 +1216,8 @@ export async function finalizeRecovery(
     session.attachRepositoryExecutionLock(recoveryRun, executionLock);
     recoveryRun.repositoryExecutionLock!.assertHeld();
     await assertImmediateQueueAvailable(recovery.repo, "Owner-approved immediate recovery");
-    const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+    const effective = resolveEffectiveConfig(configuredTeam, await readProjectOverrides(recovery.repo));
+    const taskConfig = await loadOrCreateTaskConfig(taskDir, effective);
     await enterTeamMode(recovery.repo, taskConfig);
     const snapshot = await ensureAuthorizationSnapshot(recovery.repo, taskDir, true, recoveryRun.repositoryExecutionLock!);
     if (snapshot.migrated) {
@@ -1287,6 +1295,12 @@ async function settleArchitectValidation(
 
 export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   const configuredTeam = await loadTeamConfig();
+
+  async function effectiveTeamConfig(repo: string): Promise<TeamConfig> {
+    const overrides = await readProjectOverrides(repo);
+    return resolveEffectiveConfig(configuredTeam, overrides);
+  }
+
   let completionCwd = process.cwd();
   const completeTaskArgument = (prefix: string) => taskArgumentCompletions(completionCwd, prefix);
 
@@ -1306,8 +1320,9 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   const session = createSessionState(configuredTeam, releaseInferenceLease);
 
   async function selectArchitect(repo: string, ctx: ExtensionCommandContext): Promise<void> {
-    await enterTeamMode(repo, configuredTeam);
-    const profile = configuredTeam.roles.architect;
+    const effective = await effectiveTeamConfig(repo);
+    await enterTeamMode(repo, effective);
+    const profile = effective.roles.architect;
     const model = ctx.modelRegistry.find(profile.provider, profile.model);
     if (!model) throw new Error(`Configured Architect model is unavailable: ${roleModel(configuredTeam, "architect")}`);
     if (!(await pi.setModel(model))) throw new Error(`Configured Architect model has no usable authentication: ${roleModel(configuredTeam, "architect")}`);
@@ -1317,15 +1332,97 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
   pi.registerCommand("team-config", {
     description: "Show the resolved Architect, Builder, Reviewer, and runtime limits",
     handler: async (_args, ctx) => {
+      const overrides = await readProjectOverrides(ctx.cwd);
       const lines = [
         `Config: ${configuredTeam.sourcePath}`,
-        `Architect: ${roleModel(configuredTeam, "architect")} · max ${configuredTeam.roles.architect.maxTokens}`,
-        `Builder: ${roleModel(configuredTeam, "builder")} · max ${configuredTeam.roles.builder.maxTokens}`,
-        `Reviewer: ${roleModel(configuredTeam, "reviewer")} · max ${configuredTeam.roles.reviewer.maxTokens}`,
+        `Architect: ${effectiveModel(configuredTeam, overrides, "architect")} · max ${configuredTeam.roles.architect.maxTokens}`,
+        `Builder: ${effectiveModel(configuredTeam, overrides, "builder")} · max ${configuredTeam.roles.builder.maxTokens}`,
+        `Reviewer: ${effectiveModel(configuredTeam, overrides, "reviewer")} · max ${configuredTeam.roles.reviewer.maxTokens}`,
         `Attempts: builder ${configuredTeam.limits.builderAttempts}, reviewer ${configuredTeam.limits.reviewerAttempts}`,
         `Timeouts: role ${configuredTeam.limits.roleTimeoutSeconds}s, idle ${configuredTeam.limits.idleTimeoutSeconds}s`,
       ];
       ctx.ui.notify(lines.join("\n"), "info");
+    },
+  });
+
+  pi.registerCommand("team-models", {
+    description: "Show or change per-project Architect/Builder/Reviewer models",
+    handler: async (args, ctx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+
+      if (parts.length === 0) {
+        const overrides = await readProjectOverrides(ctx.cwd);
+        const source = (role: TeamRole) =>
+          overrides[role] && overrides[role] !== null ? "(project)" : "(host default)";
+        ctx.ui.notify(
+          `Effective models for this project:\n\n` +
+          `  Architect  ${effectiveModel(configuredTeam, overrides, "architect")}  ${source("architect")}\n` +
+          `  Builder    ${effectiveModel(configuredTeam, overrides, "builder")}  ${source("builder")}\n` +
+          `  Reviewer   ${effectiveModel(configuredTeam, overrides, "reviewer")}  ${source("reviewer")}`,
+          "info",
+        );
+        return;
+      }
+
+      if (parts.length > 2) {
+        ctx.ui.notify("Usage: /team-models [architect|builder|reviewer|--reset]", "error");
+        return;
+      }
+
+      if (parts[0] === "--reset") {
+        for (const role of ["architect", "builder", "reviewer"] as const) {
+          await writeProjectOverride(ctx.cwd, role, null);
+        }
+        ctx.ui.notify("All project model overrides removed.", "info");
+        return;
+      }
+
+      const role = parts[0] as TeamRole;
+      if (!["architect", "builder", "reviewer"].includes(role)) {
+        ctx.ui.notify("Role must be: architect, builder, or reviewer", "error");
+        return;
+      }
+
+      if (parts[1] === "--reset") {
+        await writeProjectOverride(ctx.cwd, role, null);
+        const hostProfile = configuredTeam.roles[role];
+        ctx.ui.notify(`Reset ${role} to host default: ${hostProfile.provider}/${hostProfile.model}`, "info");
+        return;
+      }
+
+      const profile = configuredTeam.roles[role];
+      const provider = configuredTeam.providers[profile.provider];
+      if (!provider) {
+        ctx.ui.notify(`No provider configured for ${role}`, "error");
+        return;
+      }
+
+      let models: string[];
+      try {
+        models = await fetchAvailableModels(provider.baseUrl, provider.apiKey);
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not list models from ${provider.name}: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
+
+      if (models.length === 0) {
+        ctx.ui.notify(`No models available from ${provider.name}`, "error");
+        return;
+      }
+
+      const currentModel = profile.model;
+      const currentIndex = models.indexOf(currentModel);
+      const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, {
+        options: models.map((id) => ({ value: id, label: id })),
+        ...(currentIndex >= 0 ? { default: currentIndex } : {}),
+      });
+
+      if (!selected || selected === currentModel) return;
+      await writeProjectOverride(ctx.cwd, role, selected);
+      ctx.ui.notify(`${role} model set to: ${provider.name}/${selected} (team/models.json)`, "info");
     },
   });
 
@@ -1874,7 +1971,8 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
             executor: async (execution) => {
               const run = session.reserveRun(execution.taskId);
               session.attachQueuedExecution(run, execution);
-              const taskConfig = await loadOrCreateTaskConfig(taskPath(ctx.cwd, execution.taskId), configuredTeam);
+              const effective = await effectiveTeamConfig(ctx.cwd);
+              const taskConfig = await loadOrCreateTaskConfig(taskPath(ctx.cwd, execution.taskId), effective);
               await executeWorkflow(ctx.cwd, execution.taskId, ctx as ExtensionCommandContext, taskConfig, run, session, pi.sendMessage);
             },
           });
@@ -1926,7 +2024,8 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
           throw new Error("Task is not in unauthorized DISCUSSING state");
         }
         await validate(ctx.cwd, taskDir, "pre-go");
-        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+        const effective = await effectiveTeamConfig(ctx.cwd);
+        const taskConfig = await loadOrCreateTaskConfig(taskDir, effective);
         await enterTeamMode(ctx.cwd, taskConfig);
         authorized = true;
         session.setInteractiveAuthorization(taskId);
@@ -1974,7 +2073,8 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
           throw new Error(`Task ${taskId} cannot resume from ${status.state}; expected BLOCKED or EXECUTING.`);
         }
         resumeEligible = true;
-        const taskConfig = await loadOrCreateTaskConfig(taskDir, configuredTeam);
+        const effective = await effectiveTeamConfig(ctx.cwd);
+        const taskConfig = await loadOrCreateTaskConfig(taskDir, effective);
         await enterTeamMode(ctx.cwd, taskConfig);
         const snapshot = await ensureAuthorizationSnapshot(ctx.cwd, taskDir, true, run.repositoryExecutionLock!);
         if (snapshot.migrated) {
