@@ -71,6 +71,7 @@ import {
   writeProjectOverride,
   resolveEffectiveConfig,
   effectiveModel,
+  buildModelList,
 } from "./project-config.ts";
 import {
   assertImmediateQueueAvailable,
@@ -1400,9 +1401,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ctx.ui.notify("No models available. Run /model to refresh the catalog.", "error");
         return;
       }
-      const models = allModels
-        .map((m) => `${m.provider}/${m.id}`)
-        .sort();
+      const models = buildModelList(allModels);
 
       const currentModel = `${profile.provider}/${profile.model}`;
       const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, models);

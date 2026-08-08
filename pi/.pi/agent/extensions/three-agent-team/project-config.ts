@@ -145,6 +145,17 @@ export function effectiveModel(hostConfig: TeamConfig, overrides: ProjectOverrid
   return `${p.provider}/${p.model}`;
 }
 
+/** A lightweight model reference — the shape we get from ctx.modelRegistry. */
+export interface ModelRef {
+  provider: string;
+  id: string;
+}
+
+/** Builds a sorted list of "provider/id" strings from model registry entries. */
+export function buildModelList(models: readonly ModelRef[]): string[] {
+  return models.map((m) => `${m.provider}/${m.id}`).sort();
+}
+
 /**
  * Resolves an API key that may be a literal value or a shell command prefixed with `!`.
  * Uses the same spawn pattern proven in runner.ts.
