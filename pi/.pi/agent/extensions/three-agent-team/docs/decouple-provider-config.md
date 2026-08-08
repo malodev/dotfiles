@@ -146,16 +146,30 @@ gracefully.
 
 **Goal:** ds4 models get the same GPU load/unload lease mechanism as pi-llama.
 
-Both pi-llama and ds4 are user-hosted model servers where only one model can
-be loaded on the GPU at a time. The extension uses `managedProviders` to gate
-provider access behind a global inference lease (`pi-inference acquire/renew/release`).
-When a task switches between pi-llama and ds4 models, the lease ensures the right
-model is loaded on the GPU host, even when pi runs on a remote machine.
+The extension uses `pi-inference acquire --mode team` to load pi-llama models
+on the GPU. The same `pi-inference` binary supports `--mode ds4` for ds4 models.
+Both are user-hosted GPU servers where only one model fits at a time.
 
+The current code acquires the lease once per workflow with a single hardcoded
+mode (`--mode team` from `acquireTeamCommand`). For ds4 support, the lease must
+switch modes when roles switch between providers:
+
+1. Before each role runs: acquire lease with the provider's mode
+   (pi-llama → `--mode team`, ds4 → `--mode ds4`)
+2. The `before_provider_request` event (line 2425) already gates every request
+   against `managedProviders` — it checks a lease is held
+3. After the role completes: release the lease
+
+Implementation:
+- Add a mapping from provider to mode: `pi-llama → "team"`, `ds4 → "ds4"`
+- Extend `acquireInferenceLease` to accept a `provider` parameter and append the
+  right `--mode` flag to the acquire command
+- In `runWorkflow` (index.ts line ~907): acquire/release the lease per-role instead
+  of once at workflow start
 - Add `"ds4"` to `lifecycle.managedProviders` in the host config
 - Ensure ds4 is in the `infrastructure` block of v2 configs
 - Verify: assign ds4 model to a role via `/team-models`, run `/team-go`,
-  confirm the lease is acquired and model loads on GPU
+  confirm the lease is acquired with `--mode ds4` and model loads on GPU
 
 ## Risks
 
