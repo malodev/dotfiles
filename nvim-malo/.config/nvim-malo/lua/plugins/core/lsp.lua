@@ -434,6 +434,17 @@ return {
         },
       })
 
+      -- Remark (Markdown formatting/linting)
+      setup_lsp("remark_ls", {
+        filetypes = { "markdown" },
+        capabilities = capabilities,
+        settings = {
+          remark = {
+            requireConfig = false, -- Must be boolean, null/nil causes crash
+          },
+        },
+      })
+
       -- Now setup mason-lspconfig
       local ok_mason_lsp, mason_lspconfig = pcall(require, "mason-lspconfig")
       if ok_mason_lsp then

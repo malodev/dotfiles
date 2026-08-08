@@ -10,11 +10,9 @@
 
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import { homedir } from "node:os";
-import type { RoleProfile, TeamConfig, TeamRole } from "./config.ts";
-import { parseTeamConfig } from "./config.ts";
+import type { TeamConfig, TeamRole } from "./config.ts";
 
 const PROJECT_MODELS_PATH = "team/models.json";
 const ROLE_NAMES: TeamRole[] = ["architect", "builder", "reviewer"];
@@ -28,6 +26,25 @@ export type ProjectOverrides = Partial<Record<TeamRole, ProjectModelOverride | n
 interface ProjectModelsFile {
   version: 1;
   roles: Record<string, ProjectModelOverride | null>;
+}
+
+function runCommand(command: string, timeoutMs = 10_000): Promise<string> {
+  const parts = command.split(/\s+/);
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(parts[0], parts.slice(1), {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: timeoutMs,
+    });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (chunk: Buffer) => { out += chunk.toString(); });
+    child.stderr.on("data", (chunk: Buffer) => { err += chunk.toString(); });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) resolvePromise(out.trim());
+      else reject(new Error(`Command failed (${code}): ${err || out}`));
+    });
+  });
 }
 
 /**
@@ -115,18 +132,14 @@ export function effectiveModel(hostConfig: TeamConfig, overrides: ProjectOverrid
   return `${profile.provider}/${profile.model === model ? profile.model : model}`;
 }
 
-const execFileAsync = promisify(execFile);
-
 /**
  * Resolves an API key that may be a literal value or a shell command prefixed with `!`.
- * The `!` syntax matches pi's convention: the command's stdout (trimmed) is the credential.
+ * Uses the same spawn pattern proven in runner.ts.
  */
 async function resolveApiKey(apiKey: string): Promise<string> {
   if (apiKey.startsWith("!")) {
     const cmd = apiKey.slice(1).replace(/^~/, homedir());
-    const parts = cmd.split(/\s+/);
-    const { stdout } = await execFileAsync(parts[0], parts.slice(1), { timeout: 10_000 });
-    return stdout.trim();
+    return await runCommand(cmd);
   }
   return apiKey;
 }

@@ -9,7 +9,7 @@ into the pi stow source directory so pi can discover them.
 
 ```bash
 cd ~/dotfiles/pi
-git clone https://github.com/mattpocock/mattpocock-skills.git
+git clone https://github.com/mattpocock/skills.git mattpocock-skills
 ```
 
 The script expects the repo at `~/dotfiles/pi/mattpocock-skills` by default.
