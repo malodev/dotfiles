@@ -1400,40 +1400,12 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         ctx.ui.notify("No models available. Run /model to refresh the catalog.", "error");
         return;
       }
-
-      // Step 1: fuzzy search over all models
-      const allIds = allModels.map((m) => `${m.provider}/${m.id}`).sort();
-      const query = await ctx.ui.input(`Search ${role} model (current: ${profile.provider}/${profile.model})`, "type to filter...");
-      if (!query) return;
-
-      // Step 2: fuzzy match and present filtered list
-      const lower = query.toLowerCase();
-      const scored = allIds
-        .map((id) => {
-          const idLower = id.toLowerCase();
-          if (idLower === lower) return { id, score: 0 };
-          if (idLower.startsWith(lower)) return { id, score: 1 };
-          if (idLower.includes(lower)) return { id, score: 2 };
-          // Simple fuzzy: all query chars appear in order
-          let qi = 0;
-          for (let i = 0; i < idLower.length && qi < lower.length; i++) {
-            if (idLower[i] === lower[qi]) qi++;
-          }
-          if (qi === lower.length) return { id, score: 3 };
-          return null;
-        })
-        .filter((v): v is { id: string; score: number } => v !== null)
-        .sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))
-        .slice(0, 50)
-        .map((v) => v.id);
-
-      if (scored.length === 0) {
-        ctx.ui.notify(`No models matching "${query}"`, "error");
-        return;
-      }
+      const models = allModels
+        .map((m) => `${m.provider}/${m.id}`)
+        .sort();
 
       const currentModel = `${profile.provider}/${profile.model}`;
-      const selected = await ctx.ui.select(`Select ${role} model matching "${query}"`, scored);
+      const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, models);
 
       if (!selected || selected === currentModel) return;
       await writeProjectOverride(ctx.cwd, role, selected);
