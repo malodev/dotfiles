@@ -71,7 +71,6 @@ import {
   writeProjectOverride,
   resolveEffectiveConfig,
   effectiveModel,
-  fetchAvailableModels,
 } from "./project-config.ts";
 import {
   assertImmediateQueueAvailable,
@@ -1395,34 +1394,23 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       }
 
       const profile = configuredTeam.roles[role];
-      const provider = configuredTeam.providers[profile.provider];
-      if (!provider) {
-        ctx.ui.notify(`No provider configured for ${role}`, "error");
+
+      // Show every model pi knows about — built-in + infrastructure
+      const allModels = ctx.modelRegistry.getAll();
+      if (allModels.length === 0) {
+        ctx.ui.notify("No models available. Run /model to refresh the catalog.", "error");
         return;
       }
+      const models = allModels
+        .map((m) => `${m.provider}/${m.id}`)
+        .sort();
 
-      let models: string[];
-      try {
-        models = await fetchAvailableModels(provider.baseUrl, provider.apiKey);
-      } catch (error) {
-        ctx.ui.notify(
-          `Could not list models from ${provider.name}: ${error instanceof Error ? error.message : String(error)}`,
-          "error",
-        );
-        return;
-      }
-
-      if (models.length === 0) {
-        ctx.ui.notify(`No models available from ${provider.name}`, "error");
-        return;
-      }
-
-      const currentModel = profile.model;
+      const currentModel = `${profile.provider}/${profile.model}`;
       const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, models);
 
       if (!selected || selected === currentModel) return;
       await writeProjectOverride(ctx.cwd, role, selected);
-      ctx.ui.notify(`${role} model set to: ${provider.name}/${selected} (team/models.json)`, "info");
+      ctx.ui.notify(`${role} model set to: ${selected} (team/models.json)`, "info");
     },
   });
 

@@ -26,6 +26,7 @@ After the 2026-08-06 architecture review (`/tmp/architecture-review-20260806-235
 | `queue.ts` | `barrier(snapshot)` | One definition, 4 callers |
 | `queued-contract-amendment.ts` | `applyQueuedContractAmendment()` | Crash-resumable journaled transaction |
 | `amendment-manifest.ts` | `parseAmendmentManifest()` | Strict YAML parser with exact-once edit matching |
+| `project-config.ts` | `readProjectOverrides`, `writeProjectOverride`, `resolveEffectiveConfig` | Per-project model overrides in `team/models.json` |
 
 `index.ts` is the wiring layer — commands, extension lifecycle, and the glue
 between modules. Business logic lives in the modules above.

@@ -18,6 +18,7 @@ const PROJECT_MODELS_PATH = "team/models.json";
 const ROLE_NAMES: TeamRole[] = ["architect", "builder", "reviewer"];
 
 export interface ProjectModelOverride {
+  /** Full provider/model string, e.g. "anthropic/claude-sonnet-4-5" */
   model: string;
 }
 
@@ -108,7 +109,7 @@ export async function writeProjectOverride(
 
 /**
  * Resolves the effective TeamConfig by overlaying project overrides on the host config.
- * Only role.model can be overridden; providers, limits, and lifecycle stay host-level.
+ * In v2, an override can be a full "provider/model" string that changes both.
  */
 export function resolveEffectiveConfig(hostConfig: TeamConfig, overrides: ProjectOverrides): TeamConfig {
   const roles = { ...hostConfig.roles };
@@ -116,7 +117,12 @@ export function resolveEffectiveConfig(hostConfig: TeamConfig, overrides: Projec
     const override = overrides[role];
     if (override === null) continue; // explicit reset → use host default
     if (override?.model) {
-      roles[role] = { ...roles[role], model: override.model };
+      const slashIndex = override.model.indexOf("/");
+      if (slashIndex > 0) {
+        roles[role] = { ...roles[role], provider: override.model.slice(0, slashIndex), model: override.model.slice(slashIndex + 1) };
+      } else {
+        roles[role] = { ...roles[role], model: override.model };
+      }
     }
   }
   return { ...hostConfig, roles };
@@ -127,9 +133,16 @@ export function resolveEffectiveConfig(hostConfig: TeamConfig, overrides: Projec
  */
 export function effectiveModel(hostConfig: TeamConfig, overrides: ProjectOverrides, role: TeamRole): string {
   const override = overrides[role];
-  const profile = hostConfig.roles[role];
-  const model = override && override !== null ? override.model : profile.model;
-  return `${profile.provider}/${profile.model === model ? profile.model : model}`;
+  if (override === null) {
+    const p = hostConfig.roles[role];
+    return `${p.provider}/${p.model}`;
+  }
+  if (override?.model) {
+    if (override.model.includes("/")) return override.model;
+    return `${hostConfig.roles[role].provider}/${override.model}`;
+  }
+  const p = hostConfig.roles[role];
+  return `${p.provider}/${p.model}`;
 }
 
 /**
