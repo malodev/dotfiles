@@ -1347,6 +1347,10 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
 
   pi.registerCommand("team-models", {
     description: "Show or change per-project Architect/Builder/Reviewer models",
+    getArgumentCompletions: (prefix) => {
+      if (!prefix) return [{ value: "architect", label: "architect", description: "Change the Architect model" }, { value: "builder", label: "builder", description: "Change the Builder model" }, { value: "reviewer", label: "reviewer", description: "Change the Reviewer model" }, { value: "--reset", label: "--reset", description: "Remove all project overrides" }];
+      return null;
+    },
     handler: async (args, ctx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
 
