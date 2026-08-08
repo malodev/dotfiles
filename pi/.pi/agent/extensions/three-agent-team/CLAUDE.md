@@ -1,12 +1,14 @@
 # CLAUDE.md — three-agent-team
 
 Pi extension that gives agents a harness to complete assigned tasks without human
-intervention, starting from a plan and an optional PRD. Human involvement is
-concentrated in the initial specification phase; after `/team-import --approve`,
-`/team-continue` drains the durable FIFO queue through Builder → Reviewer cycles
-with fenced execution, crash recovery, and exact-tree completion — running until
-idle, paused, or blocked. The design optimizes for long-horizon autonomous
-strategy: agents work through a batch while the owner is away.
+intervention, starting from a plan and an optional PRD. The functional
+requirements are in [PRD.md](PRD.md) — read it first to understand what this
+extension must do and must not do.
+
+Human involvement is concentrated in the initial specification phase; after
+`/team-import --approve`, `/team-continue` drains the durable FIFO queue through
+Builder → Reviewer cycles with fenced execution, crash recovery, and exact-tree
+completion — running until idle, paused, or blocked.
 
 The domain language is in [CONTEXT.md](CONTEXT.md) — use those terms (barrier,
 epoch, completion seal, exact commit) rather than ad-hoc names. Owner-facing
