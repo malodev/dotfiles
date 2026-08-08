@@ -22,7 +22,9 @@ from typing import Any, Optional, Sequence
 
 CONTROL_STATUS_URL = "https://inference.malo.tn.it/v1/status"
 MODEL_URL = "https://llm.malo.tn.it/v1/chat/completions"
+DS4_MODEL_URL = "https://ds4.malo.tn.it/v1/chat/completions"
 DEFAULT_MODEL = "pi/gemma-4-31B-it-qat-UD-Q4_K_XL"
+DEFAULT_DS4_MODEL = "ds4/Qwen3.6-27B-MTP-UD-Q5_K_XL"
 
 
 class SetupError(RuntimeError):
@@ -146,47 +148,48 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
         raise SetupError("Control bearer and model API key must be distinct")
 
     unauthenticated, _ = http_json(CONTROL_STATUS_URL)
-    authenticated_status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
-    print(f"Control authentication: without bearer={unauthenticated}, with bearer=200")
     if unauthenticated != 401:
         raise SetupError(f"Unauthenticated control request returned HTTP {unauthenticated}, expected 401")
+    print(f"Control authentication: without bearer={unauthenticated}, with bearer=200")
 
     owner = f"{socket.gethostname()}:client-setup:{uuid.uuid4().hex[:12]}"
-    lease_id = uuid.uuid4().hex
-    acquire_attempted = False
-    acquired = False
-    release_status: Optional[int] = None
-    try:
-        acquire_attempted = True
-        acquire_status, _ = http_json(
-            "https://inference.malo.tn.it/v1/leases",
-            bearer=control_token,
-            payload={"mode": "team", "owner": owner, "ttl_seconds": 300, "lease_id": lease_id},
-        )
-        if acquire_status != 201:
-            raise SetupError(f"Lease acquisition returned HTTP {acquire_status}")
-        acquired = True
-        model_status, model_body = http_json(
-            MODEL_URL,
-            bearer=model_key,
-            payload={
-                "model": args.model,
-                "messages": [{"role": "user", "content": "Reply with exactly REMOTE_MODEL_OK and nothing else."}],
-                "max_tokens": 256,
-                "temperature": 0,
-                "stream": False,
-            },
-            timeout=180,
-        )
-        if model_status != 200:
-            raise SetupError(f"Model smoke test returned HTTP {model_status}")
-        response = json.loads(model_body.decode("utf-8"))
-        reply = response["choices"][0]["message"]["content"].strip()
-        if reply != "REMOTE_MODEL_OK":
-            raise SetupError(f"Unexpected model reply: {reply!r}")
-        print("Model inference: REMOTE_MODEL_OK")
-    finally:
-        if acquire_attempted:
+
+    for mode, model_url, model_id in args.modes:
+        print(f"\n--- Verifying mode={mode}, model={model_id} ---")
+        lease_id = uuid.uuid4().hex
+        acquired = False
+        release_status: Optional[int] = None
+        try:
+            acquire_status, _ = http_json(
+                "https://inference.malo.tn.it/v1/leases",
+                bearer=control_token,
+                payload={"mode": mode, "owner": owner, "ttl_seconds": 300, "lease_id": lease_id},
+            )
+            if acquire_status != 201:
+                raise SetupError(f"Lease acquisition ({mode}) returned HTTP {acquire_status}")
+            acquired = True
+            print(f"  Lease acquired: {lease_id[:12]}...")
+
+            model_status, model_body = http_json(
+                model_url,
+                bearer=model_key,
+                payload={
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": "Reply with exactly REMOTE_MODEL_OK and nothing else."}],
+                    "max_tokens": 256,
+                    "temperature": 0,
+                    "stream": False,
+                },
+                timeout=180,
+            )
+            if model_status != 200:
+                raise SetupError(f"Model smoke test ({mode}) returned HTTP {model_status}")
+            response = json.loads(model_body.decode("utf-8"))
+            reply = response["choices"][0]["message"]["content"].strip()
+            if reply != "REMOTE_MODEL_OK":
+                raise SetupError(f"Unexpected model reply ({mode}): {reply!r}")
+            print(f"  Model inference: REMOTE_MODEL_OK")
+        finally:
             try:
                 release_status, _ = http_json(
                     f"https://inference.malo.tn.it/v1/leases/{lease_id}",
@@ -194,11 +197,12 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
                     method="DELETE",
                 )
             except Exception as release_error:
-                print(f"Warning: lease cleanup request failed: {release_error}", file=sys.stderr)
-        if acquired and release_status != 200:
-            raise SetupError(
-                f"Acquired lease cleanup failed (HTTP {release_status}); it remains fenced until TTL expiry"
-            )
+                print(f"  Warning: lease cleanup failed: {release_error}", file=sys.stderr)
+            if acquired and release_status != 200:
+                raise SetupError(
+                    f"Acquired lease cleanup ({mode}) failed (HTTP {release_status}); it remains fenced until TTL expiry"
+                )
+            print(f"  Lease released")
 
     if args.with_pi:
         pi = locate_pi(home)
@@ -208,37 +212,39 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
         if not extension.is_file():
             raise SetupError(f"Three-agent extension is missing: {extension}")
         pi_env = {**os.environ, "PATH": str(pi.parent) + os.pathsep + os.environ.get("PATH", "")}
-        result = run(
-            [
-                str(pi),
-                "--print",
-                "--no-session",
-                "--no-tools",
-                "--no-skills",
-                "--no-prompt-templates",
-                "--no-context-files",
-                "--no-extensions",
-                "--extension",
-                str(extension),
-                "--provider",
-                "pi-llama",
-                "--model",
-                args.model,
-                "--thinking",
-                "off",
-                "Reply with exactly REMOTE_PI_OK and nothing else.",
-            ],
-            capture=True,
-            env=pi_env,
-        )
-        if result.stdout.strip() != "REMOTE_PI_OK":
-            raise SetupError(f"Unexpected Pi reply: {result.stdout.strip()!r}")
-        print("Pi managed-provider lifecycle: REMOTE_PI_OK")
+        for provider, model_id in [("pi-llama", args.model), ("ds4", args.ds4_model)]:
+            print(f"\n--- Verifying Pi with provider={provider}, model={model_id} ---")
+            result = run(
+                [
+                    str(pi),
+                    "--print",
+                    "--no-session",
+                    "--no-tools",
+                    "--no-skills",
+                    "--no-prompt-templates",
+                    "--no-context-files",
+                    "--no-extensions",
+                    "--extension",
+                    str(extension),
+                    "--provider",
+                    provider,
+                    "--model",
+                    model_id,
+                    "--thinking",
+                    "off",
+                    "Reply with exactly REMOTE_PI_OK and nothing else.",
+                ],
+                capture=True,
+                env=pi_env,
+            )
+            if result.stdout.strip() != "REMOTE_PI_OK":
+                raise SetupError(f"Unexpected Pi reply ({provider}): {result.stdout.strip()!r}")
+            print(f"  Pi managed-provider lifecycle: REMOTE_PI_OK")
 
     final_status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
     if final_status.get("lease") is not None:
         raise SetupError("Verification left an inference lease active")
-    print(f"Manager mode={authenticated_status.get('mode')}, services={authenticated_status.get('services')}")
+    print(f"\nManager mode={final_status.get('mode')}, services={final_status.get('services')}")
     print("REMOTE_INFERENCE_CLIENT_VERIFIED")
 
 
@@ -251,7 +257,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--with-pi", action="store_true", help="also run a complete Pi managed-model turn")
     result.add_argument("--control-token-file", type=Path, help="private mode-0600 source file")
     result.add_argument("--model-key-file", type=Path, help="private mode-0600 source file")
-    result.add_argument("--model", default=DEFAULT_MODEL)
+    result.add_argument("--model", default=DEFAULT_MODEL, help=f"pi-llama model to test (default: {DEFAULT_MODEL})")
+    result.add_argument("--ds4-model", default=DEFAULT_DS4_MODEL, help=f"ds4 model to test (default: {DEFAULT_DS4_MODEL})")
     result.add_argument("--home", type=Path, default=Path.home())
     result.add_argument("--dotfiles", type=Path, default=Path(__file__).resolve().parent.parent)
     return result
@@ -283,6 +290,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             args.model_key_file,
         )
         if args.verify:
+            # Build the mode→(url, model) verification list
+            args.modes = [
+                ("team", MODEL_URL, args.model),
+                ("ds4", DS4_MODEL_URL, args.ds4_model),
+            ]
             verify(args, client, home)
         else:
             print("Setup complete. Run again with --apply --verify after checking connectivity.")
