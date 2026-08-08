@@ -1396,7 +1396,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
 
       const profile = configuredTeam.roles[role];
 
-      const allModels = ctx.modelRegistry.getAll();
+      const allModels = await ctx.modelRegistry.getAvailable();
       if (allModels.length === 0) {
         ctx.ui.notify("No models available. Run /model to refresh the catalog.", "error");
         return;
@@ -1404,33 +1404,90 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       const allIds = buildModelList(allModels);
       const currentModel = `${profile.provider}/${profile.model}`;
 
-      // Step 1: type a filter query
-      const query = await ctx.ui.input(
-        `Filter ${role} models (${allIds.length} available, current: ${currentModel})`,
-        "type to filter, enter to see matches",
-      );
-      if (query === undefined) return; // cancelled
+      // Live-search model picker via ctx.ui.custom()
+      const selected = await ctx.ui.custom<string | undefined>((_tui, theme, keybindings, done) => {
+        let query = "";
+        let selectedIdx = 0;
+        const maxVisible = 12;
 
-      // Step 2: fuzzy-match and pick from filtered results
-      const lower = query.toLowerCase().trim();
-      let matches: string[];
-      if (!lower) {
-        matches = allIds.slice(0, 50);
-      } else {
-        matches = allIds
-          .filter((id) => id.toLowerCase().includes(lower))
-          .slice(0, 50);
-      }
+        function results(): string[] {
+          const q = query.toLowerCase().trim();
+          if (!q) return allIds;
+          const tokens = q.split(/[\s/]+/).filter(Boolean);
+          const filtered = allIds.filter((id) => {
+            const lower = id.toLowerCase();
+            return tokens.every((t) => lower.includes(t));
+          });
+          // Sort: exact > starts-with > contains
+          return filtered.sort((a, b) => {
+            const al = a.toLowerCase(), bl = b.toLowerCase();
+            const aScore = al === q ? 0 : al.startsWith(q) ? 1 : 2;
+            const bScore = bl === q ? 0 : bl.startsWith(q) ? 1 : 2;
+            return aScore !== bScore ? aScore - bScore : al.localeCompare(bl);
+          });
+        }
 
-      if (matches.length === 0) {
-        ctx.ui.notify(`No models match "${query}"`, "error");
-        return;
-      }
+        const fg = (s: string, color: string) => {
+          try { return (theme as Record<string, (s: string) => string>).fg?.(color)?.(s) ?? s; } catch { return s; }
+        };
 
-      const selected = await ctx.ui.select(
-        `Select ${role} model — ${matches.length} match${matches.length === 1 ? "" : "es"} for "${query}"`,
-        matches,
-      );
+        return {
+          render(width: number): string[] {
+            const lines: string[] = [];
+            const r = results();
+            const prompt = query || "type to filter";
+            const hint = "↑↓ navigate · enter select · esc cancel";
+            lines.push(`  ${fg(prompt, "accent")}${query ? "" : `  ${fg(hint, "dim")}`}`);
+            lines.push("");
+
+            if (r.length === 0) {
+              lines.push(fg("  No matching models", "dim"));
+            } else {
+              const clampedIdx = Math.max(0, Math.min(selectedIdx, r.length - 1));
+              selectedIdx = clampedIdx;
+              const start = Math.max(0, Math.min(clampedIdx - Math.floor(maxVisible / 2), r.length - maxVisible));
+              const end = Math.min(start + maxVisible, r.length);
+              for (let i = start; i < end; i++) {
+                const isSelected = i === clampedIdx;
+                lines.push(isSelected ? `\x1b[7m→ ${r[i]}\x1b[0m` : `   ${r[i]}`);
+              }
+            }
+
+            lines.push("");
+            if (r.length > 0) {
+              const idx = Math.max(0, Math.min(selectedIdx, r.length - 1));
+              lines.push(fg(`  (${idx + 1}/${r.length})`, "dim"));
+            }
+            lines.push(fg(`  ${allIds.length} models available`, "dim"));
+            return lines;
+          },
+          handleInput(data: string) {
+            const r = results();
+            if (keybindings.matches(data, "tui.select.up")) {
+              if (r.length > 0) selectedIdx = selectedIdx <= 0 ? r.length - 1 : selectedIdx - 1;
+            } else if (keybindings.matches(data, "tui.select.down")) {
+              if (r.length > 0) selectedIdx = selectedIdx >= r.length - 1 ? 0 : selectedIdx + 1;
+            } else if (keybindings.matches(data, "tui.select.confirm")) {
+              const r2 = results();
+              if (r2.length > 0) done(r2[Math.max(0, Math.min(selectedIdx, r2.length - 1))]);
+              else done(undefined);
+            } else if (keybindings.matches(data, "tui.select.cancel")) {
+              done(undefined);
+            } else {
+              // Regular character: append to filter
+              const str = String(data);
+              if (str === "\b" || str === "\x7f" || keybindings.matches(data, "tui.editor.deleteCharBackward")) {
+                query = query.slice(0, -1);
+              } else if (str.length === 1 && str >= " ") {
+                query += str;
+              }
+              // Otherwise ignore (control chars etc.)
+              selectedIdx = 0;
+            }
+          },
+          invalidate() {},
+        };
+      });
 
       if (!selected || selected === currentModel) return;
       await writeProjectOverride(ctx.cwd, role, selected);
