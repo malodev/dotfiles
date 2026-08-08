@@ -10,6 +10,9 @@
 
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { homedir } from "node:os";
 import type { RoleProfile, TeamConfig, TeamRole } from "./config.ts";
 import { parseTeamConfig } from "./config.ts";
 
@@ -112,13 +115,30 @@ export function effectiveModel(hostConfig: TeamConfig, overrides: ProjectOverrid
   return `${profile.provider}/${profile.model === model ? profile.model : model}`;
 }
 
+const execFileAsync = promisify(execFile);
+
+/**
+ * Resolves an API key that may be a literal value or a shell command prefixed with `!`.
+ * The `!` syntax matches pi's convention: the command's stdout (trimmed) is the credential.
+ */
+async function resolveApiKey(apiKey: string): Promise<string> {
+  if (apiKey.startsWith("!")) {
+    const cmd = apiKey.slice(1).replace(/^~/, homedir());
+    const parts = cmd.split(/\s+/);
+    const { stdout } = await execFileAsync(parts[0], parts.slice(1), { timeout: 10_000 });
+    return stdout.trim();
+  }
+  return apiKey;
+}
+
 /**
  * Queries a provider's /v1/models endpoint and returns a sorted list of model IDs.
  */
 export async function fetchAvailableModels(providerUrl: string, apiKey: string): Promise<string[]> {
+  const credential = await resolveApiKey(apiKey);
   const url = providerUrl.replace(/\/+$/, "") + "/models";
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${credential}`, "Content-Type": "application/json" },
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) {

@@ -71,6 +71,7 @@ import {
   writeProjectOverride,
   resolveEffectiveConfig,
   effectiveModel,
+  fetchAvailableModels,
 } from "./project-config.ts";
 import {
   assertImmediateQueueAvailable,
@@ -1394,26 +1395,29 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       }
 
       const profile = configuredTeam.roles[role];
-      const providerName = profile.provider;
-
-      // Try exact provider match first, then fall back to all models
-      let models = ctx.modelRegistry.getAll()
-        .filter((m) => m.provider === providerName)
-        .map((m) => m.id)
-        .sort();
-
-      if (models.length === 0) {
-        // The provider name in the team config might differ from pi's internal
-        // provider ID. Collect every available model as a fallback.
-        const all = ctx.modelRegistry.getAll();
-        if (all.length === 0) {
-          ctx.ui.notify(`No models available. Run /model first to refresh the catalog.`, "error");
-          return;
-        }
-        models = all.map((m) => `${m.provider}/${m.id}`).sort();
+      const provider = configuredTeam.providers[profile.provider];
+      if (!provider) {
+        ctx.ui.notify(`No provider configured for ${role}`, "error");
+        return;
       }
 
-      const currentModel = `${providerName}/${profile.model}`;
+      let models: string[];
+      try {
+        models = await fetchAvailableModels(provider.baseUrl, provider.apiKey);
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not list models from ${provider.name}: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
+
+      if (models.length === 0) {
+        ctx.ui.notify(`No models available from ${provider.name}`, "error");
+        return;
+      }
+
+      const currentModel = profile.model;
       const currentIndex = models.indexOf(currentModel);
       const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, {
         options: models.map((id) => ({ value: id, label: id })),
@@ -1421,12 +1425,8 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       });
 
       if (!selected || selected === currentModel) return;
-
-      // Parse provider/model from selected value
-      const slashIndex = selected.lastIndexOf("/");
-      const selectedModel = slashIndex >= 0 ? selected.slice(slashIndex + 1) : selected;
-      await writeProjectOverride(ctx.cwd, role, selectedModel);
-      ctx.ui.notify(`${role} model set to: ${selected} (team/models.json)`, "info");
+      await writeProjectOverride(ctx.cwd, role, selected);
+      ctx.ui.notify(`${role} model set to: ${provider.name}/${selected} (team/models.json)`, "info");
     },
   });
 
