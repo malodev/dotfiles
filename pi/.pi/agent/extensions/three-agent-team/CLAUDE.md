@@ -66,9 +66,22 @@ between modules. Business logic lives in the modules above.
   accumulate there — `rm -rf` the authorizations subdirectory if tests fail
   spuriously.
 
-## Stale docs
+## Historic documentation
 
-Files in `docs/` (`plan.md`, `*_REPORT.md`, `*_FIX_PLAN.md`) date from the
-initial build phase before the 2026-08-06 architecture review. They describe
-a pre-deepening state and may reference modules or interfaces that no longer
-exist. They should be archived or deleted — do not rely on them.
+[`docs/`](docs/) holds planning and implementation reports from the initial
+build phase, before the 2026-08-06 architecture review deepened the codebase.
+They describe a pre-deepening state — modules and interfaces may have changed
+or been replaced — but they remain the authoritative record of the design
+rationale behind `/team-import`, the durable queue, and the plan-import
+transaction model:
+
+- [`plan.md`](docs/plan.md) — original `/team-import` production-readiness
+  remediation blueprint
+- [`PLAN_IMPORT_PRODUCTION_FIX_PLAN.md`](docs/PLAN_IMPORT_PRODUCTION_FIX_PLAN.md) —
+  superseding production fix plan
+- [`PRODUCTION_READINESS_REMEDIATION_PLAN.md`](docs/PRODUCTION_READINESS_REMEDIATION_PLAN.md) —
+  pre-remediation verdict and concerns (all resolved)
+- [`PLAN_IMPORT_IMPLEMENTATION_REPORT.md`](docs/PLAN_IMPORT_IMPLEMENTATION_REPORT.md) —
+  post-remediation status report
+- [`QUEUE_IMPLEMENTATION_REPORT.md`](docs/QUEUE_IMPLEMENTATION_REPORT.md) —
+  initial queue worktree report
