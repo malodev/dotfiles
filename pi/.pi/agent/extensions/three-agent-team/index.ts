@@ -1418,11 +1418,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
       }
 
       const currentModel = profile.model;
-      const currentIndex = models.indexOf(currentModel);
-      const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, {
-        options: models.map((id) => ({ value: id, label: id })),
-        ...(currentIndex >= 0 ? { default: currentIndex } : {}),
-      });
+      const selected = await ctx.ui.select(`Select ${role} model (current: ${currentModel})`, models);
 
       if (!selected || selected === currentModel) return;
       await writeProjectOverride(ctx.cwd, role, selected);
