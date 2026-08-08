@@ -309,19 +309,33 @@ function leaseEnvironment(owner: string, config: TeamConfig): NodeJS.ProcessEnv 
   };
 }
 
-async function acquireInferenceLease(run: ActiveRun, repo: string, config: TeamConfig): Promise<void> {
+/** Returns the pi-inference acquisition mode for a managed provider, or undefined if not managed. */
+function providerAcquireMode(config: TeamConfig, provider: string): string | undefined {
+  if (!config.lifecycle.managedProviders.includes(provider)) return undefined;
+  // pi-llama uses "team" mode, ds4 uses "ds4" mode. The mode name matches the
+  // provider's loadout preset in pi-inference-manager.
+  if (provider === "ds4") return "ds4";
+  return "team";
+}
+
+async function acquireInferenceLease(run: ActiveRun, repo: string, config: TeamConfig, provider?: string): Promise<void> {
   const { acquireTeamCommand, renewTeamCommand, releaseTeamCommand } = config.lifecycle;
   if (!acquireTeamCommand || !renewTeamCommand || !releaseTeamCommand) {
     await enterTeamMode(repo, config, run.abortController.signal);
     run.legacyInferenceReady = true;
     return;
   }
+  const mode = provider ? providerAcquireMode(config, provider) : undefined;
+  if (provider && !mode) return; // Not a managed provider — skip lease
   const owner = `${hostname()}:${process.pid}:${run.taskId}:${randomUUID()}`;
   run.leaseOwner = owner;
   run.leaseRepo = repo;
   run.leaseConfig = config;
+  const command = mode
+    ? acquireTeamCommand.replace(/--mode\s+\S+/, `--mode ${mode}`)
+    : acquireTeamCommand;
   const result = await shell(
-    acquireTeamCommand,
+    command,
     repo,
     run.abortController.signal,
     210_000,
@@ -902,8 +916,6 @@ async function executeWorkflow(
   const controller = run.abortController;
   const progress = (text: string) => setUi(ctx, `team ${taskId}: ${text}`);
   try {
-    progress("ACQUIRING global inference lease");
-    await acquireInferenceLease(run, repo, config);
     capability.assertHeld();
     const { status: enteringStatus } = await readStatus(taskDir);
     const executionUpdates: Record<string, string> = { blocked_reason: "null" };
@@ -920,6 +932,7 @@ async function executeWorkflow(
     if (latestReview && !(await exists(latestReview))) latestReview = undefined;
     while (status.reviewCycle < status.maxReviewCycles) {
       progress(`BUILDER cycle ${status.reviewCycle + 1} · ${roleModel(config, "builder")}`);
+      await acquireInferenceLease(run, repo, config, config.roles.builder.provider);
       await validate(repo, taskDir, "execution", controller.signal);
       const builderCycle = status.reviewCycle + 1;
       const buildReport = resolve(taskDir, "build-report.md");
@@ -972,6 +985,9 @@ async function executeWorkflow(
       await updateTaskStatus(taskDir, { latest_build_report: relativeTaskPath(taskId, "build-report.md") }, capability);
       await validate(repo, taskDir, "execution", controller.signal);
 
+      // Builder is done — release the Builder's model from the GPU
+      await releaseInferenceLease(run, repo, config).catch(() => undefined);
+
       const cycle = status.reviewCycle + 1;
       const preReviewLogName = `pre-review-verification-${String(cycle).padStart(2, "0")}.log`;
       const preReviewLogPath = relativeTaskPath(taskId, preReviewLogName);
@@ -991,6 +1007,9 @@ async function executeWorkflow(
 
       await setState(taskDir, "REVIEWING", {}, capability);
       await validate(repo, taskDir, "execution", controller.signal);
+
+      // Load the Reviewer's model on the GPU
+      await acquireInferenceLease(run, repo, config, config.roles.reviewer.provider);
 
       const reviewerSession = roleSession(repo, taskId, "reviewer", cycle);
       await mkdir(reviewerSession.sessionDir, { recursive: true });
@@ -1103,6 +1122,8 @@ async function executeWorkflow(
       latestReview = reviewPath;
       await setState(taskDir, "EXECUTING", {}, capability);
       status = (await readStatus(taskDir)).status;
+      // Release Reviewer model before looping back to Builder
+      await releaseInferenceLease(run, repo, config).catch(() => undefined);
     }
     throw new Error(`Review ceiling reached (${status.maxReviewCycles})`);
   } catch (error) {
@@ -2478,7 +2499,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
         abortAgent: () => ctx.abort(),
       };
       try {
-        await acquireInferenceLease(lease, ctx.cwd, configuredTeam);
+        await acquireInferenceLease(lease, ctx.cwd, configuredTeam, ctx.model.provider);
         session.setInteractiveLease(lease);
       } catch (error) {
         ctx.abort();

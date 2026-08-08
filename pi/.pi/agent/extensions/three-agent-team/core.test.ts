@@ -408,11 +408,11 @@ test("bundled role policy cannot reintroduce repository-local validation blocker
 test("wraps workflows and interactive turns in renewable inference leases", async () => {
   const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
   const sessionStateSource = await readFile(new URL("./session-state.ts", import.meta.url), "utf8");
-  assert.match(source, /await acquireInferenceLease\(run, repo, config\)/);
+  assert.match(source, /acquireInferenceLease\(run, repo, config/);
   assert.match(source, /leaseRenewIntervalSeconds \* 1000/);
   assert.match(source, /run\.leaseFailure = new Error/);
   assert.match(source, /await releaseInferenceLease\(run, repo, config\)/);
-  assert.match(source, /await acquireInferenceLease\(lease, ctx\.cwd, configuredTeam\)/);
+  assert.match(source, /acquireInferenceLease\(lease, ctx\.cwd, configuredTeam/);
   assert.match(source, /await releaseInteractiveInferenceLease\(session, configuredTeam, ctx\)/);
   assert.match(source, /abortAgent: \(\) => ctx\.abort\(\)/);
   assert.match(source, /before_provider_request[\s\S]*?no healthy global inference lease/);

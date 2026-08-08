@@ -142,7 +142,24 @@ gracefully.
 - `README.md`: new config v2 format, provider/model selection
 - `CLAUDE.md`: architecture change — team config no longer owns provider definitions
 
-### Step 7 — Add ds4 to managed providers and infrastructure ⬜
+### Step 7 — Add ds4 to managed providers and infrastructure ✅
+
+**Done.** Implemented per-role lease acquisition with provider-specific mode:
+
+- `providerAcquireMode(config, provider)` — returns `"team"` for pi-llama,
+  `"ds4"` for ds4, `undefined` for non-managed providers
+- `acquireInferenceLease(run, repo, config, provider?)` — appends `--mode <mode>`
+  to the acquire command when a managed provider is given; no-ops for non-managed
+- `executeWorkflow`: acquire/release per role instead of once at workflow start.
+  Builder acquires before its loop, releases after. Reviewer acquires before its
+  loop, releases on loop-back and in the safety-net `finally` block.
+- Interactive Architect session: lease acquires with `ctx.model.provider` for
+  correct mode when the current model is from a managed provider.
+- Non-managed providers (Anthropic, OpenAI, etc.) are skipped — no acquire,
+  no release, no GPU impact.
+
+To activate ds4, add `"ds4"` to `lifecycle.managedProviders` in the host config
+and ensure ds4 has an infrastructure entry (or provider entry in v1).
 
 **Goal:** ds4 models get the same GPU load/unload lease mechanism as pi-llama.
 
