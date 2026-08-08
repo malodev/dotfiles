@@ -62,12 +62,17 @@ Task runtime-config.json                 ← frozen, never changes mid-task
 | Command | Behavior |
 |---|---|
 | `/team-models` | Show effective models for all three roles, marking which come from host vs. project override |
-| `/team-models architect <model-id>` | Set project-level override for Architect. Validates the model exists under the Architect's provider. |
-| `/team-models builder <model-id>` | Same for Builder |
-| `/team-models reviewer <model-id>` | Same for Reviewer |
+| `/team-models architect` | Open an interactive picker with available models from the Architect's provider, like pi's `/model` |
+| `/team-models builder` | Same for Builder |
+| `/team-models reviewer` | Same for Reviewer |
 | `/team-models architect --reset` | Remove the override; falls back to host default |
 | `/team-models builder --reset` | Same |
 | `/team-models reviewer --reset` | Same |
+
+The picker queries the role's configured provider at its `/v1/models` endpoint
+to list available models. The owner picks one; the choice is written to
+`team/models.json`. No raw model IDs are typed — selection is from the live
+catalog, matching pi's `/model` UX.
 
 Example output of `/team-models`:
 
@@ -88,9 +93,14 @@ Host config:       ~/.config/pi-three-agent-team/config.json
 
 - `readProjectOverrides(repo)` — reads `team/models.json`, returns
   `Partial<Record<TeamRole, { model: string }>>` or empty if file missing
-- `writeProjectOverride(repo, role, model)` — writes or removes one override
+- `writeProjectOverride(repo, role, model)` — writes or removes one override;
+  also stages and commits the file so it travels with the project
 - `resolveEffectiveConfig(hostConfig, overrides)` — returns a new `TeamConfig`
   with role models overlaid
+- `fetchAvailableModels(provider)` — calls the provider's `/v1/models` endpoint
+  and returns a sorted list of model IDs, for the picker
+- `validateModel(provider, modelId)` — checks that a model ID exists in the
+  provider's catalog; used when an override is set directly (e.g. from a script)
 
 ### 2. Modify: `config.ts`
 
@@ -100,11 +110,12 @@ Host config:       ~/.config/pi-three-agent-team/config.json
 
 ### 3. New command handler: `index.ts > /team-models`
 
-- Parse args: `/team-models [architect|builder|reviewer [<model-id>|--reset]]`
-- Resolution: for setting, validate the model exists in the provider's model
-  list. For now, accept any non-empty model ID and let the runtime validate at
-  dispatch time (the provider will error if the model is unknown).
-- Idempotent: setting the same model twice is a no-op.
+- Parse args: `/team-models [architect|builder|reviewer|--reset]`
+- Without arguments: display current effective models
+- With a role name: query the provider's `/v1/models`, present a
+  `ctx.ui.select()` picker, write the choice to `team/models.json`
+- With `--reset`: remove the override, display the new effective model
+- Idempotent: selecting the same model twice is a no-op
 
 ### 4. Tests: `project-config.test.ts`
 
