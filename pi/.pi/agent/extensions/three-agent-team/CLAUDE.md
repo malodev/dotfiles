@@ -1,10 +1,16 @@
 # CLAUDE.md — three-agent-team
 
-Pi extension that runs the Architect → Builder → Reviewer workflow with a durable
-FIFO queue, fenced execution, and crash-resumable journals. The domain language is
-in [CONTEXT.md](CONTEXT.md) — use those terms (barrier, epoch, completion seal,
-exact commit) rather than ad-hoc names. Owner-facing slash commands and the
-workflow contract are in [README.md](README.md).
+Pi extension that gives agents a harness to complete assigned tasks without human
+intervention, starting from a plan and an optional PRD. Human involvement is
+concentrated in the initial specification phase; after `/team-import --approve`,
+`/team-continue` drains the durable FIFO queue through Builder → Reviewer cycles
+with fenced execution, crash recovery, and exact-tree completion — running until
+idle, paused, or blocked. The design optimizes for long-horizon autonomous
+strategy: agents work through a batch while the owner is away.
+
+The domain language is in [CONTEXT.md](CONTEXT.md) — use those terms (barrier,
+epoch, completion seal, exact commit) rather than ad-hoc names. Owner-facing
+slash commands and the workflow contract are in [README.md](README.md).
 
 ## Architecture — deepened modules
 

@@ -2,6 +2,27 @@
 
 Deterministic runtime orchestration for a configurable Architect → Builder → Reviewer workflow.
 
+## Purpose
+
+This extension gives agents a harness to complete assigned tasks without human
+intervention, starting from a plan and an optional PRD. Human involvement is
+concentrated in the initial specification phase — discussing goals, reviewing
+contracts, possibly a grilling session to stress-test the plan — after which the
+agents proceed autonomously through a long-horizon strategy:
+
+1. **Specify** — Architect decomposes the plan into task contracts with executable
+   success tests. Owner reviews, grills, and approves.
+2. **Import** — `/team-import` renders contracts, validates them, creates an exact
+   commit, and enrolls every task in the durable FIFO queue.
+3. **Execute** — `/team-continue` drains the queue: Builder → Reviewer cycles with
+   fenced execution, crash recovery, and exact-tree completion. Runs until idle,
+   paused, or blocked.
+
+The extension is the runtime — journals, fencing, validation, commits. The
+companion skills are the instruction layer — telling agents how to author
+contracts, decompose plans, and compute amendments. Together they let agents work
+through a batch of tasks while the owner is away.
+
 ## Installation
 
 **With dotfiles:** `./install.sh pi-agent` installs the `pi` Stow package and runs `npm ci`.
