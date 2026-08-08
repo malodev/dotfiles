@@ -51,7 +51,12 @@ Pi-llama is different: it's a user-operated llma.cpp router with a custom
 base URL (`https://llm.malo.tn.it/v1`) and a credential command
 (`!~/.local/bin/pi-inference credential model-api`). This information doesn't
 exist in pi's built-in registry — it's user-specific infrastructure. So the
-team config keeps a minimal pi-llama entry:
+team config keeps a minimal entry for each infrastructure provider.
+
+Ds4 (DeepSeek v4) is the same category: a user-hosted model server where only
+one model can be loaded on the GPU at a time. Both pi-llama and ds4 need the
+lease mechanism (acquire/renew/release) to load/unload models on the GPU host
+when tasks switch between models. They share the same `pi-inference` commands.
 
 ```json
 {
@@ -60,7 +65,15 @@ team config keeps a minimal pi-llama entry:
     "pi-llama": {
       "baseUrl": "https://llm.malo.tn.it/v1",
       "credentialCommand": "~/.local/bin/pi-inference credential model-api"
+    },
+    "ds4": {
+      "baseUrl": "https://llm.malo.tn.it/v1",
+      "credentialCommand": "~/.local/bin/pi-inference credential model-api"
     }
+  },
+  "lifecycle": {
+    "managedProviders": ["pi-llama", "ds4"],
+    ...
   },
   "roles": { ... }
 }
@@ -129,6 +142,21 @@ gracefully.
 - `README.md`: new config v2 format, provider/model selection
 - `CLAUDE.md`: architecture change — team config no longer owns provider definitions
 
+### Step 7 — Add ds4 to managed providers and infrastructure ⬜
+
+**Goal:** ds4 models get the same GPU load/unload lease mechanism as pi-llama.
+
+Both pi-llama and ds4 are user-hosted model servers where only one model can
+be loaded on the GPU at a time. The extension uses `managedProviders` to gate
+provider access behind a global inference lease (`pi-inference acquire/renew/release`).
+When a task switches between pi-llama and ds4 models, the lease ensures the right
+model is loaded on the GPU host, even when pi runs on a remote machine.
+
+- Add `"ds4"` to `lifecycle.managedProviders` in the host config
+- Ensure ds4 is in the `infrastructure` block of v2 configs
+- Verify: assign ds4 model to a role via `/team-models`, run `/team-go`,
+  confirm the lease is acquired and model loads on GPU
+
 ## Risks
 
 - **Child auth for non-pi-llama providers.** Pi child sessions already inherit
@@ -143,10 +171,11 @@ gracefully.
   default), that override stays in the team config as an optional field.
 
 - **Lifecycle/managed providers.** The `lifecycle.managedProviders` list controls
-  which providers get lease management. With Anthropic in the mix, this list
-  doesn't need to change — Anthropic doesn't use pi-inference leases. But verify
-  that the managed-provider gating in `index.ts` doesn't accidentally block
-  non-pi-llama providers.
+  which providers get lease management. Must include both pi-llama and ds4 —
+  both are user-hosted GPU servers where only one model loads at a time.
+  Anthropic, OpenAI, and other built-in providers don't need lease management
+  and should not be in this list. Verify that the managed-provider gating in
+  `index.ts` doesn't accidentally block non-managed providers.
 
 ## Sequence
 
@@ -156,10 +185,12 @@ Step 1 (config parsing)
 Step 2 (child catalog from registry)
   ↓  verify: child pi session uses Anthropic model
 Step 3 (/team-models shows all models)
-  ↓  verify: picker shows Anthropic + pi-llama
+  ↓  verify: picker shows Anthropic + pi-llama + ds4
 Step 4 (migration + backward compat)
   ↓
 Step 5 (tests)
   ↓
 Step 6 (docs)
+  ↓
+Step 7 (ds4 managed provider + lease)
 ```
