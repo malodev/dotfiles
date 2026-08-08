@@ -60,23 +60,29 @@ Schema constraints, all enforced:
 - `edits[].path` must be `team/tasks/<listed-task-id>/brief.md`. No other file may be amended: `status.yaml` and the evidence files are extension-owned.
 - `old_text` must be non-empty and differ from `new_text`. `new_text` may be empty to delete text.
 
-### Phase 4: Hand off to the owner
+### Phase 4: Commit, preview, and hand off
 
-1. **Commit the manifest**:
+1. **Write the manifest** to `team/amendment.yaml`.
+2. **Commit it yourself**:
    ```bash
    git add team/amendment.yaml && git commit -m 'chore(team): add contract amendment'
    ```
-2. **Preview** (no side effects):
+   You have repository edit authority. The owner does not need to commit — the
+   digest-and-HEAD binding in the approval step already makes tampering provable.
+3. **Run the preview** and show the owner the output:
    ```
    /team-amend team/amendment.yaml
    ```
-   The preview prints the manifest digest, current `HEAD`, affected tasks, edited paths, the exact approval command, and a warning for any listed task that is no longer amendable.
-3. **The owner approves** by running the exact command from the preview:
+   The preview prints the manifest digest, current `HEAD`, affected tasks, edited paths,
+   the exact approval command, and a warning for any listed task that is no longer amendable.
+4. **The owner approves** by running the exact command from the preview:
    ```
    /team-amend team/amendment.yaml --approve sha256:<digest> --head <sha>
    ```
 
-Approval is bound to both the digest and the head: if the manifest or the repository moved since the preview, it is refused.
+Approval is bound to both the digest and the manifest at the committed HEAD: if the
+manifest or the repository moved since the preview, it is refused. The owner sees the
+cryptographic pair and runs one command — no manual git steps.
 
 ## What the extension does on approval
 
@@ -87,18 +93,18 @@ Approval is bound to both the digest and the head: if the manifest or the reposi
 
 ## Output
 
-After writing the manifest, summarize:
+After writing and committing the manifest, run the preview and summarize:
 
 ```
-Created team/amendment.yaml — amendment '<amendment-id>' over N task(s):
+Committed team/amendment.yaml — amendment '<amendment-id>' over N task(s):
 1. <task-id> — <what is being corrected> (M edits)
 
-Next steps:
-1. Review the edits above
-2. Commit: git add team/amendment.yaml && git commit -m 'chore(team): add contract amendment'
-3. Preview: /team-amend team/amendment.yaml
-4. Approve: /team-amend team/amendment.yaml --approve sha256:<digest> --head <sha>
-5. Execute: /team-continue
+Preview:
+  Digest: sha256:<64-hex>
+  HEAD: <40-hex>
+
+Next step (owner only):
+  /team-amend team/amendment.yaml --approve sha256:<digest> --head <sha>
 ```
 
 ## Constraints
@@ -106,6 +112,7 @@ Next steps:
 - Do not implement production code
 - Do not invoke Builder or Reviewer roles
 - Do not run `/team-amend --approve` yourself; the owner must review the preview first
+- Do write and commit `team/amendment.yaml` yourself — the digest binding makes it safe
 - Do not amend `status.yaml`, `verification.log`, `completion-report.md`, or any other extension-owned file
 - Do not attempt to amend a task that has been claimed, authorized, or dispatched — use `/team-unblock` or `/team-discard`
 - Every `old_text` must match its file exactly once; add surrounding context rather than guessing
