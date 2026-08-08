@@ -24,7 +24,7 @@ CONTROL_STATUS_URL = "https://inference.malo.tn.it/v1/status"
 MODEL_URL = "https://llm.malo.tn.it/v1/chat/completions"
 DS4_MODEL_URL = "https://ds4.malo.tn.it/v1/chat/completions"
 DEFAULT_MODEL = "pi/gemma-4-31B-it-qat-UD-Q4_K_XL"
-DEFAULT_DS4_MODEL = "ds4/Qwen3.6-27B-MTP-UD-Q5_K_XL"
+DEFAULT_DS4_MODEL = "deepseek-v4-flash"
 
 
 class SetupError(RuntimeError):
