@@ -10,10 +10,8 @@ import {
   type AdvisoryLock,
   type AdvisoryLockOwner,
 } from "./durable-state.ts";
+import { isSha1, isSha256, isTaskId } from "./core.ts";
 
-const SHA1 = /^[0-9a-f]{40}$/;
-const SHA256 = /^[0-9a-f]{64}$/;
-const TASK_ID = /^[a-z0-9][a-z0-9._-]*$/;
 const SCHEMA_VERSION = 1 as const;
 const ENTRY_STATES = ["QUEUED", "RUNNING", "BLOCKED", "COMPLETED", "DEQUEUED"] as const;
 const PHASES = ["CLAIMED", "AUTHORIZING", "AUTHORIZED", "EXECUTING", "VERIFIED", "COMMITTING", "COMPLETED", "BLOCKED"] as const;
@@ -239,17 +237,17 @@ function timestamp(value: unknown, label: string): string {
   if (!Number.isFinite(Date.parse(text))) fail(`${label} must be an ISO timestamp`);
   return text;
 }
-function sha(value: unknown, pattern: RegExp, label: string): string {
+function sha(value: unknown, matches: (value: string) => boolean, label: string): string {
   const text = string(value, label);
-  if (!pattern.test(text)) fail(`${label} has the wrong digest format`);
+  if (!matches(text)) fail(`${label} has the wrong digest format`);
   return text;
 }
-function nullableSha(value: unknown, pattern: RegExp, label: string): string | null {
-  return value === null ? null : sha(value, pattern, label);
+function nullableSha(value: unknown, matches: (value: string) => boolean, label: string): string | null {
+  return value === null ? null : sha(value, matches, label);
 }
 function taskId(value: unknown, label: string): string {
   const text = string(value, label);
-  if (!TASK_ID.test(text)) fail(`${label} is invalid`);
+  if (!isTaskId(text)) fail(`${label} is invalid`);
   return text;
 }
 function clone<T>(value: T): T { return structuredClone(value); }
@@ -288,7 +286,7 @@ function parseEvent(value: unknown, label: string): DispatchEvent {
     phase: value.phase as DispatchPhase,
     at: timestamp(value.at, `${label}.at`),
     detail: value.detail as string | null,
-    completionCommit: nullableSha(value.completionCommit, SHA1, `${label}.completionCommit`),
+    completionCommit: nullableSha(value.completionCommit, isSha1, `${label}.completionCommit`),
   };
 }
 
@@ -385,16 +383,16 @@ function parseEntry(value: unknown, uid: number, label: string): QueueEntry {
     sequence: integer(value.sequence, `${label}.sequence`, 1),
     state: value.state as QueueEntryState,
     dependsOn,
-    baselineCommit: sha(value.baselineCommit, SHA1, `${label}.baselineCommit`),
-    expectedHead: sha(value.expectedHead, SHA1, `${label}.expectedHead`),
-    approvedBriefDigest: sha(value.approvedBriefDigest, SHA256, `${label}.approvedBriefDigest`),
-    contractDigest: sha(value.contractDigest, SHA256, `${label}.contractDigest`),
+    baselineCommit: sha(value.baselineCommit, isSha1, `${label}.baselineCommit`),
+    expectedHead: sha(value.expectedHead, isSha1, `${label}.expectedHead`),
+    approvedBriefDigest: sha(value.approvedBriefDigest, isSha256, `${label}.approvedBriefDigest`),
+    contractDigest: sha(value.contractDigest, isSha256, `${label}.contractDigest`),
     ownerPrincipal: string(value.ownerPrincipal, `${label}.ownerPrincipal`),
     approvedAt: timestamp(value.approvedAt, `${label}.approvedAt`),
     approvalSource: value.approvalSource === "/team-enqueue" ? "/team-enqueue" : fail(`${label}.approvalSource is invalid`),
     completionPolicy: parsePolicy(value.completionPolicy, `${label}.completionPolicy`),
-    authorizationHead: nullableSha(value.authorizationHead, SHA1, `${label}.authorizationHead`),
-    completionCommit: nullableSha(value.completionCommit, SHA1, `${label}.completionCommit`),
+    authorizationHead: nullableSha(value.authorizationHead, isSha1, `${label}.authorizationHead`),
+    completionCommit: nullableSha(value.completionCommit, isSha1, `${label}.completionCommit`),
     attempts,
     recoveryApproval: parseRecovery(value.recoveryApproval, `${label}.recoveryApproval`),
   };
@@ -407,6 +405,16 @@ function parseEntry(value: unknown, uid: number, label: string): QueueEntry {
   if (entry.state === "COMPLETED" && (last?.phase !== "COMPLETED" || entry.completionCommit !== last.completionCommit)) fail(`${label} COMPLETED commit mismatch`);
   if (entry.state !== "COMPLETED" && entry.completionCommit) fail(`${label} has premature completion commit`);
   return entry;
+}
+
+/** Not yet terminal: excludes COMPLETED and DEQUEUED. QUEUED/RUNNING/BLOCKED all count. */
+function isNonterminal(entry: QueueEntry): boolean {
+  return entry.state !== "COMPLETED" && entry.state !== "DEQUEUED";
+}
+
+/** The earliest nonterminal FIFO entry — the only runnable entry, and the queue-wide barrier for everything behind it. */
+export function barrier(snapshot: QueueSnapshot): QueueEntry | undefined {
+  return snapshot.entries.find(isNonterminal);
 }
 
 const SNAPSHOT_FIELDS = [
@@ -428,7 +436,7 @@ function validateSnapshot(value: unknown, repository: string, repositoryKey: str
   let nonterminalSeen = false;
   let activeBarrierSeen = false;
   let chainHead: string | null = null;
-  const expectedHead = nullableSha(value.expectedHead, SHA1, "expectedHead");
+  const expectedHead = nullableSha(value.expectedHead, isSha1, "expectedHead");
   for (const entry of entries) {
     if (ids.has(entry.taskId) || sequences.has(entry.sequence) || entry.sequence <= previousSequence) fail("entry IDs/sequences are duplicate or reordered");
     ids.add(entry.taskId); sequences.add(entry.sequence); previousSequence = entry.sequence;
@@ -455,7 +463,7 @@ function validateSnapshot(value: unknown, repository: string, repositoryKey: str
     // Allow drift when the only non-terminated entries are QUEUED — a fresh import
     // may start a new epoch after completed work, advancing expectedHead to the
     // import commit while the old completions still point to their own chain.
-    const active = entries.find((e: any) => e.state !== "COMPLETED" && e.state !== "DEQUEUED");
+    const active = entries.find(isNonterminal);
     if (!active || active.state === "QUEUED") { /* ok — new epoch after completed history */ }
     else fail("expectedHead does not equal the last completed commit");
   }
@@ -554,7 +562,7 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
     }
     if (input.type === "enqueue") {
       taskId(input.taskId, "enqueue.taskId");
-      const head = sha(input.expectedHead, SHA1, "enqueue.expectedHead");
+      const head = sha(input.expectedHead, isSha1, "enqueue.expectedHead");
       const proposed = {
         taskId: input.taskId,
         dependsOn: input.dependsOn,
@@ -582,9 +590,7 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       if (snapshot.expectedHead !== null && snapshot.expectedHead !== head) {
         // expectedHead mismatch — may be a new epoch after completed work.
         // Only allow if all existing entries are COMPLETED or DEQUEUED (no active work).
-        const active = snapshot.entries.find(
-          (e: any) => e.state !== "COMPLETED" && e.state !== "DEQUEUED",
-        );
+        const active = snapshot.entries.find(isNonterminal);
         if (active) {
           throw new Error(`Queue expected HEAD ${snapshot.expectedHead}, not ${head}`);
         }
@@ -614,14 +620,14 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       return { changed: true, snapshot: await persist(snapshot, lock) };
     }
     if (input.type === "bulkEnqueue") {
-      const expectedHead = input.entries[0] ? sha(input.entries[0].expectedHead, SHA1, "bulkEnqueue.expectedHead") : null;
+      const expectedHead = input.entries[0] ? sha(input.entries[0].expectedHead, isSha1, "bulkEnqueue.expectedHead") : null;
 
       // First pass: check ALL existing entries before any expectedHead check
       const newProposals: Array<{ index: number; proposed: { taskId: string; dependsOn: string[]; baselineCommit: string; expectedHead: string; approvedBriefDigest: string; contractDigest: string; ownerPrincipal: string; approvedAt: string; approvalSource: string; completionPolicy: { commitOnSuccess: boolean; pushOnSuccess: boolean; deployOnSuccess: boolean } } }> = [];
       for (let i = 0; i < input.entries.length; i++) {
         const item = input.entries[i];
         taskId(item.taskId, `bulkEnqueue[${i}].taskId`);
-        const head = sha(item.expectedHead, SHA1, `bulkEnqueue[${i}].expectedHead`);
+        const head = sha(item.expectedHead, isSha1, `bulkEnqueue[${i}].expectedHead`);
         if (head !== expectedHead) throw new Error(`bulkEnqueue[${i}].expectedHead mismatch`);
 
         const proposed = {
@@ -700,8 +706,8 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       return { changed: true, snapshot: await persist(snapshot, lock) };
     }
     if (input.type === "amendQueuedContracts") {
-      const expectedHead = sha(input.expectedHead, SHA1, "amendQueuedContracts.expectedHead");
-      const newExpectedHead = sha(input.newExpectedHead, SHA1, "amendQueuedContracts.newExpectedHead");
+      const expectedHead = sha(input.expectedHead, isSha1, "amendQueuedContracts.expectedHead");
+      const newExpectedHead = sha(input.newExpectedHead, isSha1, "amendQueuedContracts.newExpectedHead");
       if (!input.amendments.length) throw new Error("Queued contract amendment requires at least one task");
       const seen = new Set<string>();
       const parsed = input.amendments.map((amendment, index) => {
@@ -710,10 +716,10 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
         seen.add(amendment.taskId);
         return {
           ...amendment,
-          expectedApprovedBriefDigest: sha(amendment.expectedApprovedBriefDigest, SHA256, `amendQueuedContracts[${index}].expectedApprovedBriefDigest`),
-          expectedContractDigest: sha(amendment.expectedContractDigest, SHA256, `amendQueuedContracts[${index}].expectedContractDigest`),
-          approvedBriefDigest: sha(amendment.approvedBriefDigest, SHA256, `amendQueuedContracts[${index}].approvedBriefDigest`),
-          contractDigest: sha(amendment.contractDigest, SHA256, `amendQueuedContracts[${index}].contractDigest`),
+          expectedApprovedBriefDigest: sha(amendment.expectedApprovedBriefDigest, isSha256, `amendQueuedContracts[${index}].expectedApprovedBriefDigest`),
+          expectedContractDigest: sha(amendment.expectedContractDigest, isSha256, `amendQueuedContracts[${index}].expectedContractDigest`),
+          approvedBriefDigest: sha(amendment.approvedBriefDigest, isSha256, `amendQueuedContracts[${index}].approvedBriefDigest`),
+          contractDigest: sha(amendment.contractDigest, isSha256, `amendQueuedContracts[${index}].contractDigest`),
         };
       });
       const postimage = snapshot.expectedHead === newExpectedHead && parsed.every((amendment) => {
@@ -749,7 +755,7 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       // completed-task chain from the prior epoch.
       const retainedIds = new Set(
         snapshot.entries
-          .filter((entry) => entry.state !== "COMPLETED" && entry.state !== "DEQUEUED")
+          .filter(isNonterminal)
           .map((entry) => entry.taskId),
       );
       snapshot.entries = snapshot.entries
@@ -786,7 +792,7 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       for (let i = 0; i < input.entries.length; i++) {
         const item = input.entries[i];
         taskId(item.taskId, `bulkImportEnqueue[${i}].taskId`);
-        const head = sha(item.expectedHead, SHA1, `bulkImportEnqueue[${i}].expectedHead`);
+        const head = sha(item.expectedHead, isSha1, `bulkImportEnqueue[${i}].expectedHead`);
 
         const proposed = {
           taskId: item.taskId, dependsOn: item.dependsOn,
@@ -841,9 +847,7 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       // They're historical — the journal holds the audit record. Keeping them
       // forces a broken authorization chain between the old completion commits
       // and the new import-commit baseline.
-      snapshot.entries = snapshot.entries.filter(
-        (e) => e.state !== "COMPLETED" && e.state !== "DEQUEUED",
-      );
+      snapshot.entries = snapshot.entries.filter(isNonterminal);
       snapshot.nextSequence += newEntries.length;
       snapshot.expectedHead = input.newExpectedHead;
       snapshot.entries.push(...newEntries);
@@ -923,6 +927,32 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       }
       return { entry, attempt };
     };
+    // Shared by complete/reconcileComplete: both resolve an attempt (with
+    // different strictness — see their own attempt lookups) and then agree
+    // on identical completion mechanics. detail is the only thing that
+    // should differ between callers; it's what the durable journal uses to
+    // distinguish a normal completion from a fenced reconciliation.
+    const finishAttempt = async (
+      snapshot: QueueSnapshot,
+      lock: AdvisoryLock,
+      entry: QueueEntry,
+      attempt: DispatchAttempt,
+      commit: string,
+      detail: string | null,
+    ): Promise<QueueSnapshot> => {
+      const existing = attempt.events.at(-1);
+      if (existing?.phase === "COMPLETED") {
+        if (entry.completionCommit !== commit || existing.completionCommit !== commit) throw new Error(`Conflicting completion replay for ${entry.taskId}`);
+        return clone(snapshot);
+      }
+      if (entry.state !== "RUNNING" || existing?.phase !== "COMMITTING") throw new Error(`${entry.taskId} must be COMMITTING before completion`);
+      if (entry.authorizationHead !== snapshot.expectedHead) throw new Error(`Head-chain break for ${entry.taskId}`);
+      attempt.events.push({ phase: "COMPLETED", at: now().toISOString(), detail, completionCommit: commit });
+      entry.state = "COMPLETED";
+      entry.completionCommit = commit;
+      snapshot.expectedHead = commit;
+      return persist(snapshot, lock);
+    };
     const session: DispatcherSession = Object.freeze({
       owner: clone(owner),
       fencingToken,
@@ -936,7 +966,7 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
       assertCurrent: () => mutate("assert dispatcher fence", undefined, (snapshot) => clone(snapshot)),
       claimNext: (expectedRevision?: number) => mutate("claim FIFO head", expectedRevision, async (snapshot, lock) => {
         if (snapshot.paused) return undefined;
-        const first = snapshot.entries.find((entry) => entry.state !== "COMPLETED" && entry.state !== "DEQUEUED");
+        const first = barrier(snapshot);
         if (!first) return undefined;
         if (first.state === "RUNNING") return undefined;
         let kind: AttemptKind = "INITIAL";
@@ -1014,39 +1044,22 @@ export async function openDurableQueue(repo: string, options: DurableQueueOption
         }),
       complete: (id: string, attemptId: string, completionCommit: string, expectedRevision?: number) =>
         mutate(`complete ${id}`, expectedRevision, async (snapshot, lock) => {
-          const commit = sha(completionCommit, SHA1, "completionCommit");
+          const commit = sha(completionCommit, isSha1, "completionCommit");
           const { entry, attempt } = findAttempt(snapshot, id, attemptId);
-          const existing = attempt.events.at(-1);
-          if (existing?.phase === "COMPLETED") {
-            if (entry.completionCommit !== commit || existing.completionCommit !== commit) throw new Error(`Conflicting completion replay for ${id}`);
-            return clone(snapshot);
-          }
-          if (entry.state !== "RUNNING" || existing?.phase !== "COMMITTING") throw new Error(`${id} must be COMMITTING before completion`);
-          if (entry.authorizationHead !== snapshot.expectedHead) throw new Error(`Head-chain break for ${id}`);
-          attempt.events.push({ phase: "COMPLETED", at: now().toISOString(), detail: null, completionCommit: commit });
-          entry.state = "COMPLETED";
-          entry.completionCommit = commit;
-          snapshot.expectedHead = commit;
-          return persist(snapshot, lock);
+          return finishAttempt(snapshot, lock, entry, attempt, commit, null);
         }),
+      // Crash recovery: a replacement dispatcher session (new fencing token)
+      // completing an attempt claimed under a prior one. This attempt lookup
+      // is deliberately looser than findAttempt's — it must NOT require the
+      // current fencing token/owner to match, or reconciliation could never
+      // complete a stale attempt from before the takeover.
       reconcileComplete: (id: string, attemptId: string, completionCommit: string, expectedRevision?: number) =>
         mutate(`reconcile exact completion ${id}`, expectedRevision, async (snapshot, lock) => {
-          const commit = sha(completionCommit, SHA1, "completionCommit");
+          const commit = sha(completionCommit, isSha1, "completionCommit");
           const entry = snapshot.entries.find((candidate) => candidate.taskId === id);
           const attempt = entry?.attempts.at(-1);
           if (!entry || !attempt || attempt.attemptId !== attemptId) throw new Error(`Unknown or non-current dispatch attempt ${attemptId}`);
-          const existing = attempt.events.at(-1);
-          if (existing?.phase === "COMPLETED") {
-            if (entry.completionCommit !== commit || existing.completionCommit !== commit) throw new Error(`Conflicting reconciled completion for ${id}`);
-            return clone(snapshot);
-          }
-          if (entry.state !== "RUNNING" || existing?.phase !== "COMMITTING") throw new Error(`${id} has no reconcilable COMMITTING journal`);
-          if (entry.authorizationHead !== snapshot.expectedHead) throw new Error(`Head-chain break for ${id}`);
-          attempt.events.push({ phase: "COMPLETED", at: now().toISOString(), detail: `exact COMMITTING journal reconciled under replacement fence ${fencingToken}`, completionCommit: commit });
-          entry.state = "COMPLETED";
-          entry.completionCommit = commit;
-          snapshot.expectedHead = commit;
-          return persist(snapshot, lock);
+          return finishAttempt(snapshot, lock, entry, attempt, commit, `exact COMMITTING journal reconciled under replacement fence ${fencingToken}`);
         }),
     });
 

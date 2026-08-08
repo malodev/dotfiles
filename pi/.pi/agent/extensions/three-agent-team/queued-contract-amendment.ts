@@ -1,8 +1,25 @@
+/**
+ * Atomic amendment of already-enqueued, unclaimed task contracts.
+ *
+ * Enrolled tasks freeze their approved-brief and contract digests in the
+ * durable queue. Correcting a mistake across an imported batch would otherwise
+ * mean dequeuing every task in reverse dependency order and re-importing,
+ * losing the queue epoch. This applies the edits, commits them exactly, and
+ * advances the queue to a new epoch with the new digests — as one journaled,
+ * crash-resumable transaction.
+ *
+ * Digest/bytes divergence is not re-verified here: the dispatcher's
+ * revalidateQueuedHead recomputes both digests from the committed brief before
+ * authorizing anything and fails closed on drift, so a redundant pass would
+ * only duplicate that check at N× the cost.
+ */
+
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
+import { isTaskId, relativeTaskPath } from "./core.ts";
+import { gitText } from "./git.ts";
+import { buildAuthorizedBrief } from "./goal-contract.ts";
 import {
   durableReplaceJson,
   ensureSecureDirectory,
@@ -14,15 +31,11 @@ import {
   assertStrictCleanRepository,
   atomicRepositoryWrite,
   createExactWorktreeCommit,
-  inspectEnrollmentAdmission,
   installExactCommit,
   runValidator,
   type ExactCommit,
 } from "./queue-repository.ts";
 import { openDurableQueue, type AmendQueuedContractsCommand } from "./queue.ts";
-
-const execFileAsync = promisify(execFile);
-const ID = /^[a-z0-9][a-z0-9._-]*$/;
 
 export interface QueuedContractTextEdit {
   path: string;
@@ -49,17 +62,8 @@ function digest(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
-async function head(repo: string): Promise<string> {
-  const result = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" });
-  return result.stdout.trim();
-}
-
-function authorizedBrief(brief: string, approvedAt: string): string {
-  const marker = /## Execution authorization\s*\nPENDING\s*$/m;
-  if ((brief.match(new RegExp(marker.source, "gm")) ?? []).length !== 1) {
-    throw new Error("Queued contract must contain exactly one PENDING authorization marker");
-  }
-  return brief.replace(marker, `## Execution authorization\nAUTHORIZED at ${approvedAt} by owner command \`/team-enqueue\``);
+function head(repo: string): Promise<string> {
+  return gitText(repo, ["rev-parse", "HEAD"], "Queued amendment cannot resolve HEAD");
 }
 
 function parseJournal(value: unknown, amendmentId: string): AmendmentJournal {
@@ -90,17 +94,13 @@ async function settleJournal(
     await durableReplaceJson(journalPath, journal, capability);
   }
 
+  const queue = await openDurableQueue(repo, { stateRoot });
+  const snapshot = await queue.snapshot();
   for (const amendment of journal.command.amendments) {
-    const entry = (await openDurableQueue(repo, { stateRoot })).snapshot().then((snapshot) => snapshot.entries.find((candidate) => candidate.taskId === amendment.taskId));
-    const queued = await entry;
-    if (!queued) throw new Error(`Queued amendment lost task ${amendment.taskId}`);
-    const admission = await inspectEnrollmentAdmission(repo, amendment.taskId, queued.approvedAt, undefined, stateRoot);
-    if (admission.approvedBriefDigest !== amendment.approvedBriefDigest || admission.contractDigest !== amendment.contractDigest) {
-      throw new Error(`Committed queued contract digest mismatch for ${amendment.taskId}`);
+    if (!snapshot.entries.some((candidate) => candidate.taskId === amendment.taskId)) {
+      throw new Error(`Queued amendment lost task ${amendment.taskId}`);
     }
   }
-
-  const queue = await openDurableQueue(repo, { stateRoot });
   const result = await queue.command(journal.command);
   journal = { ...journal, phase: "COMPLETED" };
   await durableReplaceJson(journalPath, journal, capability);
@@ -114,7 +114,7 @@ export async function applyQueuedContractAmendment(
   stateRoot?: string,
 ): Promise<{ commit: string; changed: boolean }> {
   capability.assertHeld();
-  if (!ID.test(spec.amendmentId) || !spec.taskIds.length || new Set(spec.taskIds).size !== spec.taskIds.length) {
+  if (!isTaskId(spec.amendmentId) || !spec.taskIds.length || new Set(spec.taskIds).size !== spec.taskIds.length) {
     throw new Error("Queued amendment identity or task list is invalid");
   }
   if (!spec.edits.length) throw new Error("Queued amendment requires text edits");
@@ -164,14 +164,14 @@ export async function applyQueuedContractAmendment(
 
   const exact = await createExactWorktreeCommit(repo, expectedHead, spec.subject, capability);
   const amendments = entries.map((entry) => {
-    const brief = byPath.get(`team/tasks/${entry.taskId}/brief.md`);
+    const brief = byPath.get(relativeTaskPath(entry.taskId, "brief.md"));
     if (brief === undefined) throw new Error(`Queued amendment did not edit brief.md for ${entry.taskId}`);
     return {
       taskId: entry.taskId,
       expectedApprovedBriefDigest: entry.approvedBriefDigest,
       expectedContractDigest: entry.contractDigest,
       approvedBriefDigest: digest(brief),
-      contractDigest: digest(authorizedBrief(brief, entry.approvedAt)),
+      contractDigest: digest(buildAuthorizedBrief(brief, entry.approvedAt)),
     };
   });
   const command: AmendQueuedContractsCommand = {

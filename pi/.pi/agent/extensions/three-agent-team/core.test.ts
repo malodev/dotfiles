@@ -369,20 +369,23 @@ test("centralizes active-run admission for Architect session commands", async ()
   assert.match(source, /REBOUND_AFTER_RELOAD/);
   assert.match(source, /has no persisted recovery discussion; use \/team-unblock/);
   const idleCommands = ["team-new", "team-grill-me", "team-unblock", "team-repair", "team-go", "team-resume"];
-  assert.match(source, /const recoveryTask = pendingUnblockRecovery\?\.taskId \?\? activeUnblockDiscussion\?\.taskId/);
-  const settledRecovery = source.slice(source.indexOf('pi.on("agent_settled"'));
-  assert.ok(settledRecovery.indexOf("reserveRun(recovery.taskId)") < settledRecovery.indexOf("await "), "recovery must reserve its run before awaiting");
+  // The idle-admission and recovery-reservation logic itself lives in
+  // session-state.ts; index.ts only calls through session.*.
+  const sessionStateSource = await readFile(new URL("./session-state.ts", import.meta.url), "utf8");
+  assert.match(sessionStateSource, /const recoveryTask = pendingUnblockRecovery\?\.taskId \?\? activeUnblockDiscussion\?\.taskId/);
+  const finalizeRecoverySource = source.slice(source.indexOf("async function finalizeRecovery"));
+  assert.ok(finalizeRecoverySource.indexOf("session.reserveRun(recovery.taskId)") < finalizeRecoverySource.indexOf("await "), "recovery must reserve its run before awaiting");
   for (const command of idleCommands) {
     const start = source.indexOf(`pi.registerCommand("${command}"`);
     const end = source.indexOf("pi.registerCommand(\"", start + 1);
     const handler = source.slice(start, end < 0 ? undefined : end);
-    assert.match(handler, new RegExp(`requireIdle\\(ctx, ["']${command}["']\\)`), `${command} must enforce idle admission`);
+    assert.match(handler, new RegExp(`session\\.requireIdle\\(ctx, ["']${command}["']\\)`), `${command} must enforce idle admission`);
     if (["team-go", "team-resume"].includes(command)) {
-      assert.ok(handler.indexOf("reserveRun(taskId)") < handler.indexOf("await "), `${command} must reserve its run before awaiting`);
+      assert.ok(handler.indexOf("session.reserveRun(taskId)") < handler.indexOf("await "), `${command} must reserve its run before awaiting`);
     }
     if (["team-resume", "team-discard"].includes(command)) {
-      assert.match(handler, /activeUnblockDiscussion/);
-      assert.match(handler, /pendingUnblockRecovery/);
+      assert.match(handler, /session\.activeDiscussion\(\)/);
+      assert.match(handler, /session\.pendingRecovery\(\)/);
     }
   }
 });
@@ -404,15 +407,19 @@ test("bundled role policy cannot reintroduce repository-local validation blocker
 
 test("wraps workflows and interactive turns in renewable inference leases", async () => {
   const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const sessionStateSource = await readFile(new URL("./session-state.ts", import.meta.url), "utf8");
   assert.match(source, /await acquireInferenceLease\(run, repo, config\)/);
   assert.match(source, /leaseRenewIntervalSeconds \* 1000/);
   assert.match(source, /run\.leaseFailure = new Error/);
   assert.match(source, /await releaseInferenceLease\(run, repo, config\)/);
   assert.match(source, /await acquireInferenceLease\(lease, ctx\.cwd, configuredTeam\)/);
-  assert.match(source, /await releaseInteractiveInferenceLease\(ctx\)/);
+  assert.match(source, /await releaseInteractiveInferenceLease\(session, configuredTeam, ctx\)/);
   assert.match(source, /abortAgent: \(\) => ctx\.abort\(\)/);
   assert.match(source, /before_provider_request[\s\S]*?no healthy global inference lease/);
-  assert.match(source, /session_shutdown[\s\S]*?await releaseInferenceLease\(workflow/);
+  // session_shutdown delegates to session.shutdown(); the lease-release
+  // sequence itself lives in session-state.ts alongside the other slots.
+  assert.match(source, /session_shutdown[\s\S]*?await session\.shutdown\(completionCwd\)/);
+  assert.match(sessionStateSource, /await releaseInferenceLease\(workflow/);
 });
 
 test("aborts a failed interactive lease without installing a permanent provider gate", async () => {

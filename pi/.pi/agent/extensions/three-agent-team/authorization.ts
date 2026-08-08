@@ -10,6 +10,7 @@ import {
   verifySecureStateObject,
   type SideEffectCapability,
 } from "./durable-state.ts";
+import { isSha1, isSha256, isTaskId } from "./core.ts";
 
 export interface AuthorizationRecord {
   version: 1;
@@ -20,9 +21,6 @@ export interface AuthorizationRecord {
   authorizedAt: string;
 }
 
-const TASK_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
-const SHA1_PATTERN = /^[0-9a-f]{40}$/;
-const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const EXACT_FIELDS = ["version", "repository", "taskId", "authorizationHead", "contractDigest", "authorizedAt"];
 
 /** Compatibility name retained for immediate /team-go callers. */
@@ -31,7 +29,7 @@ export function defaultAuthorizationStateRoot(): string {
 }
 
 function assertTaskId(taskId: string): void {
-  if (!TASK_ID_PATTERN.test(taskId)) throw new Error(`Invalid task ID for authorization record: ${taskId}`);
+  if (!isTaskId(taskId)) throw new Error(`Invalid task ID for authorization record: ${taskId}`);
 }
 
 function validateRecord(value: unknown, expectedRepository: string, expectedTaskId: string, path: string): AuthorizationRecord {
@@ -46,9 +44,9 @@ function validateRecord(value: unknown, expectedRepository: string, expectedTask
     || parsed.repository !== expectedRepository
     || parsed.taskId !== expectedTaskId
     || typeof parsed.authorizationHead !== "string"
-    || !SHA1_PATTERN.test(parsed.authorizationHead)
+    || !isSha1(parsed.authorizationHead)
     || typeof parsed.contractDigest !== "string"
-    || !SHA256_PATTERN.test(parsed.contractDigest)
+    || !isSha256(parsed.contractDigest)
     || typeof parsed.authorizedAt !== "string"
     || !parsed.authorizedAt
     || !Number.isFinite(Date.parse(parsed.authorizedAt))

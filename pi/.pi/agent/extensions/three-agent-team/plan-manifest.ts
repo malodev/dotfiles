@@ -6,6 +6,7 @@
  */
 
 import { parse } from "yaml";
+import { isSha256 } from "./core.ts";
 
 const PROSE_COMMAND_HEADS = new Set([
   "check", "click", "confirm", "ensure", "inspect", "move", "observe",
@@ -220,7 +221,7 @@ function validateSourceRef(obj: Record<string, unknown>, context: string): void 
   }
 
   const sha256 = obj.sha256;
-  if (typeof sha256 !== "string" || !/^[a-f0-9]{64}$/.test(sha256)) {
+  if (typeof sha256 !== "string" || !isSha256(sha256)) {
     throw new Error(`${context}.sha256 must be a 64-character hex string`);
   }
 

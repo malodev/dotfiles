@@ -123,21 +123,32 @@ completion_policy:
 }
 
 /**
+ * The unauthorized-contract marker.
+ *
+ * Tolerates whitespace around the newline and at end of line because that is
+ * what the enrollment path (queue-repository) has always accepted — a brief
+ * that could be enrolled must remain authorizable and amendable. The `m` flag
+ * anchors `$` to end of line rather than end of string.
+ */
+export const AUTHORIZATION_PENDING = /## Execution authorization\s*\nPENDING\s*$/m;
+
+/** Counts PENDING markers using the same tolerant matching as AUTHORIZATION_PENDING. */
+export function countPendingMarkers(brief: string): number {
+  return (brief.match(new RegExp(AUTHORIZATION_PENDING.source, "gm")) ?? []).length;
+}
+
+/**
  * Build the authorized brief by replacing the PENDING marker with the authorization timestamp.
  */
 export function buildAuthorizedBrief(brief: string, approvedAt: string): string {
-  const marker = "## Execution authorization\nPENDING";
-  const replacement = `## Execution authorization\nAUTHORIZED at ${approvedAt} by owner command \`/team-enqueue\``;
-
-  const authorizedBrief = brief.replace(marker, replacement);
-
-  // Verify exactly one replacement occurred
-  const pendingCount = (brief.match(/## Execution authorization\nPENDING/g) || []).length;
+  const pendingCount = countPendingMarkers(brief);
   if (pendingCount !== 1) {
     throw new Error(`Expected exactly 1 PENDING marker, found ${pendingCount}`);
   }
-
-  return authorizedBrief;
+  return brief.replace(
+    AUTHORIZATION_PENDING,
+    `## Execution authorization\nAUTHORIZED at ${approvedAt} by owner command \`/team-enqueue\``,
+  );
 }
 
 /**

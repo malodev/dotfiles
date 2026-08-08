@@ -72,6 +72,29 @@ export function recoveryReviewCeiling(reviewCycle: number, maxReviewCycles: numb
 
 const TEAM_NEW_USAGE = "Usage: /team-new <task-id> -- <task request>";
 const TASK_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+const SHA1_PATTERN = /^[0-9a-f]{40}$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+/**
+ * Identity predicates. These are the extension's single definition of what a
+ * task ID and a Git/content digest look like — previously copied into six
+ * modules, where the SHA patterns had already begun to drift textually
+ * (`[0-9a-f]` vs `[a-f0-9]`). Predicates rather than exported regexes so
+ * callers cannot depend on regex internals.
+ */
+export function isTaskId(value: string): boolean { return TASK_ID_PATTERN.test(value); }
+export function isSha1(value: string): boolean { return SHA1_PATTERN.test(value); }
+export function isSha256(value: string): boolean { return SHA256_PATTERN.test(value); }
+
+/**
+ * A task file's repo-relative path — the form used for `status.yaml` field
+ * values, completion-evidence map keys, and owner-facing messages. Distinct
+ * from {@link taskPath}, which returns an absolute filesystem path.
+ */
+export function relativeTaskPath(taskId: string, name: string): string {
+  assertValidTaskId(taskId);
+  return `team/tasks/${taskId}/${name}`;
+}
 
 export function localTaskDatePrefix(date = new Date()): string {
   const year = String(date.getFullYear()).padStart(4, "0");

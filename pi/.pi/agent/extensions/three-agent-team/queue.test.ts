@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, symlink, chmod, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
-import { openDurableQueue, type EnqueueCommand } from "./queue.ts";
+import { barrier, openDurableQueue, type EnqueueCommand } from "./queue.ts";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -351,4 +351,77 @@ test("bulkEnqueue rejects stale revision for effective writes", async () => {
   });
   assert.equal(second.changed, true);
   assert.equal(second.snapshot.entries.length, 2);
+});
+
+test("barrier finds the earliest nonterminal entry and ignores terminal ones", async () => {
+  const { queue } = await fixture();
+  assert.equal(barrier(await queue.snapshot()), undefined, "an empty queue has no barrier");
+
+  await queue.command(enqueue("one"));
+  await queue.command(enqueue("two", A, ["one"]));
+  let snapshot = await queue.snapshot();
+  assert.equal(barrier(snapshot)?.taskId, "one", "the earliest QUEUED entry is the barrier when nothing is running");
+
+  let completionCommit = "";
+  await queue.withDispatcher(async (session) => {
+    const claimed = await session.claimNext();
+    assert.equal(claimed?.entry.taskId, "one");
+    await advanceToCommitting(session, "one", claimed!.attempt.attemptId);
+    completionCommit = B;
+    await session.complete("one", claimed!.attempt.attemptId, completionCommit);
+  });
+  snapshot = await queue.snapshot();
+  assert.equal(barrier(snapshot)?.taskId, "two", "a COMPLETED entry is skipped");
+
+  await queue.command({ type: "dequeue", taskId: "two" });
+  snapshot = await queue.snapshot();
+  assert.equal(barrier(snapshot), undefined, "COMPLETED and DEQUEUED entries leave no barrier");
+});
+
+test("reconcileComplete finishes an attempt claimed under a prior fencing token", async () => {
+  let milliseconds = Date.parse("2026-01-01T00:00:00.000Z");
+  const { queue } = await fixture(() => new Date(milliseconds), 100);
+  await queue.command(enqueue("one"));
+
+  let attemptId = "";
+  await queue.withDispatcher(async (oldSession) => {
+    const claimed = await oldSession.claimNext();
+    attemptId = claimed!.attempt.attemptId;
+    await advanceToCommitting(oldSession, "one", attemptId);
+    // Simulate a crash: the session ends without oldSession.complete() ever running.
+  });
+
+  milliseconds += 101; // expire the old lease so a new session gets a higher fence
+  await queue.withDispatcher(async (newSession) => {
+    // reconcileComplete must not require the attempt to match this session's
+    // own fencing token — it exists specifically to finish work claimed
+    // under a fence that no longer matches the current session's.
+    const reconciled = await newSession.reconcileComplete("one", attemptId, B);
+    const entry = reconciled.entries[0];
+    assert.equal(entry.state, "COMPLETED");
+    assert.equal(entry.completionCommit, B);
+    assert.match(entry.attempts[0].events.at(-1)!.detail ?? "", /reconciled under replacement fence/);
+  });
+  assert.equal((await queue.snapshot()).expectedHead, B);
+});
+
+test("complete and reconcileComplete report identical wording for a replay conflict and a non-COMMITTING precondition failure", async () => {
+  const { queue } = await fixture();
+  await queue.command(enqueue("one"));
+  await queue.withDispatcher(async (session) => {
+    const claimed = await session.claimNext();
+    const attemptId = claimed!.attempt.attemptId;
+    // Not yet advanced to COMMITTING — both entry points must fail identically.
+    await assert.rejects(session.complete("one", attemptId, B), /must be COMMITTING before completion/);
+    await assert.rejects(session.reconcileComplete("one", attemptId, B), /must be COMMITTING before completion/);
+
+    await advanceToCommitting(session, "one", attemptId);
+    await session.complete("one", attemptId, B);
+    // Exact replay of an already-completed attempt is idempotent...
+    await assert.doesNotReject(session.complete("one", attemptId, B));
+    await assert.doesNotReject(session.reconcileComplete("one", attemptId, B));
+    // ...but a conflicting commit for the same attempt fails with the same wording either way.
+    await assert.rejects(session.complete("one", attemptId, C), /Conflicting completion replay/);
+    await assert.rejects(session.reconcileComplete("one", attemptId, C), /Conflicting completion replay/);
+  });
 });

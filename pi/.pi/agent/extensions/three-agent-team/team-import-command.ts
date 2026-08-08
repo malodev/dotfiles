@@ -1,3 +1,4 @@
+import { isSha1, isSha256 } from "./core.ts";
 /**
  * Strict /team-import argument parser.
  *
@@ -50,7 +51,7 @@ export function parseTeamImportArgs(args: string): ImportCommandArgs {
     throw new ImportArgsError(`Expected '--approve' at position 2, got '${parts[1]}'`);
   }
 
-  if (!/^sha256:[a-f0-9]{64}$/.test(parts[2])) {
+  if (!parts[2].startsWith("sha256:") || !isSha256(parts[2].slice("sha256:".length))) {
     throw new ImportArgsError("Digest must be in format sha256:<64-lowercase-hex-chars>");
   }
 
@@ -58,7 +59,7 @@ export function parseTeamImportArgs(args: string): ImportCommandArgs {
     throw new ImportArgsError(`Expected '--head' at position 4, got '${parts[3]}'`);
   }
 
-  if (!/^[a-f0-9]{40}$/.test(parts[4])) {
+  if (!isSha1(parts[4])) {
     throw new ImportArgsError("--head must be a 40-character lowercase hex commit SHA");
   }
 

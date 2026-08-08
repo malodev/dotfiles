@@ -16,6 +16,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { isSha1, isSha256 } from "./core.ts";
 import {
   mkdir, readFile, writeFile, rename, unlink,
   readdir, realpath, open as fsOpen, stat,
@@ -234,8 +235,6 @@ export function createImportJournal(
 // Read with strict validation
 // ---------------------------------------------------------------------------
 
-const SHA256_RE = /^[a-f0-9]{64}$/;
-const SHA1_RE = /^[a-f0-9]{40}$/;
 
 export async function readImportJournal(path: string): Promise<ImportJournal> {
   await verifySecureStateObject(path, "file");
@@ -301,10 +300,10 @@ export async function readImportJournal(path: string): Promise<ImportJournal> {
   if (!j.manifestPath || typeof j.manifestPath !== "string") {
     throw new Error("Journal missing manifestPath");
   }
-  if (!j.manifestDigest || !SHA256_RE.test(j.manifestDigest)) {
+  if (!j.manifestDigest || !isSha256(j.manifestDigest)) {
     throw new Error("Journal missing or invalid manifestDigest");
   }
-  if (!j.approvedDigest || !SHA256_RE.test(j.approvedDigest)) {
+  if (!j.approvedDigest || !isSha256(j.approvedDigest)) {
     throw new Error("Journal missing or invalid approvedDigest");
   }
 
@@ -314,19 +313,19 @@ export async function readImportJournal(path: string): Promise<ImportJournal> {
   }
 
   // --- Git state ---
-  if (!j.initialHead || !SHA1_RE.test(j.initialHead)) {
+  if (!j.initialHead || !isSha1(j.initialHead)) {
     throw new Error("Journal missing or invalid initialHead");
   }
-  if (j.importCommitSha !== null && !SHA1_RE.test(j.importCommitSha)) {
+  if (j.importCommitSha !== null && !isSha1(j.importCommitSha)) {
     throw new Error("Journal invalid importCommitSha");
   }
-  if (j.importTreeSha !== null && !SHA1_RE.test(j.importTreeSha)) {
+  if (j.importTreeSha !== null && !isSha1(j.importTreeSha)) {
     throw new Error("Journal invalid importTreeSha");
   }
-  if (j.commitParent !== null && !SHA1_RE.test(j.commitParent)) {
+  if (j.commitParent !== null && !isSha1(j.commitParent)) {
     throw new Error("Journal invalid commitParent");
   }
-  if (j.completedCommitSha !== null && !SHA1_RE.test(j.completedCommitSha)) {
+  if (j.completedCommitSha !== null && !isSha1(j.completedCommitSha)) {
     throw new Error("Journal invalid completedCommitSha");
   }
 
@@ -373,10 +372,10 @@ export async function readImportJournal(path: string): Promise<ImportJournal> {
     if (!t.statusPath || typeof t.statusPath !== "string" || t.statusPath.includes("..") || isAbsolute(t.statusPath)) {
       throw new Error(`Journal task entry has invalid statusPath: ${t.taskId}`);
     }
-    if (!t.briefDigest || typeof t.briefDigest !== "string" || !SHA256_RE.test(t.briefDigest)) {
+    if (!t.briefDigest || typeof t.briefDigest !== "string" || !isSha256(t.briefDigest)) {
       throw new Error(`Journal task entry missing or invalid briefDigest: ${t.taskId}`);
     }
-    if (!t.contractDigest || typeof t.contractDigest !== "string" || !SHA256_RE.test(t.contractDigest)) {
+    if (!t.contractDigest || typeof t.contractDigest !== "string" || !isSha256(t.contractDigest)) {
       throw new Error(`Journal task entry missing or invalid contractDigest: ${t.taskId}`);
     }
     if (typeof t.briefSize !== "number" || t.briefSize < 0) {
@@ -408,13 +407,13 @@ export async function readImportJournal(path: string): Promise<ImportJournal> {
     if (typeof qi.sequence !== "number" || qi.sequence < 0) {
       throw new Error(`Journal queueIntent entry invalid sequence: ${qi.taskId}`);
     }
-    if (!SHA1_RE.test(qi.expectedHead)) {
+    if (!isSha1(qi.expectedHead)) {
       throw new Error(`Journal queueIntent entry invalid expectedHead: ${qi.taskId}`);
     }
-    if (!SHA256_RE.test(qi.approvedBriefDigest)) {
+    if (!isSha256(qi.approvedBriefDigest)) {
       throw new Error(`Journal queueIntent entry invalid approvedBriefDigest: ${qi.taskId}`);
     }
-    if (!SHA256_RE.test(qi.contractDigest)) {
+    if (!isSha256(qi.contractDigest)) {
       throw new Error(`Journal queueIntent entry invalid contractDigest: ${qi.taskId}`);
     }
   }
@@ -457,7 +456,7 @@ function validateQueuePreimage(
   if (typeof q.revision !== "number" || q.revision < 0 || !Number.isSafeInteger(q.revision)) {
     throw new Error(`Journal ${label}.revision is invalid`);
   }
-  if (q.expectedHead !== null && (typeof q.expectedHead !== "string" || !SHA1_RE.test(q.expectedHead))) {
+  if (q.expectedHead !== null && (typeof q.expectedHead !== "string" || !isSha1(q.expectedHead))) {
     throw new Error(`Journal ${label}.expectedHead is invalid`);
   }
   if (typeof q.paused !== "boolean") {

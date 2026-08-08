@@ -5,7 +5,9 @@ import { lstat, open, readFile, readdir, realpath, rename, unlink } from "node:f
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertAuthorizationRecordAbsent, createAuthorizationRecord, readAuthorizationRecord, writeAuthorizationRecord } from "./authorization.ts";
-import { parseStatus, setYamlScalar, taskPath, upsertYamlScalar, type TaskStatus } from "./core.ts";
+import { git, gitText } from "./git.ts";
+import { AUTHORIZATION_PENDING } from "./goal-contract.ts";
+import { isSha1, isSha256, parseStatus, relativeTaskPath, setYamlScalar, taskPath, upsertYamlScalar, type TaskStatus } from "./core.ts";
 import {
   acquireAdvisoryLock,
   assertSideEffectCapability,
@@ -15,8 +17,6 @@ import {
 } from "./durable-state.ts";
 import type { DispatcherSession, EnqueueCommand, QueueEntry } from "./queue.ts";
 
-const SHA1 = /^[0-9a-f]{40}$/;
-const AUTHORIZATION_PENDING = /## Execution authorization\s*\nPENDING\s*$/m;
 
 /** Fail-closed diagnostic used only when a dispatcher has no executor adapter. */
 export const QUEUED_EXECUTION_BLOCKER =
@@ -26,45 +26,7 @@ const DEFAULT_VALIDATOR = resolve(
   "../../skills/init-three-agent-team/assets/validate_goal_contract.py",
 );
 
-interface GitOptions { code?: never; input?: Buffer; env?: NodeJS.ProcessEnv; timeoutMs?: number; }
-interface GitResult { code: number; stdout: Buffer; stderr: Buffer }
-function git(repo: string, args: string[], options: GitOptions = {}): Promise<GitResult> {
-  return new Promise((resolveResult, reject) => {
-    let timer: NodeJS.Timeout | undefined;
-    const child = spawn("git", ["-C", repo, ...args], {
-      stdio: [options.input ? "pipe" : "ignore", "pipe", "pipe"],
-      env: options.env ?? process.env,
-    });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    child.stdout!.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr!.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.once("error", (error) => {
-      if (timer) clearTimeout(timer);
-      reject(error);
-    });
-    child.once("close", (code) => {
-      if (timer) clearTimeout(timer);
-      resolveResult({ code: code ?? 1, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
-    });
-    if (options.input) child.stdin!.end(options.input);
-    if (options.timeoutMs) {
-      timer = setTimeout(() => {
-        child.kill("SIGKILL");
-        resolveResult({ code: 124, stdout: Buffer.concat(stdout), stderr: Buffer.from("git command timed out") });
-      }, options.timeoutMs);
-    }
-  });
-}
-async function gitText(repo: string, args: string[], label: string, options: GitOptions = {}): Promise<string> {
-  const result = await git(repo, args, options);
-  if (result.code !== 0) throw new Error(`${label}: ${result.stderr.toString("utf8").trim() || "git failed"}`);
-  return result.stdout.toString("utf8").trim();
-}
 function digest(bytes: Buffer | string): string { return createHash("sha256").update(bytes).digest("hex"); }
-function relativeTaskPath(repo: string, taskId: string, name: string): string {
-  return `team/tasks/${taskId}/${name}`;
-}
 
 async function assertNoGitOperation(repo: string): Promise<void> {
   const markers = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "rebase-merge", "rebase-apply", "sequencer"];
@@ -82,7 +44,7 @@ async function assertNoGitOperation(repo: string): Promise<void> {
 export async function assertStrictCleanRepository(repo: string): Promise<string> {
   const canonical = await realpath(repo);
   const head = await gitText(canonical, ["rev-parse", "--verify", "HEAD^{commit}"], "Repository has no valid HEAD");
-  if (!SHA1.test(head)) throw new Error("Only SHA-1 Git repositories are supported by queued dispatch");
+  if (!isSha1(head)) throw new Error("Only SHA-1 Git repositories are supported by queued dispatch");
   await assertNoGitOperation(canonical);
   const status = await git(canonical, ["status", "--porcelain=v2", "--untracked-files=all", "-z"]);
   if (status.code !== 0) throw new Error(`Cannot inspect complete repository status: ${status.stderr.toString("utf8")}`);
@@ -109,7 +71,7 @@ async function assertRegularTaskFiles(repo: string, taskId: string): Promise<voi
     return names;
   };
   const files = await walk(root);
-  if (!files.includes(relativeTaskPath(repo, taskId, "brief.md")) || !files.includes(relativeTaskPath(repo, taskId, "status.yaml"))) {
+  if (!files.includes(relativeTaskPath(taskId, "brief.md")) || !files.includes(relativeTaskPath(taskId, "status.yaml"))) {
     throw new Error("Queued task requires regular brief.md and status.yaml files");
   }
   for (const path of files) {
@@ -358,7 +320,7 @@ export async function authorizeQueuedEntry(
   const statusNow = await git(repo, ["status", "--porcelain=v2", "--untracked-files=all", "-z"]);
   // Exactly brief.md and status.yaml are expected to differ from the clean parent.
   const changed = statusNow.stdout.toString("utf8").split("\0").filter(Boolean);
-  if (statusNow.code !== 0 || changed.length !== 2 || changed.some((line) => !line.endsWith(relativeTaskPath(repo, entry.taskId, "brief.md")) && !line.endsWith(relativeTaskPath(repo, entry.taskId, "status.yaml")))) {
+  if (statusNow.code !== 0 || changed.length !== 2 || changed.some((line) => !line.endsWith(relativeTaskPath(entry.taskId, "brief.md")) && !line.endsWith(relativeTaskPath(entry.taskId, "status.yaml")))) {
     throw new Error("Repository contamination detected during queued authorization");
   }
   assertSideEffectCapability(capability);
@@ -375,7 +337,7 @@ export async function authorizeQueuedEntry(
   }
   const statusAfterValidation = await git(repo, ["status", "--porcelain=v2", "--untracked-files=all", "-z"]);
   const changedAfterValidation = statusAfterValidation.stdout.toString("utf8").split("\0").filter(Boolean);
-  if (statusAfterValidation.code !== 0 || changedAfterValidation.length !== 2 || changedAfterValidation.some((line) => !line.endsWith(relativeTaskPath(repo, entry.taskId, "brief.md")) && !line.endsWith(relativeTaskPath(repo, entry.taskId, "status.yaml")))) {
+  if (statusAfterValidation.code !== 0 || changedAfterValidation.length !== 2 || changedAfterValidation.some((line) => !line.endsWith(relativeTaskPath(entry.taskId, "brief.md")) && !line.endsWith(relativeTaskPath(entry.taskId, "status.yaml")))) {
     throw new Error("Repository contamination detected after queued authorization validation");
   }
   assertSideEffectCapability(capability);
@@ -510,7 +472,7 @@ export async function completeExactCommit(
   if (head !== expectedParent) throw new Error(`Completion parent drift: expected ${expectedParent}, current ${head}`);
   if (await realIndexDigest(repo) !== reviewedTree.indexDigest) throw new Error("Repository index changed after Reviewer approval");
   for (const [path, expectedDigest] of Object.entries(expectedEvidence)) {
-    if (!isCompletionEvidence(taskId, path) || !/^[0-9a-f]{64}$/.test(expectedDigest)) throw new Error(`Invalid expected completion evidence: ${path}`);
+    if (!isCompletionEvidence(taskId, path) || !isSha256(expectedDigest)) throw new Error(`Invalid expected completion evidence: ${path}`);
   }
   const finalTree = await materializeWorktreeTree(repo, reviewedTree.treeSha, capability);
   const changed = await git(repo, ["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", reviewedTree.treeSha, finalTree]);
@@ -541,8 +503,8 @@ function parseExactCommitJournal(detail: string | null): ExactCommit {
   if (!requiredKeys.every((k) => keys.includes(k))) throw new Error("COMMITTING journal is missing required fields");
   const extraKeys = keys.filter((k) => !requiredKeys.includes(k) && k !== "indexDigest");
   if (extraKeys.length > 0) throw new Error(`COMMITTING journal has unrecognized fields: ${extraKeys.join(", ")}`);
-  if (typeof record.commit !== "string" || !SHA1.test(record.commit) || typeof record.parent !== "string" || !SHA1.test(record.parent)
-      || typeof record.tree !== "string" || !SHA1.test(record.tree) || typeof record.subject !== "string" || !record.subject) {
+  if (typeof record.commit !== "string" || !isSha1(record.commit) || typeof record.parent !== "string" || !isSha1(record.parent)
+      || typeof record.tree !== "string" || !isSha1(record.tree) || typeof record.subject !== "string" || !record.subject) {
     throw new Error("COMMITTING journal values are invalid");
   }
   const indexDigest: string = (typeof record.indexDigest === "string" && record.indexDigest) ? record.indexDigest : "";

@@ -1,16 +1,16 @@
 import type { TeamQueueTiming } from "./config.ts";
 import type { SideEffectCapability } from "./durable-state.ts";
-import { openDurableQueue, type DispatcherLease, type DurableQueue, type QueueEntry, type QueueSnapshot } from "./queue.ts";
+import { barrier as queueBarrier, openDurableQueue, type DispatcherLease, type DurableQueue, type QueueEntry, type QueueSnapshot } from "./queue.ts";
 import {
   acquireRepositoryExecutionLock,
   authorizeQueuedEntry,
   blockQueuedRepositoryTask,
   QUEUED_EXECUTION_BLOCKER,
-  reconcileJournaledExactCommit,
   revalidateAuthorizedQueueEntry,
   revalidateQueuedHead,
   type RepositoryExecutionLock,
 } from "./queue-repository.ts";
+import { resumeSealedCompletion } from "./completion-seal.ts";
 
 export interface DispatchResult {
   kind: "idle" | "paused" | "blocked" | "completed";
@@ -42,10 +42,6 @@ export interface QueueDispatcherOptions {
   executor?: (execution: QueuedExecutionContext) => Promise<void>;
   /** Called after the repository lock is acquired, before dispatch proceeds. */
   onLockAcquired?: () => Promise<void>;
-}
-
-function firstBarrier(snapshot: QueueSnapshot): QueueEntry | undefined {
-  return snapshot.entries.find((entry) => entry.state !== "COMPLETED" && entry.state !== "DEQUEUED");
 }
 
 function processGroupIsLive(pgid: number): boolean {
@@ -164,7 +160,7 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
       heartbeatTimer.unref();
 
       if (snapshot.paused) return { kind: "paused", snapshot };
-      const barrier = firstBarrier(snapshot);
+      const barrier = queueBarrier(snapshot);
       if (!barrier) return { kind: "idle", snapshot };
 
       executionLock.signal.addEventListener("abort", () => abort(executionLock!.signal.reason), { once: true });
@@ -179,7 +175,7 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
       armDeadlineFromLease(snapshot.dispatcherLease);
       assertRepositoryCapability();
 
-      const currentBarrier = firstBarrier(snapshot);
+      const currentBarrier = queueBarrier(snapshot);
       if (!currentBarrier || currentBarrier.taskId !== barrier.taskId || currentBarrier.state !== barrier.state) {
         throw new Error("Queue head changed while waiting for the repository execution lock");
       }
@@ -192,8 +188,9 @@ export async function dispatchQueueOnce(repo: string, options: QueueDispatcherOp
         const event = attempt.events.at(-1)!;
         if (event.phase === "COMMITTING") {
           await assertAttemptProcessesQuiescent(barrier);
-          const exact = await reconcileJournaledExactCommit(repo, event.detail, snapshot.expectedHead!, capability);
-          snapshot = await session.reconcileComplete(barrier.taskId, attempt.attemptId, exact.commitSha);
+          await resumeSealedCompletion(repo, event.detail, snapshot.expectedHead!, capability, async (commitSha) => {
+            snapshot = await session.reconcileComplete(barrier.taskId, attempt.attemptId, commitSha);
+          });
           return { kind: "completed", taskId: barrier.taskId, snapshot };
         }
         const reason = `Crash reconciliation blocked stale RUNNING attempt ${attempt.attemptId} at ${event.phase}; no uncertain role work was replayed`;

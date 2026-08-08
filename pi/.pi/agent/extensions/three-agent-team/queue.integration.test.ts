@@ -30,6 +30,13 @@ import {
   revalidateQueuedHead,
   withRepositoryExecutionLock,
 } from "./queue-repository.ts";
+import {
+  freezeCompletionWindow,
+  sealCompletion,
+  serializeCommittingDetail,
+  verifiedJournalDetail,
+  writeCompletionEvidence,
+} from "./completion-seal.ts";
 import { parseStatus } from "./core.ts";
 
 const WORKER = fileURLToPath(new URL("./test/queue-worker.ts", import.meta.url));
@@ -457,7 +464,7 @@ test("discard and arbitrary tool mutations serialize on the repository execution
 });
 
 test("production executor journals exact phases and installs only the reviewed tree plus named evidence", async () => {
-  const { repo, state, task, validator } = await gitRepository();
+  const { repo, state, validator } = await gitRepository();
   const { queue, head } = await enrollSample(repo, state, validator);
   const result = await dispatchQueueOnce(repo, {
     queue,
@@ -467,13 +474,22 @@ test("production executor journals exact phases and installs only the reviewed t
     executor: async (execution) => {
       assert.equal(execution.expectedParent, head);
       await writeFile(resolve(repo, "implementation.txt"), "reviewed implementation\n");
-      const reviewedTree = await freezeReviewedTree(repo, execution.expectedParent, execution.capability);
-      await execution.markVerified(JSON.stringify({ reviewedTree }));
-      await atomicRepositoryWrite(resolve(task, "completion-report.md"), "verified evidence\n", execution.capability);
-      const exact = await completeExactCommit(repo, execution.taskId, execution.expectedParent, reviewedTree, await expectedEvidence(repo, execution.taskId), execution.capability);
-      await execution.markCommitting(JSON.stringify(exact));
-      await installExactCommit(repo, exact, execution.capability);
-      await execution.complete(exact.commitSha);
+      const reviewedTree = await freezeCompletionWindow(
+        repo, execution.expectedParent, execution.capability, { pushOnSuccess: false, deployOnSuccess: false },
+      );
+      await execution.markVerified(verifiedJournalDetail(reviewedTree));
+      const evidenceDigests = await writeCompletionEvidence(repo, [
+        { path: `team/tasks/${execution.taskId}/completion-report.md`, bytes: "verified evidence\n" },
+      ], execution.capability);
+      await sealCompletion({
+        repo,
+        taskId: execution.taskId,
+        expectedParent: execution.expectedParent,
+        reviewedTree,
+        capability: execution.capability,
+        expectedEvidence: evidenceDigests,
+        journal: execution,
+      });
     },
   });
   assert.equal(result.kind, "completed");
@@ -488,7 +504,7 @@ test("production executor journals exact phases and installs only the reviewed t
 });
 
 test("stale COMMITTING journal accepts an exact completion parent descended from queue authorization", async () => {
-  const { repo, state, task, validator } = await gitRepository();
+  const { repo, state, validator } = await gitRepository();
   const { queue } = await enrollSample(repo, state, validator);
   let completion = "";
   await queue.withDispatcher(async (session) => {
@@ -503,14 +519,17 @@ test("stale COMMITTING journal accepts an exact completion parent descended from
       await run(repo, "git", "commit", "-qm", "builder forward commit");
       const forwardParent = await run(repo, "git", "rev-parse", "HEAD");
       assert.notEqual(forwardParent, claimed!.entry.authorizationHead);
-      const reviewedTree = await freezeReviewedTree(repo, forwardParent, lock);
-      await session.advance("sample", claimed!.attempt.attemptId, "VERIFIED", JSON.stringify({ reviewedTree }));
-      await atomicRepositoryWrite(resolve(task, "completion-report.md"), "journaled evidence\n", lock);
-      const exact = await completeExactCommit(repo, "sample", forwardParent, reviewedTree, await expectedEvidence(repo, "sample"), lock);
+      const reviewedTree = await freezeCompletionWindow(repo, forwardParent, lock, { pushOnSuccess: false, deployOnSuccess: false });
+      await session.advance("sample", claimed!.attempt.attemptId, "VERIFIED", verifiedJournalDetail(reviewedTree));
+      const evidenceDigests = await writeCompletionEvidence(repo, [
+        { path: "team/tasks/sample/completion-report.md", bytes: "journaled evidence\n" },
+      ], lock);
+      const exact = await completeExactCommit(repo, "sample", forwardParent, reviewedTree, evidenceDigests, lock);
       completion = exact.commitSha;
-      await session.advance("sample", claimed!.attempt.attemptId, "COMMITTING", JSON.stringify({
-        tree: exact.treeSha, parent: exact.parent, subject: exact.subject, commit: exact.commitSha,
-      }));
+      // Journal COMMITTING but stop short of installing the queue's COMPLETED
+      // event, simulating a crash between commit-tree and the queue write —
+      // this is what dispatchQueueOnce's resumeSealedCompletion must recover.
+      await session.advance("sample", claimed!.attempt.attemptId, "COMMITTING", serializeCommittingDetail(exact));
       await installExactCommit(repo, exact, lock);
       // Simulated crash: HEAD is installed but queue COMPLETED is not written.
     } finally {
@@ -663,7 +682,7 @@ test("reconcileJournaledExactCommit with divergent intent-to-add index rejects",
 });
 
 test("matching owner recovery appends a fenced attempt and resumes exact authorized execution", async () => {
-  const { repo, state, task, validator } = await gitRepository();
+  const { repo, state, validator } = await gitRepository();
   const { queue } = await enrollSample(repo, state, validator);
   await dispatchQueueOnce(repo, { queue, stateRoot: state, validatorPath: validator, timing: dispatchTiming });
   const blocked = await queue.snapshot();
@@ -683,13 +702,22 @@ test("matching owner recovery appends a fenced attempt and resumes exact authori
     timing: dispatchTiming,
     executor: async (execution) => {
       await writeFile(resolve(repo, "implementation.txt"), "recovered implementation\n");
-      const reviewedTree = await freezeReviewedTree(repo, execution.expectedParent, execution.capability);
-      await execution.markVerified(JSON.stringify({ reviewedTree }));
-      await atomicRepositoryWrite(resolve(task, "completion-report.md"), "recovered evidence\n", execution.capability);
-      const exact = await completeExactCommit(repo, execution.taskId, execution.expectedParent, reviewedTree, await expectedEvidence(repo, execution.taskId), execution.capability);
-      await execution.markCommitting(JSON.stringify(exact));
-      await installExactCommit(repo, exact, execution.capability);
-      await execution.complete(exact.commitSha);
+      const reviewedTree = await freezeCompletionWindow(
+        repo, execution.expectedParent, execution.capability, { pushOnSuccess: false, deployOnSuccess: false },
+      );
+      await execution.markVerified(verifiedJournalDetail(reviewedTree));
+      const evidenceDigests = await writeCompletionEvidence(repo, [
+        { path: `team/tasks/${execution.taskId}/completion-report.md`, bytes: "recovered evidence\n" },
+      ], execution.capability);
+      await sealCompletion({
+        repo,
+        taskId: execution.taskId,
+        expectedParent: execution.expectedParent,
+        reviewedTree,
+        capability: execution.capability,
+        expectedEvidence: evidenceDigests,
+        journal: execution,
+      });
     },
   });
   assert.equal(result.kind, "completed");
@@ -703,7 +731,7 @@ test("matching owner recovery appends a fenced attempt and resumes exact authori
 });
 
 test("/team-continue auto-recovers an unapproved BLOCKED entry", async () => {
-  const { repo, state, task, validator } = await gitRepository();
+  const { repo, state, validator } = await gitRepository();
   const { queue } = await enrollSample(repo, state, validator);
   // Dispatch once to get the task into BLOCKED state (no executor → blocks)
   const first = await dispatchQueueOnce(repo, { queue, stateRoot: state, validatorPath: validator, timing: dispatchTiming });
@@ -718,13 +746,22 @@ test("/team-continue auto-recovers an unapproved BLOCKED entry", async () => {
     timing: dispatchTiming,
     executor: async (execution) => {
       await writeFile(resolve(repo, "implementation.txt"), "auto-recovered\n");
-      const reviewedTree = await freezeReviewedTree(repo, execution.expectedParent, execution.capability);
-      await execution.markVerified(JSON.stringify({ reviewedTree }));
-      await atomicRepositoryWrite(resolve(task, "completion-report.md"), "auto-recovered evidence\n", execution.capability);
-      const exact = await completeExactCommit(repo, execution.taskId, execution.expectedParent, reviewedTree, await expectedEvidence(repo, execution.taskId), execution.capability);
-      await execution.markCommitting(JSON.stringify({ tree: exact.treeSha, parent: exact.parent, subject: exact.subject, commit: exact.commitSha, indexDigest: exact.indexDigest }));
-      await installExactCommit(repo, exact, execution.capability);
-      await execution.complete(exact.commitSha);
+      const reviewedTree = await freezeCompletionWindow(
+        repo, execution.expectedParent, execution.capability, { pushOnSuccess: false, deployOnSuccess: false },
+      );
+      await execution.markVerified(verifiedJournalDetail(reviewedTree));
+      const evidenceDigests = await writeCompletionEvidence(repo, [
+        { path: `team/tasks/${execution.taskId}/completion-report.md`, bytes: "auto-recovered evidence\n" },
+      ], execution.capability);
+      await sealCompletion({
+        repo,
+        taskId: execution.taskId,
+        expectedParent: execution.expectedParent,
+        reviewedTree,
+        capability: execution.capability,
+        expectedEvidence: evidenceDigests,
+        journal: execution,
+      });
     },
   });
   assert.equal(result.kind, "completed");

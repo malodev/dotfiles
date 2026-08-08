@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, unlink, realpath } from "node:fs/promises";
 import { resolve, relative, dirname, isAbsolute, normalize } from "node:path";
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { git, gitText, gitTextOrEmpty } from "./git.ts";
 import {
   parsePlanManifest,
   type PlanManifest,
@@ -54,25 +54,21 @@ import { type SideEffectCapability } from "./durable-state.ts";
 import { materializeArtifacts, type ArtifactFile } from "./plan-import-artifacts.ts";
 import { maybeCrashProbe } from "./plan-import-crash-probe.ts";
 
-const execFileAsync = promisify(execFile);
-
 // ---------------------------------------------------------------------------
 // Git helpers
 // ---------------------------------------------------------------------------
-async function git(repo: string, args: string[], env?: Record<string, string>): Promise<{ stdout: string; stderr: string }> {
-  try {
-    const r = await execFileAsync("git", ["-C", repo, ...args], { env: { ...process.env, ...env } });
-    return { stdout: r.stdout, stderr: r.stderr };
-  } catch (e: any) { throw new Error(`git ${args.join(" ")} failed: ${e.stderr || e.message}`); }
-}
+/**
+ * Runs git through the shared adapter, preserving this module's historic
+ * error shape (`git <subcommand> failed`) and its two call styles:
+ * `gt(repo, args)` throws on failure, `gt(repo, args, { noThrow: true })`
+ * yields "" instead. An env argument sets GIT_INDEX_FILE for private-index
+ * tree builds.
+ */
 async function gt(repo: string, args: string[], opts?: Record<string, string> | { noThrow?: boolean }): Promise<string> {
-  const env = opts && "noThrow" in opts ? undefined : opts as Record<string, string> | undefined;
-  try {
-    return (await git(repo, args, env)).stdout.trim();
-  } catch {
-    if (opts && typeof opts === "object" && "noThrow" in opts && opts.noThrow) return "";
-    throw new Error(`git ${args[0]} failed`);
+  if (opts && "noThrow" in opts) {
+    return opts.noThrow ? gitTextOrEmpty(repo, args) : gitText(repo, args, `git ${args[0]} failed`);
   }
+  return gitText(repo, args, `git ${args[0]} failed`, opts ? { env: opts as NodeJS.ProcessEnv } : {});
 }
 
 function arraysEqual(a: string[], b: string[]): boolean {
@@ -127,7 +123,9 @@ async function verifySources(repo: string, manifest: PlanManifest, head: string)
     if (!mode) throw new Error(`Source '${src.path}' not in git tree`);
     if (!mode.startsWith("100644 ") && !mode.startsWith("100755 ")) throw new Error(`Source '${src.path}' not a regular file`);
     const { createHash: ch } = await import("node:crypto");
-    const { stdout } = await execFileAsync("git", ["-C", repo, "cat-file", "blob", `${head}:${n}`], { encoding: "buffer" });
+    const blob = await git(repo, ["cat-file", "blob", `${head}:${n}`]);
+    if (blob.code !== 0) throw new Error(`Source '${src.path}' could not be read from git: ${blob.stderr.toString("utf8").trim()}`);
+    const stdout = blob.stdout;
     const d = ch("sha256").update(stdout).digest("hex");
     if (d !== src.sha256) throw new Error(`Source '${src.path}' digest mismatch`);
     results.set(n, { path: n, content: stdout, mode, sha256: d });
@@ -287,12 +285,12 @@ async function fresh(options: PlanImportOptions, capability: SideEffectCapabilit
     const valRoot = await mkdtV(joinV(tmpV(), "pi-import-validate-"));
     try {
       // Init git repo with AGENTS.md and initial commit
-      await git(valRoot, ["init", "-q"]);
-      await git(valRoot, ["config", "user.email", "test@test"]);
-      await git(valRoot, ["config", "user.name", "Test"]);
+      await gt(valRoot, ["init", "-q"]);
+      await gt(valRoot, ["config", "user.email", "test@test"]);
+      await gt(valRoot, ["config", "user.name", "Test"]);
       await wfV(resolve(valRoot, "AGENTS.md"), "# Agents\n\nUse strict commands.\n");
-      await git(valRoot, ["add", "AGENTS.md"]);
-      await git(valRoot, ["commit", "-qm", "initial"]);
+      await gt(valRoot, ["add", "AGENTS.md"]);
+      await gt(valRoot, ["commit", "-qm", "initial"]);
       const valBaseline = await gt(valRoot, ["rev-parse", "HEAD"]);
 
       // Copy validator from the extension's shipped assets
@@ -310,7 +308,7 @@ async function fresh(options: PlanImportOptions, capability: SideEffectCapabilit
       const statusWithTempBaseline = r.c.status.replaceAll(h, valBaseline);
       await wfV(resolve(taskDirV, "brief.md"), briefWithTempBaseline, { mode: 0o400 });
       await wfV(resolve(taskDirV, "status.yaml"), statusWithTempBaseline, { mode: 0o400 });
-      await git(valRoot, ["add", "-N", "team"]);
+      await gt(valRoot, ["add", "-N", "team"]);
 
       await new Promise<void>((resP, rejP) => {
         const child = execFile("python3", [resolve(valRoot, "team", "validate_goal_contract.py"), taskDirV, "--phase", "pre-go"], {
@@ -434,13 +432,13 @@ async function buildCommit(repo: string, j: ImportJournal, parent: string, capab
 
   const tip = resolve(repo, ".git", `import-index-${randomUUID()}`);
   try {
-    await git(repo, ["read-tree", "--index-output=" + tip, "HEAD"]);
+    await gt(repo, ["read-tree", "--index-output=" + tip, "HEAD"]);
     const pf = resolve(repo, ".git", `import-pathspec-${randomUUID()}`);
     const paths = j.tasks.flatMap(t => [t.briefPath, t.statusPath]);
     await import("node:fs/promises").then(m => m.writeFile(pf, paths.join("\0") + "\0"));
     try {
       const env = { GIT_INDEX_FILE: tip };
-      await git(repo, ["add", "--pathspec-from-file=" + pf, "--pathspec-file-nul"], env);
+      await gt(repo, ["add", "--pathspec-from-file=" + pf, "--pathspec-file-nul"], env);
       const tree = await gt(repo, ["write-tree"], env);
       const subj = j.commitSubject;
       const cmt = await gt(repo, ["commit-tree", tree, "-p", parent, "-m", subj]);
@@ -453,7 +451,7 @@ async function buildCommit(repo: string, j: ImportJournal, parent: string, capab
       maybeCrashProbe("AFTER_TREE_INSTALLED");
       capability.assertHeld(); lock.assertHeld();
 
-      await git(repo, ["update-ref", "HEAD", cmt, parent]);
+      await gt(repo, ["update-ref", "HEAD", cmt, parent]);
       await gt(repo, ["read-tree", "--reset", cmt]);
       maybeCrashProbe("AFTER_REF_CAS_BEFORE_GIT_INSTALLED");
       if (await assertStrictCleanRepository(repo) !== cmt) throw new Error("Post-commit HEAD mismatch");
