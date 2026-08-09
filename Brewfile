@@ -37,7 +37,7 @@ brew "wget"
 
 # Dev tools
 brew "git"
-brew "git-credential-libsecret"
+brew "git-credential-libsecret" if OS.linux?
 brew "gh"
 brew "git-delta"
 brew "git-lfs"

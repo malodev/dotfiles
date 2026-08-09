@@ -10,6 +10,9 @@ zed/.config/zed/conversations
 zed/.config/zed/embeddings
 zed/.config/zed/prompts
 .DS_Store
+nvim-malo/.harper/
+*.zcompdump*
+sketchybar-omerxx/.config/sketchybar/helper/helper
 .env
 sketchybar/.config/sketchybar-ai-old
 sketchybar/.config/sketchybar-old
