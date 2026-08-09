@@ -156,6 +156,18 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
 
     for mode, model_url, model_id in args.modes:
         print(f"\n--- Verifying mode={mode}, model={model_id} ---")
+    for mode, model_url, model_id in args.modes:
+        print(f"\n--- Verifying mode={mode}, model={model_id} ---")
+
+        # Switch the host to the target mode before acquiring the lease.
+        # pi-inference acquire --mode X requires the host to already be in mode X.
+        run([str(client), mode])
+        switch_status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
+        actual_mode = switch_status.get("mode", "unknown")
+        if actual_mode != mode:
+            raise SetupError(f"Host mode switch failed: expected {mode}, got {actual_mode}")
+        print(f"  Host mode: {actual_mode}")
+
         lease_id = uuid.uuid4().hex
         acquired = False
         release_status: Optional[int] = None
@@ -212,8 +224,10 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
         if not extension.is_file():
             raise SetupError(f"Three-agent extension is missing: {extension}")
         pi_env = {**os.environ, "PATH": str(pi.parent) + os.pathsep + os.environ.get("PATH", "")}
-        for provider, model_id in [("pi-llama", args.model), ("ds4", args.ds4_model)]:
+        for provider, mode, model_id in [("pi-llama", "team", args.model), ("ds4", "ds4", args.ds4_model)]:
             print(f"\n--- Verifying Pi with provider={provider}, model={model_id} ---")
+            run([str(client), mode])
+            print(f"  Host mode: {mode}")
             result = run(
                 [
                     str(pi),
@@ -244,7 +258,11 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
     final_status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
     if final_status.get("lease") is not None:
         raise SetupError("Verification left an inference lease active")
-    print(f"\nManager mode={final_status.get('mode')}, services={final_status.get('services')}")
+
+    # Always restore team mode as the default
+    run([str(client), "team"])
+    final_mode = json.loads(run([str(client), "--json", "status"], capture=True).stdout).get("mode", "unknown")
+    print(f"\nRestored mode={final_mode}, services={final_status.get('services')}")
     print("REMOTE_INFERENCE_CLIENT_VERIFIED")
 
 

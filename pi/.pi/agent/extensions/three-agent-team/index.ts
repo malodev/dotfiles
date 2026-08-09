@@ -274,10 +274,15 @@ function roleFailure(result: RoleResult): string | undefined {
   return undefined;
 }
 
-async function enterTeamMode(repo: string, config: TeamConfig, signal?: AbortSignal): Promise<void> {
-  const result = await shell(config.lifecycle.enterTeamCommand, repo, signal, 210_000);
+async function enterTeamMode(repo: string, config: TeamConfig, signal?: AbortSignal, provider?: string): Promise<void> {
+  const mode = provider ? providerAcquireMode(config, provider) : undefined;
+  // For ds4, run "pi-inference ds4" instead of "pi-inference team" to switch the host
+  const command = mode === "ds4"
+    ? config.lifecycle.enterTeamCommand.replace(/\bteam\b/, "ds4")
+    : config.lifecycle.enterTeamCommand;
+  const result = await shell(command, repo, signal, 210_000);
   if (result.code !== 0) {
-    throw new Error(`Could not enter team inference mode: ${result.stderr || result.stdout}`);
+    throw new Error(`Could not enter ${mode ?? "team"} inference mode: ${result.stderr || result.stdout}`);
   }
 }
 
@@ -321,7 +326,7 @@ function providerAcquireMode(config: TeamConfig, provider: string): string | und
 async function acquireInferenceLease(run: ActiveRun, repo: string, config: TeamConfig, provider?: string): Promise<void> {
   const { acquireTeamCommand, renewTeamCommand, releaseTeamCommand } = config.lifecycle;
   if (!acquireTeamCommand || !renewTeamCommand || !releaseTeamCommand) {
-    await enterTeamMode(repo, config, run.abortController.signal);
+    await enterTeamMode(repo, config, run.abortController.signal, provider);
     run.legacyInferenceReady = true;
     return;
   }
@@ -1239,7 +1244,7 @@ export async function finalizeRecovery(
     await assertImmediateQueueAvailable(recovery.repo, "Owner-approved immediate recovery");
     const effective = resolveEffectiveConfig(configuredTeam, await readProjectOverrides(recovery.repo));
     const taskConfig = await loadOrCreateTaskConfig(taskDir, effective);
-    await enterTeamMode(recovery.repo, taskConfig);
+    await enterTeamMode(recovery.repo, taskConfig, undefined, taskConfig.roles.architect.provider);
     const snapshot = await ensureAuthorizationSnapshot(recovery.repo, taskDir, true, recoveryRun.repositoryExecutionLock!);
     if (snapshot.migrated) {
       ctx.ui.notify(`Legacy authorization migrated after owner-finalized recovery: HEAD ${snapshot.authorizationHead}, contract SHA-256 ${snapshot.contractDigest}.`, "warning");
@@ -1342,7 +1347,7 @@ export default async function threeAgentTeamExtension(pi: ExtensionAPI) {
 
   async function selectArchitect(repo: string, ctx: ExtensionCommandContext): Promise<void> {
     const effective = await effectiveTeamConfig(repo);
-    await enterTeamMode(repo, effective);
+    await enterTeamMode(repo, effective, undefined, effective.roles.architect.provider);
     const profile = effective.roles.architect;
     const model = ctx.modelRegistry.find(profile.provider, profile.model);
     if (!model) throw new Error(`Configured Architect model is unavailable: ${roleModel(configuredTeam, "architect")}`);
