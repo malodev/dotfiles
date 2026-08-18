@@ -22,6 +22,7 @@ node_modules
 *_local
 *.local.json
 *_local.conf
+*_local.lua
 git/.local/bin/
 package-lock.json
 /pi/.pi/.task-forge

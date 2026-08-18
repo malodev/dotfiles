@@ -1,0 +1,3 @@
+-- Variety and nm-applet are already started by XDG autostart entries:
+-- ~/.config/autostart/variety.desktop and /etc/xdg/autostart/nm-applet.desktop.
+-- Do not duplicate them here.
