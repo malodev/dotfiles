@@ -261,9 +261,12 @@ elif [ "$DE" == "fluxbox" ]; then
     echo '$''full ''$'"full|$WP||:0.0" >~/.fluxbox/lastwallpaper
 
 elif [ "$DE" == "sway" ] || [ "$DE" == "hyprland" ]; then
-    # Wayland compositors: use swaybg when available.
-    # Grey background flicker is prevented by killing old swaybg process after new one.
-    if command -v "swaybg" >/dev/null 2>&1; then
+    # Omarchy 4 renders its background through Quickshell instead of swaybg.
+    if [ "$DE" == "hyprland" ] && command -v omarchy >/dev/null 2>&1; then
+        omarchy theme bg set "$WP"
+    # Other Hyprland/Sway installations can continue using swaybg.
+    elif command -v "swaybg" >/dev/null 2>&1; then
+        # Grey background flicker is prevented by killing the old swaybg after starting the new one.
         PID=$(pidof swaybg)
         swaybg -i "$WP" -m fill &
         if [ -n "$PID" ]; then
