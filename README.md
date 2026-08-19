@@ -44,7 +44,7 @@ This launches an interactive menu where you can select which groups of configura
 ./install.sh --list-groups    # List available groups
 ./install.sh shell editor     # Install specific groups
 ./install.sh --minimal        # Preset: core + shell + terminal + dev
-./install.sh --standard       # Preset: core + shell + editor + terminal + system-info
+./install.sh --standard       # Preset: core + shell + dev + editor + terminal + system-info
 ./install.sh --full           # Preset: everything
 ./install.sh --with-brew      # Enable Homebrew on Linux
 ./install.sh --user-local     # Install everything as current user (no sudo required)
@@ -101,7 +101,7 @@ These are split into a **tracked** base and a **gitignored** local override:
   Pi auto-updates `lastChangelogVersion`; you add `defaultModel`/`defaultProvider` there.
 - **Git**: `~/.gitconfig` includes `~/.gitconfig_local`. Use it for `safe.directory`:
   `git config --file ~/.gitconfig_local --add safe.directory /path`
-- **Shell**: external tools (deno, nvm, etc.) that write to `~/.zshrc`/`~/.bashrc` are
+- **Shell**: external tools (deno, uv, mise, etc.) that write to `~/.zshrc`/`~/.bashrc` are
   auto-relocated to `_local` files during install (see `relocate_shell_configs_to_local`).
 
 See also:
@@ -200,6 +200,11 @@ The following tables show how each tool is installed per platform. On macOS, mos
 
 #### Dev Tools (dev group)
 
+> **Note (Linux):** dev tools in this group are now installed via **mise**
+> (`mise use -g` into `~/.config/mise/config.toml` + `mise install`) — see
+> `scripts/install/mise.sh`. Node.js is `node@lts` under mise. The per-distro rows
+> below are retained for macOS/Brewfile reference.
+
 | Tool | macOS | Arch Linux | Debian/Ubuntu | Fedora |
 | ---- | ----- | ---------- | ------------- | ------ |
 | **Git** | Brewfile | `pacman -S git` | `apt-get install git` | `dnf install git` |
@@ -212,7 +217,7 @@ The following tables show how each tool is installed per platform. On macOS, mos
 | **uv** | Brewfile | Official installer | Official installer | Official installer |
 | **Bun** | Brewfile | Official installer | Official installer | Official installer |
 | **LLM (SimonW)** | Brewfile | `pipx install llm` | `pipx install llm` (or `uv tool install`) | `pipx install llm` |
-| **Node.js** | Brewfile | `pacman -S nodejs npm` | `deb.nodesource.com` LTS | `dnf install nodejs npm` |
+| **Node.js** | Brewfile | `mise` (`node@lts`) | `mise` (`node@lts`) | `mise` (`node@lts`) |
 | **Hub** | Brewfile | AUR (`yay -S hub`) | GitHub release binary | `dnf install hub` |
 | **Python packages** (basedpyright, black, isort) | Brewfile | `pip install --user` | `pip3 install --user` | `pip3 install --user` |
 

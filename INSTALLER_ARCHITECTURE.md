@@ -144,7 +144,20 @@ Package-manager and non-dev tool installers:
 scripts/install/dev-tools.sh
 ```
 
-Developer tools and language/tooling dependencies.
+Developer tools entry point. On Linux, dev tools (node, go, deno, bun, uv, gh,
+git-delta, lazygit, lazydocker, hub) are installed via **mise** — this module keeps
+the `dev` group gate and macOS/Brewfile early-return, then defers to
+`scripts/install/mise.sh`.
+
+```text
+scripts/install/mise.sh
+```
+
+Mise (tool/runtime manager) bootstrap + sync:
+
+- `ensure_mise()` — installs mise if absent (system package, else `curl mise.run`)
+- `mise_sync_tools()` — declares dev/editor tools via `mise use -g` (merges with
+  Omarchy's entries) and runs `mise install`
 
 ## Flow
 
