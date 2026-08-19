@@ -136,7 +136,7 @@ def locate_pi(home: Path) -> Optional[Path]:
     found = shutil.which("pi")
     if found:
         return Path(found)
-    candidates = sorted((home / ".nvm" / "versions" / "node").glob("*/bin/pi"), reverse=True)
+    candidates = sorted((home / ".local" / "share" / "mise" / "shims").glob("pi"), reverse=True)
     return candidates[0] if candidates else None
 
 
@@ -219,7 +219,7 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
     if args.with_pi:
         pi = locate_pi(home)
         if pi is None:
-            raise SetupError("--with-pi was requested, but Pi was not found in PATH or ~/.nvm")
+            raise SetupError("--with-pi was requested, but Pi was not found in PATH or ~/.local/share/mise/shims")
         extension = home / ".pi" / "agent" / "extensions" / "three-agent-team" / "index.ts"
         if not extension.is_file():
             raise SetupError(f"Three-agent extension is missing: {extension}")

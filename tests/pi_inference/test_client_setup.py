@@ -83,8 +83,8 @@ class ClientSetupTest(unittest.TestCase):
             )
         )
 
-    def test_locates_pi_inside_nvm_when_not_in_noninteractive_path(self):
-        pi = self.root / ".nvm" / "versions" / "node" / "v22" / "bin" / "pi"
+    def test_locates_pi_inside_mise_shims_when_not_in_noninteractive_path(self):
+        pi = self.root / ".local" / "share" / "mise" / "shims" / "pi"
         pi.parent.mkdir(parents=True)
         pi.write_text("#!/bin/sh\n")
         with patch.object(setup.shutil, "which", return_value=None):
