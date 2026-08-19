@@ -85,6 +85,7 @@ source "$SCRIPT_DIR/scripts/install/cli.sh"
 source "$SCRIPT_DIR/scripts/install/flow.sh"
 source "$SCRIPT_DIR/scripts/install/packages.sh"
 source "$SCRIPT_DIR/scripts/install/dev-tools.sh"
+source "$SCRIPT_DIR/scripts/install/mise.sh"
 
 #=============================================================================
 # INSTALL NODE DEPENDENCIES
@@ -142,11 +143,13 @@ main() {
     show_selected_groups_summary
     show_pre_install_status_if_needed
     setup_stow
+    ensure_mise
     setup_package_manager_for_mode
     # Install programs first — stow only handles dotfiles after
     run_install_programs
     run_stow_preflight_for_selection
     run_stow_and_post_steps
+    mise_sync_tools
     install_node_dependencies
     show_final_summary
 }

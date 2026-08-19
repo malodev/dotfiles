@@ -271,7 +271,7 @@ install_editor_tools() {
         arch)
             _linux_pkg_install "Neovim" neovim
             _linux_pkg_install "Build tools" base-devel cmake
-            _linux_pkg_install "Neovim dependencies" nodejs npm yarn luarocks python-pynvim
+            _linux_pkg_install "Neovim dependencies" luarocks python-pynvim
             ;;
         debian)
             if ! command_exists nvim; then
@@ -293,39 +293,16 @@ install_editor_tools() {
                 fi
             fi
             _linux_pkg_install "Build tools" build-essential cmake
-            _linux_pkg_install "Neovim dependencies" nodejs npm luarocks python3-pynvim
-            if ! command_exists yarn; then
-                log_info "Installing yarn via npm for current user..."
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    ensure_user_local_bin
-                    npm install -g --prefix "$HOME/.local" yarn 2>/dev/null || log_warn "yarn installation via npm failed"
-                fi
-            fi
+            _linux_pkg_install "Neovim dependencies" luarocks python3-pynvim
             ;;
         fedora)
             _linux_pkg_install "Neovim" neovim
             _linux_pkg_install "Build tools" gcc gcc-c++ make cmake
-            _linux_pkg_install "Neovim dependencies" nodejs npm luarocks python3-pynvim
-            if ! command_exists yarn; then
-                log_info "Installing yarn via npm for current user..."
-                if [[ "$DRY_RUN" == "0" ]]; then
-                    ensure_user_local_bin
-                    npm install -g --prefix "$HOME/.local" yarn 2>/dev/null || log_warn "yarn installation via npm failed"
-                fi
-            fi
+            _linux_pkg_install "Neovim dependencies" luarocks python3-pynvim
             ;;
         *) log_warn "Editor dependencies installation not configured for $DISTRO" ;;
     esac
 
-    if ! command_exists tree-sitter; then
-        log_info "Installing tree-sitter-cli via npm for current user..."
-        if [[ "$DRY_RUN" == "0" ]]; then
-            ensure_user_local_bin
-            npm install -g --prefix "$HOME/.local" tree-sitter-cli 2>/dev/null || log_warn "tree-sitter-cli installation failed"
-        else
-            log_dry_run "Would install tree-sitter-cli via npm to $HOME/.local/bin/tree-sitter"
-        fi
-    fi
 }
 
 setup_homebrew() {
@@ -641,11 +618,7 @@ install_user_local_preferred_tools() {
     fi
 
     show_banner "Installing User-local Preferred Tools"
-    log_info "User-local mode: system package managers are avoided for fzf/rg/bat/fd/delta/lazygit/lazydocker/go/starship/zoxide/tmux/urlview/kitty-terminfo when possible."
-
-    install_uv_tool
-    install_bun_tool
-    install_lazydocker_tool
+    log_info "User-local mode: dev tools (node/go/deno/bun/uv/gh/delta/lazygit/lazydocker/hub) come from mise; the rest install user-locally where possible."
 
     if ! command_exists starship; then
         log_dry_run "Would install starship to $HOME/.local/bin/starship"
@@ -665,25 +638,6 @@ install_user_local_preferred_tools() {
         fi
     else
         log_success "zoxide is already installed"
-    fi
-
-    if ! command_exists go; then
-        log_dry_run "Would install Go to $HOME/.local/opt/go with symlinks in $HOME/.local/bin"
-        if [[ "$DRY_RUN" == "0" ]]; then
-            local go_version go_root
-            go_root="$HOME/.local/opt/go"
-            go_version=$(curl -s "https://go.dev/dl/?mode=json" | grep -Po '"version": "go\K[^"]*' | head -1 2>/dev/null || echo "1.26.0")
-            mkdir -p "$HOME/.local/opt"
-            curl -Lo /tmp/go.tar.gz "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" 2>/dev/null \
-                && rm -rf "$go_root" \
-                && tar -C "$HOME/.local/opt" -xzf /tmp/go.tar.gz \
-                && symlink_to_user_local_bin "$go_root/bin/go" go \
-                && symlink_to_user_local_bin "$go_root/bin/gofmt" gofmt \
-                && rm -f /tmp/go.tar.gz \
-                || log_warn "Go installation failed, install manually from https://go.dev/dl"
-        fi
-    else
-        log_success "go is already installed"
     fi
 
     # --- SSH-safe terminal tools (tmux, urlview, kitty-terminfo) ---
