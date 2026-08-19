@@ -6,9 +6,6 @@ export DOTFILES_HOSTNAME="${DOTFILES_HOSTNAME:-$(hostname 2>/dev/null || cat /et
 
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/.local/bin:$HOME/bin:/usr/local/sbin:/usr/local/bin:$PATH
-export BUN_INSTALL="$HOME/.bun"
-export DENO_INSTALL="$HOME/.deno"
-export NVM_DIR="$HOME/.nvm"
 
 export DEFAULT_USER="$USER"
 
@@ -77,7 +74,9 @@ if [[ "$IS_LINUX" == "1" ]] && [[ -d /home/linuxbrew/.linuxbrew/bin ]]; then
 fi
 
 # User-local toolchains
-export PATH="$HOME/.local/bin:$BUN_INSTALL/bin:$DENO_INSTALL/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
+# mise shims (tool/runtime manager — node, go, deno, uv, …)
+[[ -d "$HOME/.local/share/mise/shims" ]] && export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 #=============================================================================
 # COMPLETION
@@ -217,54 +216,6 @@ esac
 #=============================================================================
 # LANGUAGE VERSION MANAGERS — lazy-loaded for fast startup
 #=============================================================================
-# nvm - node version manager (lazy-loaded: ~300ms savings)
-# Check both standard and XDG locations for nvm
-if [ -d "${HOME}/.nvm" ]; then
-  export NVM_DIR="${HOME}/.nvm"
-elif [ -n "${XDG_CONFIG_HOME-}" ] && [ -d "${XDG_CONFIG_HOME}/nvm" ]; then
-  export NVM_DIR="${XDG_CONFIG_HOME}/nvm"
-fi
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-  # Add nvm's default node to PATH immediately (no subprocess cost)
-  # Resolves alias chains (lts/* → lts/iron → v20.x.x) and partial versions (24 → v24.14.0)
-  if [ -s "$NVM_DIR/alias/default" ]; then
-    NVM_DEFAULT=$(cat "$NVM_DIR/alias/default" 2>/dev/null)
-    # Resolve lts/* alias chains
-    while [[ "$NVM_DEFAULT" == lts/* ]]; do
-      NVM_DEFAULT=$(cat "$NVM_DIR/alias/$NVM_DEFAULT" 2>/dev/null)
-    done
-    # Resolve partial version (e.g. "24" → "v24.14.0")
-    if [ -n "$NVM_DEFAULT" ] && [ "${NVM_DEFAULT#v}" = "$NVM_DEFAULT" ] && [ "${NVM_DEFAULT#lts/}" = "$NVM_DEFAULT" ]; then
-      NVM_DEFAULT=$(ls "$NVM_DIR/versions/node/" 2>/dev/null | grep "^v${NVM_DEFAULT}[.-]" | sort -V | tail -1)
-    fi
-    [ -n "$NVM_DEFAULT" ] && PATH="$NVM_DIR/versions/node/$NVM_DEFAULT/bin:$PATH"
-  fi
-  # Lazy-load nvm itself — only runs when you first call nvm/node/npm/npx
-  nvm() {
-    unfunction nvm node npm npx 2>/dev/null
-    \. "$NVM_DIR/nvm.sh"
-    nvm "$@"
-  }
-  node() {
-    unfunction nvm node npm npx 2>/dev/null
-    \. "$NVM_DIR/nvm.sh"
-    node "$@"
-  }
-  npm() {
-    unfunction nvm node npm npx 2>/dev/null
-    \. "$NVM_DIR/nvm.sh"
-    npm "$@"
-  }
-  npx() {
-    unfunction nvm node npm npx 2>/dev/null
-    \. "$NVM_DIR/nvm.sh"
-    npx "$@"
-  }
-fi
-
-# deno
-[ -f "$HOME/.deno/env" ] && source "$HOME/.deno/env"
-
 # rust cargo
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 

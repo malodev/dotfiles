@@ -19,7 +19,7 @@ export DOTFILES_HOSTNAME="${DOTFILES_HOSTNAME:-$(hostname 2>/dev/null || cat /et
 # DEBUGGING BASH STARTUP / SSH LOGIN HANGS
 #=============================================================================
 # This file has opt-in checkpoints around common hang points (starship, zoxide,
-# fzf, nvm, deno, virtualenvwrapper, and machine-local overrides). Debug output
+# fzf, deno, virtualenvwrapper, and machine-local overrides). Debug output
 # is written to stderr and is disabled by default so normal shells, SSH, scp, and
 # sftp stay quiet.
 #
@@ -96,6 +96,8 @@ _dotfiles_bashrc_debug "shell options: configured"
 # Add user bin directories to PATH if they exist
 [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
 [[ -d "$HOME/bin" ]] && export PATH="$HOME/bin:$PATH"
+# mise shims (tool/runtime manager — node, go, deno, uv, …)
+[[ -d "$HOME/.local/share/mise/shims" ]] && export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 # Homebrew
 if [[ -d "/opt/homebrew/bin" ]]; then
@@ -216,55 +218,6 @@ if [[ -f "$HOME/bin/virtualenvwrapper_bashrc" ]]; then
     _dotfiles_bashrc_debug "virtualenvwrapper: before source"
     source "$HOME/bin/virtualenvwrapper_bashrc"
     _dotfiles_bashrc_debug "virtualenvwrapper: after source"
-fi
-
-#=============================================================================
-# LANGUAGE VERSION MANAGERS
-#=============================================================================
-# nvm - node version manager
-_dotfiles_bashrc_debug "nvm: checking"
-if [[ -d "$HOME/.nvm" ]]; then
-  export NVM_DIR="$HOME/.nvm"
-fi
-if [[ -n "${NVM_DIR:-}" && -s "$NVM_DIR/nvm.sh" ]]; then
-  # Add default node to PATH immediately if available
-  if [[ -s "$NVM_DIR/alias/default" ]]; then
-    NVM_DEFAULT=$(cat "$NVM_DIR/alias/default" 2>/dev/null)
-    while [[ "${NVM_DEFAULT:-}" == lts/* ]]; do
-      NVM_DEFAULT=$(cat "$NVM_DIR/alias/$NVM_DEFAULT" 2>/dev/null)
-    done
-    if [[ -n "${NVM_DEFAULT:-}" && -d "$NVM_DIR/versions/node/$NVM_DEFAULT/bin" ]]; then
-      PATH="$NVM_DIR/versions/node/$NVM_DEFAULT/bin:$PATH"
-    fi
-  fi
-  nvm() {
-    unfunction nvm node npm npx 2>/dev/null
-    . "$NVM_DIR/nvm.sh"
-    nvm "$@"
-  }
-  node() {
-    unfunction nvm node npm npx 2>/dev/null
-    . "$NVM_DIR/nvm.sh"
-    node "$@"
-  }
-  npm() {
-    unfunction nvm node npm npx 2>/dev/null
-    . "$NVM_DIR/nvm.sh"
-    npm "$@"
-  }
-  npx() {
-    unfunction nvm node npm npx 2>/dev/null
-    . "$NVM_DIR/nvm.sh"
-    npx "$@"
-  }
-fi
-_dotfiles_bashrc_debug "nvm: configured"
-
-# deno
-if [[ -f "$HOME/.deno/env" ]]; then
-    _dotfiles_bashrc_debug "deno: before source"
-    source "$HOME/.deno/env"
-    _dotfiles_bashrc_debug "deno: after source"
 fi
 
 #=============================================================================
