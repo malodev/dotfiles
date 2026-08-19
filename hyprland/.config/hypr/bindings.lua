@@ -24,7 +24,7 @@ hl.unbind("SUPER + SHIFT + S") -- was Google Maps
 o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
 
 hl.unbind("SUPER + CTRL + T") -- was Activity/btop
-o.bind("SUPER + CTRL + T", "Toggle Voxtype translate mode", "voxtype-translate-toggle")
+o.bind("SUPER + CTRL + T", "Toggle Voxtype mode", "voxtype-mode-toggle")
 
 -- Scrolling-layout navigation.
 hl.unbind("SUPER + comma") -- was dismiss last notification

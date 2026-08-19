@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/voxtype"
+mode_file="$state_dir/mode"
+mkdir -p "$state_dir"
+
+current=$(cat "$mode_file" 2>/dev/null || printf 'transcribe')
+if [[ "$current" == "translate" ]]; then
+  next=transcribe
+  summary="Automatic transcription"
+  detail="Italian / English · Parakeet INT8 · CPU"
+  icon="🗣️"
+else
+  next=translate
+  summary="Translate to English"
+  detail="Italian → English · Whisper medium · GTX 1060"
+  icon="🌐"
+fi
+
+printf '%s\n' "$next" >"$mode_file.tmp"
+mv "$mode_file.tmp" "$mode_file"
+systemctl --user restart voxtype.service
+notify-send "Voxtype $icon" "$summary\n$detail" -t 2500

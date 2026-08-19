@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+
+mode_file="${XDG_STATE_HOME:-$HOME/.local/state}/voxtype/mode"
+mode=$(cat "$mode_file" 2>/dev/null || printf 'transcribe')
+
+if [[ "$mode" == "translate" ]]; then
+  printf '%s\n' '{"text":" 🌐","tooltip":"Voxtype: Italian → English\nWhisper medium · GTX 1060\nClick to transcribe","class":"translate","alt":"translate"}'
+else
+  printf '%s\n' '{"text":" IT/EN","tooltip":"Voxtype: automatic transcription\nParakeet INT8 · CPU\nClick to translate","class":"transcribe","alt":"transcribe"}'
+fi

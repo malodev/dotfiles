@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+mode_file="${XDG_STATE_HOME:-$HOME/.local/state}/voxtype/mode"
+mode=$(cat "$mode_file" 2>/dev/null || printf 'transcribe')
+
+case "$mode" in
+  translate)
+    exec /usr/lib/voxtype/voxtype-vulkan \
+      --engine whisper \
+      --model medium \
+      --language it \
+      --translate \
+      --gpu-device 1 \
+      daemon
+    ;;
+  *)
+    exec /usr/lib/voxtype/voxtype-onnx-avx512 \
+      --engine parakeet \
+      daemon
+    ;;
+esac

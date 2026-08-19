@@ -18,7 +18,14 @@
         { "id": "omarchy.weather" },
         { "id": "omarchy.network" },
         { "id": "omarchy.system-update" },
-        { "id": "omarchy.indicators" }
+        { "id": "omarchy.indicators" },
+        {
+          "id": "voxtype-mode",
+          "type": "command",
+          "exec": "$HOME/.local/bin/voxtype-mode-status",
+          "interval": 2,
+          "onClick": "$HOME/.local/bin/voxtype-mode-toggle"
+        }
       ],
       "right": [
         { "id": "omarchy.tray" },
