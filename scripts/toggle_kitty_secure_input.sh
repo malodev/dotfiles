@@ -1,37 +1,41 @@
 #!/usr/bin/env bash
-# Toggle macOS Secure Keyboard Entry off in kitty so skhd/yabai hotkeys work.
-# Secure Keyboard Entry blocks global hotkey daemons from capturing keystrokes.
-# Kitty enables this by default with no config option to disable — only a toggle action.
+# Turn OFF macOS Secure Keyboard Entry in kitty.
 #
-# This script uses AppleScript to send Right-Option+Cmd+S to kitty.
-# Right Option is used because the kitty config maps left option to Alt
-# (macos_option_as_alt left), so left option won't trigger the toggle.
+# Secure Keyboard Entry blocks global hotkey daemons (skhd/yabai) from
+# capturing keystrokes, which breaks Option+number / Shift+Option+number and
+# every other skhd/yabai hotkey. Kitty enables SE by default and only exposes a
+# *toggle* action (no config option to disable it permanently), so this script
+# reads kitty's live SE state from its preferences plist and only toggles when
+# SE is currently ON.
+#
+# Detection:  defaults read net.kovidgoyal.kitty SecureKeyboardEntry
+#             0 = off, 1 = on
+# Toggle:     click the "Secure Keyboard Entry" item in kitty's app menu.
 
 set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Only proceed if kitty is running
 pgrep -x kitty >/dev/null 2>&1 || exit 0
 
-# Only proceed if secure keyboard entry is actually enabled for kitty
-# (check by seeing if skhd would fail to start)
-if /opt/homebrew/bin/skhd -V 2>/dev/null; then
-  exit 0  # skhd can start, nothing to do
+se_state() {
+  defaults read net.kovidgoyal.kitty SecureKeyboardEntry 2>/dev/null || echo 0
+}
+
+if [[ "$(se_state)" != "1" ]]; then
+  exit 0  # already off
 fi
 
-osascript -e '
+# Toggle it off. The item lives in kitty's application menu; System Events must
+# open the app menu first, then click the item.
+osascript <<'APPLESCRIPT'
 tell application "System Events"
   tell process "kitty"
-    set frontmost to true
-    delay 0.3
-    key down command
-    key down option
-    delay 0.1
-    keystroke "s"
-    delay 0.1
-    key up option
-    key up command
+    click menu bar item "kitty" of menu bar 1
+    delay 0.2
+    click menu item "Secure Keyboard Entry" of menu "kitty" of menu bar 1
   end tell
 end tell
-'
+APPLESCRIPT
 
-echo "$(date): toggled secure keyboard entry off" >&2
+echo "$(date): turned secure keyboard entry off" >&2

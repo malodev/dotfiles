@@ -1,39 +1,44 @@
 #!/usr/bin/env bash
-# Auto-toggle Secure Keyboard Entry off in kitty after wake from sleep.
-# Kitty enables SE by default, which blocks skhd/yabai hotkeys.
-# This runs via launchd on wake and periodically.
+# Ensure skhd is running and kitty's Secure Keyboard Entry is OFF.
+#
+# Secure Keyboard Entry (SE) blocks skhd/yabai global hotkeys, so the recurring
+# "Option+number stopped switching desktops" failure is caused by SE being on.
+# The fix is twofold: keep skhd alive, and keep SE off. Kitty re-enables SE when
+# it regains focus, opens a new window, or the machine wakes from sleep, which
+# is why the problem is periodic. This runs via launchd on wake and every 5 min.
+#
+# SE state is read live from kitty's preferences plist; we only toggle when ON.
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-# Check if kitty is running
-pgrep -x kitty >/dev/null 2>&1 || exit 0
+# 1. Start skhd if it isn't running.
+if ! pgrep -x skhd >/dev/null 2>&1; then
+  /opt/homebrew/bin/skhd &
+  sleep 0.5
+fi
 
-# Check if skhd is already running and healthy
-if pgrep -x skhd >/dev/null 2>&1; then
-  # skhd is running, but might be blocked. Try a quick health check:
-  # If skhd has been running less than 5 min, assume it's fine
+# 2. Turn off Secure Keyboard Entry if kitty has it on.
+if ! pgrep -x kitty >/dev/null 2>&1; then
   exit 0
 fi
 
-# skhd isn't running — SE is probably on. Toggle it.
-osascript -e '
+se_state() {
+  defaults read net.kovidgoyal.kitty SecureKeyboardEntry 2>/dev/null || echo 0
+}
+
+if [[ "$(se_state)" != "1" ]]; then
+  exit 0  # already off
+fi
+
+osascript <<'APPLESCRIPT'
 tell application "System Events"
   tell process "kitty"
-    set frontmost to true
-    delay 0.3
-    key down command
-    key down option
-    delay 0.1
-    keystroke "s"
-    delay 0.1
-    key up option
-    key up command
+    click menu bar item "kitty" of menu bar 1
+    delay 0.2
+    click menu item "Secure Keyboard Entry" of menu "kitty" of menu bar 1
   end tell
 end tell
-'
+APPLESCRIPT
 
-sleep 0.5
-
-# Start skhd if not running
-pgrep -x skhd >/dev/null 2>&1 || /opt/homebrew/bin/skhd &
+echo "$(date): turned secure keyboard entry off" >&2
