@@ -116,7 +116,7 @@ The install script does more than just symlink configs — it also installs the 
 1. **Detects your OS** (macOS, Arch Linux, Ubuntu/Debian, Fedora)
 2. **Installs the package manager** and system packages (see [Package Installation by Platform](#package-installation-by-platform))
 3. **Installs CLI tools** — fzf, ripgrep, bat, fd, lsd, jq, yazi, curl, wget, etc.
-4. **Installs shell/terminal tools** — zsh, tmux, kitty, carapace, starship, zoxide
+4. **Installs shell/terminal tools** — zsh, tmux, kitty, starship, zoxide
 5. **Installs Neovim + editor dependencies** — neovim, build tools (make, gcc), nodejs, npm, yarn, luarocks, python-pynvim, tree-sitter-cli
 6. **Installs dev tools** — git, gh, git-delta, lazygit, go, deno, pip, composer, hub
 7. **Symlinks config files** to your home directory using GNU Stow
@@ -181,7 +181,6 @@ The following tables show how each tool is installed per platform. On macOS, mos
 | **zsh** | Brewfile | `pacman -S zsh` | `apt-get install zsh` | `dnf install zsh` |
 | **tmux** | Brewfile | `pacman -S tmux` | `apt-get install tmux` | `dnf install tmux` |
 | **kitty** | Brewfile (cask) | `pacman -S kitty` | `apt-get install kitty` | `dnf install kitty` |
-| **carapace** | Brewfile | AUR (`yay -S carapace-bin`) | Not in repos | Not in repos |
 | **Starship** | Brewfile | `pacman -S starship` | `apt-get install` or `curl -sS https://starship.rs/install.sh \| sh` | `dnf install starship` |
 | **Zoxide** | Brewfile | `pacman -S zoxide` | `curl -sSfL .../zoxide/.../install.sh \| sh` | `dnf install zoxide` |
 

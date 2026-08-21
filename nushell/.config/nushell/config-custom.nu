@@ -15,5 +15,4 @@ alias tl = tmux list-sessions
 alias ts = tmux new-session -A -s 
 
 use ~/.cache/starship/init.nu
-source ~/.cache/carapace/init.nu
 source ~/.zoxide.nu
