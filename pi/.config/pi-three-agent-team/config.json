@@ -22,38 +22,41 @@
   "roles": {
     "architect": {
       "provider": "pi-llama",
-      "model": "pi/gemma-4-31B-it-qat-UD-Q4_K_XL",
-      "name": "Gemma 4 31B Architect/Reviewer",
+      "model": "pi/Qwen3.8-27B-UD-Q5_K_XL",
+      "name": "Qwen3.8 27B UD Q5 K XL",
       "reasoning": true,
       "input": [
-        "text"
+        "text",
+        "image"
       ],
-      "contextWindow": 160000,
-      "maxTokens": 32768,
+      "contextWindow": 262144,
+      "maxTokens": 258048,
       "thinking": "high"
     },
     "builder": {
       "provider": "pi-llama",
-      "model": "pi/Qwen3.6-27B-MTP-UD-Q5_K_XL",
-      "name": "Qwen3.6 27B Builder",
+      "model": "pi/Qwen3.8-27B-UD-Q5_K_XL",
+      "name": "Qwen3.8 27B UD Q5 K XL",
       "reasoning": true,
       "input": [
-        "text"
+        "text",
+        "image"
       ],
-      "contextWindow": 160000,
-      "maxTokens": 32768,
+      "contextWindow": 262144,
+      "maxTokens": 258048,
       "thinking": "high"
     },
     "reviewer": {
       "provider": "pi-llama",
-      "model": "pi/gemma-4-31B-it-qat-UD-Q4_K_XL",
-      "name": "Gemma 4 31B Architect/Reviewer",
+      "model": "pi/Muse-Glimmer-30B-UD-Q5_K_XL",
+      "name": "Muse Glimmer 30B UD Q5 K XL",
       "reasoning": true,
       "input": [
-        "text"
+        "text",
+        "image"
       ],
-      "contextWindow": 160000,
-      "maxTokens": 32768,
+      "contextWindow": 131072,
+      "maxTokens": 126976,
       "thinking": "high"
     }
   },
