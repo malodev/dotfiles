@@ -31,3 +31,6 @@ show_agent_labels_on_pane_borders = false
 [ui.toast]
 delivery = "system"
 
+[theme]
+name = "rose-pine"
+auto_switch = false
