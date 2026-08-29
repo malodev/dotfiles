@@ -23,6 +23,9 @@ end
 hl.unbind("SUPER + SHIFT + S") -- was Google Maps
 o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
 
+-- Preserve the legacy Activity launcher; Quattro leaves SUPER+SHIFT+T free.
+o.bind("SUPER + SHIFT + T", "Activity", "omarchy-launch-or-focus btop")
+
 hl.unbind("SUPER + CTRL + T") -- was Activity/btop
 o.bind("SUPER + CTRL + T", "Toggle Voxtype mode", "voxtype-mode-toggle")
 
