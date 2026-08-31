@@ -1,0 +1,647 @@
+#!/usr/bin/env python3
+"""Transcribe long audio through Studio's local Whisper GGUF sidecar."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from pathlib import Path
+from urllib.parse import urlencode, urlsplit
+from typing import Any, Mapping
+
+
+MAX_AUDIO_SECONDS = 30 * 60
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+DEFAULT_CHUNK_MINUTES = 5.0
+DEFAULT_TIMEOUT_SECONDS = 1800.0
+AUDIO_SAMPLE_RATE = 16_000
+AUDIO_CHANNELS = 1
+AUDIO_BITRATE = "24k"
+MANIFEST_VERSION = 1
+STANDARD_MODEL = "large-v3"
+TURBO_MODEL = "large-v3-turbo"
+
+
+class TranscribeError(RuntimeError):
+    """An error that can be printed without a traceback to a command-line user."""
+
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+class StudioClient:
+    def __init__(self, base_url: str, api_key: str, timeout: float) -> None:
+        parsed = urlsplit(base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise TranscribeError(
+                "STUDIO_URL must be an http(s) URL such as "
+                "http://127.0.0.1:8888 or https://ai.example.test."
+            )
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise TranscribeError("STUDIO_URL must not contain credentials, a query, or a fragment.")
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.timeout = timeout
+        self.opener = urllib.request.build_opener(NoRedirectHandler())
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        body: bytes | None = None,
+        content_type: str = "application/json",
+    ) -> dict[str, Any]:
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "dotfiles-transcribe/1",
+            "Content-Type": content_type,
+        }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            data=body,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with self.opener.open(request, timeout=self.timeout) as response:
+                status = response.status
+                response_body = response.read(4 * 1024 * 1024 + 1)
+        except urllib.error.HTTPError as error:
+            detail = error.read(4096).decode("utf-8", errors="replace").strip()
+            if len(detail) > 600:
+                detail = detail[:597] + "..."
+            hint = ""
+            if error.code == 401:
+                hint = " Set STUDIO_API_KEY or STUDIO_API_KEY_FILE."
+            raise TranscribeError(
+                f"Studio request failed with HTTP {error.code}: {detail or 'no response body'}.{hint}"
+            ) from error
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            raise TranscribeError(f"Could not reach Studio at {self.base_url}: {error}") from error
+
+        if status < 200 or status >= 300:
+            raise TranscribeError(f"Studio request failed with HTTP {status}.")
+        if len(response_body) > 4 * 1024 * 1024:
+            raise TranscribeError("Studio returned an unexpectedly large response.")
+        try:
+            payload = json.loads(response_body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise TranscribeError("Studio returned invalid JSON.") from error
+        if not isinstance(payload, dict):
+            raise TranscribeError("Studio returned a JSON value instead of an object.")
+        return payload
+
+    def load_model(self, model: str) -> None:
+        body = json.dumps({"model": model, "engine": "gguf"}).encode("utf-8")
+        self._request("POST", "/api/inference/audio/stt/load", body=body)
+
+    def transcribe_chunk(self, model: str, language: str, path: Path) -> dict[str, Any]:
+        query = urlencode(
+            {
+                "model": model,
+                "language": language,
+                "fast": "false",
+                "engine": "gguf",
+            }
+        )
+        try:
+            audio = path.read_bytes()
+        except OSError as error:
+            raise TranscribeError(f"Cannot read audio chunk {path}: {error}") from error
+        if len(audio) > MAX_UPLOAD_BYTES:
+            raise TranscribeError(
+                f"{path.name} is over Studio's {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB upload limit."
+            )
+        return self._request(
+            "POST",
+            f"/api/inference/audio/transcribe/raw?{query}",
+            body=audio,
+            content_type="audio/ogg",
+        )
+
+
+def _print_status(message: str) -> None:
+    print(f"transcribe: {message}", file=sys.stderr)
+
+
+def _read_api_key() -> str:
+    value = os.environ.get("STUDIO_API_KEY", "").strip()
+    if value:
+        return value
+
+    configured = os.environ.get(
+        "STUDIO_API_KEY_FILE",
+        str(Path.home() / ".config" / "unsloth" / "pi-api-key"),
+    )
+    path = Path(configured).expanduser()
+    if not path.is_file():
+        return ""
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if mode & 0o077:
+            raise TranscribeError(f"API key file is accessible by group or other users: {path}")
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except TranscribeError:
+        raise
+    except OSError as error:
+        raise TranscribeError(f"Cannot read Studio API key file {path}: {error}") from error
+    return next((line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")), "")
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError as error:
+        raise TranscribeError(f"{name} must be a number.") from error
+
+
+def _normalize_language(value: str) -> str:
+    normalized = value.strip().replace("_", "-").lower()
+    return normalized or "auto"
+
+
+def _is_local_url(url: str) -> bool:
+    hostname = (urlsplit(url).hostname or "").lower().strip("[]")
+    return hostname in {"localhost", "127.0.0.1", "::1"}
+
+
+def _pi_inference_policy() -> str:
+    policy = os.environ.get("TRANSCRIBE_PI_INFERENCE", "auto").strip().lower()
+    aliases = {"1": "always", "yes": "always", "on": "always", "0": "never", "no": "never", "off": "never"}
+    policy = aliases.get(policy, policy)
+    if policy not in {"auto", "always", "never"}:
+        raise TranscribeError("TRANSCRIBE_PI_INFERENCE must be auto, always, or never.")
+    return policy
+
+
+def _ensure_studio_mode(studio_url: str, skip: bool) -> None:
+    if skip:
+        return
+    policy = _pi_inference_policy()
+    if policy == "never" or (policy == "auto" and not _is_local_url(studio_url)):
+        return
+
+    pi_inference = shutil.which("pi-inference")
+    if pi_inference is None:
+        if policy == "always":
+            raise TranscribeError("TRANSCRIBE_PI_INFERENCE requests pi-inference, but it is not on PATH.")
+        return
+
+    status = subprocess.run(
+        [pi_inference, "--json", "status"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if status.returncode == 0:
+        try:
+            payload = json.loads(status.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        services = payload.get("services") if isinstance(payload, dict) else None
+        if (
+            isinstance(payload, dict)
+            and payload.get("mode") == "studio"
+            and isinstance(services, dict)
+            and services.get("studio") == "active"
+        ):
+            return
+
+    _print_status("switching the inference host to Studio mode")
+    switched = subprocess.run(
+        [pi_inference, "studio"],
+        stdout=subprocess.DEVNULL,
+        stderr=None,
+        check=False,
+    )
+    if switched.returncode != 0:
+        raise TranscribeError(
+            "pi-inference could not switch to Studio mode. "
+            "An active lease or another inference owner may be holding the host."
+        )
+
+
+def _input_metadata(path: Path) -> dict[str, Any]:
+    try:
+        info = path.stat()
+    except OSError as error:
+        raise TranscribeError(f"Cannot inspect input audio {path}: {error}") from error
+    return {
+        "path": str(path),
+        "size_bytes": info.st_size,
+        "mtime_ns": info.st_mtime_ns,
+    }
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.tmp-",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    except OSError as error:
+        raise TranscribeError(f"Cannot write {path}: {error}") from error
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    _atomic_write(path, (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+
+
+def _load_result(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("text"), str):
+        return None
+    return payload
+
+
+def _work_directory(
+    input_path: Path,
+    model: str,
+    language: str,
+    chunk_seconds: int,
+    studio_url: str,
+    explicit: Path | None,
+) -> Path:
+    if explicit is not None:
+        return explicit.expanduser().resolve()
+
+    root_value = os.environ.get("TRANSCRIBE_WORK_DIR")
+    if root_value:
+        root = Path(root_value).expanduser()
+    else:
+        cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")).expanduser()
+        root = cache_home / "transcribe"
+    identity = {
+        "input": _input_metadata(input_path),
+        "model": model,
+        "language": language,
+        "chunk_seconds": chunk_seconds,
+        "studio_url": studio_url.rstrip("/"),
+    }
+    digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    return root / f"{digest}-{model}-{chunk_seconds}s"
+
+
+def _split_audio(input_path: Path, work_dir: Path, chunk_seconds: int) -> list[Path]:
+    if shutil.which("ffmpeg") is None:
+        raise TranscribeError("ffmpeg is required to split long audio.")
+    if chunk_seconds <= 0 or chunk_seconds >= MAX_AUDIO_SECONDS:
+        raise TranscribeError("Chunk duration must be positive and below Studio's 30-minute limit.")
+
+    temporary_dir = work_dir / f".chunks.tmp-{os.getpid()}"
+    try:
+        temporary_dir.mkdir(parents=True, exist_ok=False)
+    except OSError as error:
+        raise TranscribeError(f"Cannot create temporary chunk directory {temporary_dir}: {error}") from error
+
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-i",
+        str(input_path),
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-ac",
+        str(AUDIO_CHANNELS),
+        "-ar",
+        str(AUDIO_SAMPLE_RATE),
+        "-c:a",
+        "libopus",
+        "-b:a",
+        AUDIO_BITRATE,
+        "-application",
+        "audio",
+        "-f",
+        "segment",
+        "-segment_time",
+        str(chunk_seconds),
+        "-reset_timestamps",
+        "1",
+        "-n",
+        str(temporary_dir / "chunk-%04d.ogg"),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        detail = completed.stderr.strip().replace("\n", " ")
+        raise TranscribeError(f"ffmpeg could not split the audio: {detail[-800:]}")
+
+    chunks = sorted(temporary_dir.glob("chunk-*.ogg"))
+    if not chunks:
+        raise TranscribeError(f"ffmpeg produced no audio chunks; temporary files remain in {temporary_dir}")
+    for chunk in chunks:
+        try:
+            size = chunk.stat().st_size
+        except OSError as error:
+            raise TranscribeError(f"Cannot inspect generated chunk {chunk}: {error}") from error
+        if size <= 0:
+            raise TranscribeError(f"ffmpeg produced an empty chunk: {chunk}")
+        if size > MAX_UPLOAD_BYTES:
+            raise TranscribeError(
+                f"{chunk.name} is over Studio's {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB upload limit."
+            )
+
+    chunks_dir = work_dir / "chunks"
+    try:
+        os.replace(temporary_dir, chunks_dir)
+    except OSError as error:
+        raise TranscribeError(f"Cannot install generated chunks in {chunks_dir}: {error}") from error
+    return sorted(chunks_dir.glob("chunk-*.ogg"))
+
+
+def _prepare_workflow(
+    input_path: Path,
+    work_dir: Path,
+    *,
+    model: str,
+    language: str,
+    chunk_seconds: int,
+    studio_url: str,
+) -> tuple[dict[str, Any], list[Path]]:
+    manifest_path = work_dir / "manifest.json"
+    settings = {
+        "model": model,
+        "language": language,
+        "chunk_seconds": chunk_seconds,
+        "sample_rate": AUDIO_SAMPLE_RATE,
+        "channels": AUDIO_CHANNELS,
+        "codec": "opus",
+        "bitrate": AUDIO_BITRATE,
+        "studio_url": studio_url.rstrip("/"),
+    }
+    input_metadata = _input_metadata(input_path)
+
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise TranscribeError(f"Cannot read workflow manifest {manifest_path}: {error}") from error
+        if not isinstance(manifest, dict):
+            raise TranscribeError(f"Workflow manifest is not a JSON object: {manifest_path}")
+        if manifest.get("version") != MANIFEST_VERSION:
+            raise TranscribeError(f"Unsupported workflow manifest version in {manifest_path}.")
+        if manifest.get("input") != input_metadata or manifest.get("settings") != settings:
+            raise TranscribeError(
+                f"{work_dir} belongs to a different input or configuration; choose a new work directory."
+            )
+        raw_chunks = manifest.get("chunks")
+        if not isinstance(raw_chunks, list) or not raw_chunks:
+            raise TranscribeError(f"Workflow manifest contains no chunks: {manifest_path}")
+        chunks: list[Path] = []
+        for item in raw_chunks:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                raise TranscribeError(f"Workflow manifest contains an invalid chunk entry: {manifest_path}")
+            chunk = work_dir / "chunks" / item["name"]
+            if not chunk.is_file():
+                raise TranscribeError(f"Workflow chunk is missing: {chunk}")
+            if chunk.stat().st_size != item.get("size_bytes"):
+                raise TranscribeError(f"Workflow chunk changed: {chunk}")
+            chunks.append(chunk)
+        return manifest, chunks
+
+    if work_dir.exists():
+        try:
+            occupied = any(work_dir.iterdir())
+        except OSError as error:
+            raise TranscribeError(f"Cannot inspect workflow directory {work_dir}: {error}") from error
+        if occupied:
+            raise TranscribeError(
+                f"{work_dir} contains files but no manifest; choose a new work directory."
+            )
+    try:
+        work_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise TranscribeError(f"Cannot create workflow directory {work_dir}: {error}") from error
+
+    chunks = _split_audio(input_path, work_dir, chunk_seconds)
+    manifest = {
+        "version": MANIFEST_VERSION,
+        "input": input_metadata,
+        "settings": settings,
+        "chunks": [
+            {
+                "index": index,
+                "name": chunk.name,
+                "size_bytes": chunk.stat().st_size,
+                "result": f"results/{chunk.stem}.json",
+            }
+            for index, chunk in enumerate(chunks, start=1)
+        ],
+        "status": "split",
+    }
+    _atomic_write_json(manifest_path, manifest)
+    return manifest, chunks
+
+
+def _joined_text(chunks: list[Path], results_dir: Path) -> str:
+    texts: list[str] = []
+    for chunk in chunks:
+        result = _load_result(results_dir / f"{chunk.stem}.json")
+        if result is None:
+            raise TranscribeError(f"No valid cached result for {chunk.name}.")
+        texts.append(result["text"].strip())
+    joined = "\n\n".join(text for text in texts if text)
+    return f"{joined}\n" if joined else ""
+
+
+def _transcribe(
+    input_path: Path,
+    *,
+    model: str,
+    language: str,
+    chunk_seconds: int,
+    studio_url: str,
+    timeout: float,
+    work_dir: Path,
+    skip_pi_inference: bool,
+) -> str:
+    _manifest, chunks = _prepare_workflow(
+        input_path,
+        work_dir,
+        model=model,
+        language=language,
+        chunk_seconds=chunk_seconds,
+        studio_url=studio_url,
+    )
+    results_dir = work_dir / "results"
+    cached = [_load_result(results_dir / f"{chunk.stem}.json") for chunk in chunks]
+    if all(result is not None for result in cached):
+        return _joined_text(chunks, results_dir)
+
+    _ensure_studio_mode(studio_url, skip_pi_inference)
+    client = StudioClient(studio_url, _read_api_key(), timeout)
+    _print_status(f"loading Studio GGUF model {model}")
+    client.load_model(model)
+
+    results_dir.mkdir(parents=True, exist_ok=True)
+    for index, chunk in enumerate(chunks, start=1):
+        result_path = results_dir / f"{chunk.stem}.json"
+        cached_result = _load_result(result_path)
+        if cached_result is not None:
+            _print_status(f"skipping {chunk.name} ({index}/{len(chunks)})")
+            continue
+        _print_status(f"transcribing {chunk.name} ({index}/{len(chunks)})")
+        try:
+            response = client.transcribe_chunk(model, language, chunk)
+        except TranscribeError as error:
+            raise TranscribeError(
+                f"chunk {index}/{len(chunks)} failed: {error}. "
+                f"Completed chunks are cached in {results_dir}."
+            ) from error
+        if not isinstance(response.get("text"), str):
+            raise TranscribeError(
+                f"chunk {index}/{len(chunks)} returned no string text; "
+                f"completed chunks are cached in {results_dir}."
+            )
+        response = {**response, "chunk_index": index}
+        _atomic_write_json(result_path, response)
+        _atomic_write(results_dir / f"{chunk.stem}.txt", (response["text"].strip() + "\n").encode("utf-8"))
+        _print_status(f"completed {chunk.name} ({index}/{len(chunks)})")
+
+    return _joined_text(chunks, results_dir)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="transcribe",
+        description="Transcribe long audio through Studio's local Whisper GGUF engine.",
+        epilog=(
+            "Standard uses Whisper Large v3. Add -t for Whisper Large v3 Turbo. "
+            "Progress goes to stderr; by default the transcript goes to stdout."
+        ),
+    )
+    parser.add_argument("-t", "--turbo", action="store_true", help="use Whisper Large v3 Turbo")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
+        "-f",
+        "--file",
+        action="store_true",
+        help="write to the input filename with a .txt extension",
+    )
+    output.add_argument("-o", "--output", type=Path, metavar="FILE", help="write to FILE instead of stdout")
+    parser.add_argument("-l", "--language", help="language code (default: auto or TRANSCRIBE_LANGUAGE)")
+    parser.add_argument("--studio-url", help="Studio base URL (default: STUDIO_URL or http://127.0.0.1:8888)")
+    parser.add_argument(
+        "--chunk-minutes",
+        type=float,
+        help=f"decoded duration per chunk (default: {DEFAULT_CHUNK_MINUTES:g} or TRANSCRIBE_CHUNK_MINUTES)",
+    )
+    parser.add_argument(
+        "--work-dir",
+        type=Path,
+        help="persistent chunks/results directory (default: TRANSCRIBE_WORK_DIR or ~/.cache/transcribe)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        help=f"HTTP timeout per chunk in seconds (default: {DEFAULT_TIMEOUT_SECONDS:g} or TRANSCRIBE_TIMEOUT)",
+    )
+    parser.add_argument(
+        "--no-pi-inference",
+        action="store_true",
+        help="do not call pi-inference to ensure Studio mode",
+    )
+    parser.add_argument("audio", type=Path, help="input audio or video file")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    try:
+        input_path = args.audio.expanduser().resolve()
+        if not input_path.is_file():
+            raise TranscribeError(f"input audio file does not exist: {input_path}")
+        model = TURBO_MODEL if args.turbo else STANDARD_MODEL
+        language = _normalize_language(args.language or os.environ.get("TRANSCRIBE_LANGUAGE", "auto"))
+        chunk_minutes = args.chunk_minutes
+        if chunk_minutes is None:
+            chunk_minutes = _env_float("TRANSCRIBE_CHUNK_MINUTES", DEFAULT_CHUNK_MINUTES)
+        if chunk_minutes <= 0:
+            raise TranscribeError("chunk duration must be positive.")
+        chunk_seconds = round(chunk_minutes * 60)
+        if chunk_seconds <= 0 or chunk_seconds >= MAX_AUDIO_SECONDS:
+            raise TranscribeError("chunk duration must be below Studio's 30-minute limit.")
+        studio_url = (args.studio_url or os.environ.get("STUDIO_URL", "http://127.0.0.1:8888")).rstrip("/")
+        timeout = args.timeout if args.timeout is not None else _env_float("TRANSCRIBE_TIMEOUT", DEFAULT_TIMEOUT_SECONDS)
+        if timeout <= 0:
+            raise TranscribeError("HTTP timeout must be positive.")
+        work_dir = _work_directory(
+            input_path,
+            model,
+            language,
+            chunk_seconds,
+            studio_url,
+            args.work_dir,
+        )
+        transcript = _transcribe(
+            input_path,
+            model=model,
+            language=language,
+            chunk_seconds=chunk_seconds,
+            studio_url=studio_url,
+            timeout=timeout,
+            work_dir=work_dir,
+            skip_pi_inference=args.no_pi_inference,
+        )
+        output_path: Path | None = None
+        if args.file:
+            output_path = input_path.with_suffix(".txt").resolve()
+        elif args.output is not None:
+            output_path = args.output.expanduser().resolve()
+        if output_path is None:
+            sys.stdout.write(transcript)
+        else:
+            if output_path == input_path:
+                raise TranscribeError("output file must differ from the input audio file.")
+            _atomic_write(output_path, transcript.encode("utf-8"))
+            _print_status(f"wrote {output_path}")
+        return 0
+    except KeyboardInterrupt:
+        print("transcribe: interrupted; completed chunks were kept in the cache.", file=sys.stderr)
+        return 130
+    except (BrokenPipeError, OSError) as error:
+        print(f"transcribe: {error}", file=sys.stderr)
+        return 1
+    except TranscribeError as error:
+        print(f"transcribe: error: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
