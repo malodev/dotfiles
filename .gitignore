@@ -6,6 +6,9 @@ lazy-lock.json
 lazyvim.json
 .tmp*
 *.bak
+*.bak.*
+*.state
+*.log
 zed/.config/zed/conversations
 zed/.config/zed/embeddings
 zed/.config/zed/prompts
