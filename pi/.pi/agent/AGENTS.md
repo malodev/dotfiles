@@ -18,3 +18,7 @@ trust and can destroy work.
 - Always test destructive operations in `/tmp/` or with `--dry-run` first
 - Never modify live `~/.pi/agent/` data without asking
 - When writing to a user file, show what will change before writing
+
+## User Preferences
+
+- Provide shell commands as a single line unless a multiline script is explicitly requested.
