@@ -30,3 +30,9 @@ require("default.hypr.toggles")
 
 -- Add any other personal Hyprland configuration below.
 -- o.window("qemu", { workspace = "5" })
+
+-- Keep DaVinci Resolve inside the monitor's usable area.
+o.window(
+  { class = ".*[Rr]esolve.*", title = "^DaVinci Resolve( Studio)? - .+$" },
+  { tile = true, fullscreen = false }
+)
