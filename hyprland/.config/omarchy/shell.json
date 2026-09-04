@@ -11,6 +11,9 @@
         },
         {
           "id": "omarchy.active-window"
+        },
+        {
+          "id": "omaplug"
         }
       ],
       "center": [
@@ -21,7 +24,7 @@
           "id": "omarchy.clock",
           "format": "hh:mm AP",
           "formatAlt": "dddd dd/MM/yyyy",
-          "verticalFormat": "HH\n—\nmm"
+          "verticalFormat": "HH\nmm"
         },
         {
           "id": "omarchy.weather"
@@ -44,11 +47,20 @@
           "exec": "$HOME/.local/bin/voxtype-mode-status",
           "interval": 2,
           "onClick": "$HOME/.local/bin/voxtype-mode-toggle"
+        },
+        {
+          "id": "quickshell.spotify"
         }
       ],
       "right": [
         {
           "id": "omarchy.tray"
+        },
+        {
+          "id": "akshar.radio-atlas"
+        },
+        {
+          "id": "omarchy.tailscale"
         },
         {
           "id": "omarchy.bluetooth"
@@ -67,7 +79,7 @@
         }
       ]
     },
-    "position": "bottom",
+    "position": "left",
     "transparent": false
   },
   "idle": {
@@ -77,7 +89,16 @@
   "plugins": [
     {
       "id": "expose.window-overview"
+    },
+    {
+      "id": "io.github.mtolhuys.theme-manager"
     }
   ],
-  "version": 1
+  "version": 1,
+  "disabledPlugins": [
+    "omarchy.image-picker"
+  ],
+  "cloneSourceRestores": [
+    "io.github.mtolhuys.theme-manager"
+  ]
 }
