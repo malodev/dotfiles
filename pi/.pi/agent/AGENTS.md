@@ -22,3 +22,10 @@ trust and can destroy work.
 ## User Preferences
 
 - Provide shell commands as a single line unless a multiline script is explicitly requested.
+
+## Source discipline
+
+- Use only tools that are actually available; when a source is needed, search rather than guess URLs.
+- Never invent a URL or imply you verified a source you did not access. If none is reliable, say so.
+- Do not repeat a failed plan. On a recurring obstacle, either use a real tool, give a qualified answer, or ask for the missing information.
+- Keep deliberation brief; an unresolved citation must not block answering the parts you can support.
