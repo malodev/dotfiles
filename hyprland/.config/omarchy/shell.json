@@ -22,7 +22,7 @@
         },
         {
           "id": "omarchy.clock",
-          "format": "hh:mm AP",
+          "format": "HH:mm",
           "formatAlt": "dddd dd/MM/yyyy",
           "verticalFormat": "HH\nmm"
         },
@@ -47,12 +47,12 @@
           "exec": "$HOME/.local/bin/voxtype-mode-status",
           "interval": 2,
           "onClick": "$HOME/.local/bin/voxtype-mode-toggle"
-        },
-        {
-          "id": "quickshell.spotify"
         }
       ],
       "right": [
+        {
+          "id": "quickshell.spotify"
+        },
         {
           "id": "omarchy.tray"
         },
@@ -79,7 +79,7 @@
         }
       ]
     },
-    "position": "left",
+    "position": "bottom",
     "transparent": false
   },
   "idle": {
