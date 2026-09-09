@@ -1,0 +1,32 @@
+{
+  "workflow": "auto-summary",
+  "braveApiKey": "!cat ~/.config/pi-secrets/brave",
+  "tavilyApiKey": "!cat ~/.config/pi-secrets/tavily",
+  "firecrawlBaseUrl": "https://api.firecrawl.dev",
+  "firecrawlApiKey": "!cat ~/.config/pi-secrets/firecrawl",
+  "serpdiveApiKey": "!cat ~/.config/pi-secrets/serpdive",
+  "geminiApiKey": "!cat ~/.config/pi-secrets/gemini",
+  "allowBrowserCookies": true,
+  "searchRouting": {
+    "providers": [
+      "openai",
+      "exa",
+      "brave",
+      "tavily",
+      "serpdive",
+      "firecrawl",
+      "duckduckgo",
+      "gemini"
+    ],
+    "fallbackOn": [
+      "unsupported",
+      "transient",
+      "quota",
+      "network",
+      "invalid-response"
+    ]
+  },
+  "browserCookies": {
+    "profile": "Profile 3"
+  }
+}
