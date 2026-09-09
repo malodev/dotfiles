@@ -36,3 +36,23 @@ o.window(
   { class = ".*[Rr]esolve.*", title = "^DaVinci Resolve( Studio)? - .+$" },
   { tile = true, fullscreen = false }
 )
+
+-- 1Password creates Settings as a fixed-size floating Electron window and
+-- rejects compositor resize requests. Its title changes from "1Password" to
+-- "Settings" after mapping, so a static title rule cannot match it reliably.
+local function tile_1password_settings(window)
+  if window ~= nil
+      and window.class == "1password"
+      and window.title == "Settings"
+      and window.floating then
+    hl.dispatch(hl.dsp.window.float({ action = "unset", window = window }))
+  end
+end
+
+hl.on("window.open", tile_1password_settings)
+hl.on("window.title", tile_1password_settings)
+
+-- Apply the correction to Settings if this config is reloaded while it is open.
+for _, window in ipairs(hl.get_windows({ class = "^1password$", title = "^Settings$" })) do
+  tile_1password_settings(window)
+end
