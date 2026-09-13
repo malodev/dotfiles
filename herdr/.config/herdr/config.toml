@@ -36,3 +36,12 @@ delivery = "system"
 # every `omarchy theme set` (kitty/alacritty/ghostty/foot).
 name = "terminal"
 auto_switch = false
+
+# Herdr's "terminal" theme maps accent -> ANSI 4 and overlay0 -> ANSI 7, which
+# the active/inactive pane borders use. In dark themes whose ANSI 4 is a muted
+# colour (blackgold: #6E6A58) and ANSI 7 is bright (blackgold: #F6F1DD) that
+# inverts the emphasis: the focused pane looks dim and the others highlighted.
+# Pin the two tokens to the palette's bright/dark slots instead.
+[theme.custom]
+accent = "lightmagenta"   # focused pane border + highlights (theme's bright slot)
+overlay0 = "darkgray"     # unfocused pane borders
