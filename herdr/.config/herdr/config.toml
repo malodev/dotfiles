@@ -32,5 +32,7 @@ show_agent_labels_on_pane_borders = false
 delivery = "system"
 
 [theme]
-name = "rose-pine"
+# "terminal" = follow the host terminal palette, which Omarchy regenerates on
+# every `omarchy theme set` (kitty/alacritty/ghostty/foot).
+name = "terminal"
 auto_switch = false
