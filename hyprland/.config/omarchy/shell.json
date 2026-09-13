@@ -13,7 +13,8 @@
           "id": "omarchy.active-window"
         },
         {
-          "id": "omaplug"
+          "id": "omaplug",
+          "autoCheckUpdates": true
         }
       ],
       "center": [
