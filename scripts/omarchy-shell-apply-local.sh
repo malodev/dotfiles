@@ -56,9 +56,10 @@ command -v jq >/dev/null || die "jq is required"
 [ -f "$base" ] || die "no shared config at $base"
 [ -f "$delta" ] || delta=""
 
-# --- promote: live (minus the keys the delta owns) becomes the shared base ---
+# --- promote: live becomes the shared base, but the keys the delta owns keep
+# the base's own values (the delta is that machine's authority for them). --------
 promote() {
-  local force=$1 paths tmp
+  local force=$1 paths tmp restricted
   [ -n "$live" ] || return 0
   [ -f "$live" ] || return 0
   if [ -n "$delta" ]; then
@@ -70,15 +71,24 @@ promote() {
     [ -f "$last" ] || return 0          # nothing generated yet: live == base
     cmp -s "$live" "$last" && return 0  # no drift
   fi
+  # Restricted base: only the delta-owned leaves, so merging it over the live
+  # file restores the base's values there without resurrecting an empty parent
+  # object (which would wipe the base's sibling keys, e.g. the whole `idle`
+  # block when only idle.lock is a delta).
+  restricted=$(mktemp "$state_dir/.shell.json.restricted.XXXXXX")
+  jq --argjson dp "$paths" \
+    'reduce ([paths(scalars)] - $dp)[] as $p (.; delpaths([$p]))' \
+    "$base" >"$restricted" || die "could not restrict the base to the delta paths"
   tmp=$(mktemp "$(dirname -- "$base")/.shell.json.promote.XXXXXX")
-  jq --argjson paths "$paths" 'delpaths($paths)' "$live" >"$tmp" ||
+  jq -s '.[0] * .[1]' "$live" "$restricted" >"$tmp" ||
     die "could not compute the promoted config"
+  rm -f "$restricted"
   if cmp -s "$tmp" "$base"; then
     rm -f "$tmp"
     return 0
   fi
   mv "$tmp" "$base"
-  say "promoted live changes into $base (delta-owned keys excluded) — review and commit"
+  say "promoted live changes into $base (delta-owned keys keep the base's values) — review and commit"
 }
 
 # --- no delta: the shared file is the live file, linked ----------------------
