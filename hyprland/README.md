@@ -182,6 +182,10 @@ otherwise fight the generated file); the script links it instead on machines wit
 and the shell hot-reloads the result (`FileView { watchChanges: true, atomicWrites: true }`,
 which is why the script writes tmp + rename).
 
+The merge is a recursive **object** merge: arrays are replaced wholesale (jq semantics), so a
+delta that carries e.g. `bar.layout.left` owns that array entirely instead of merging it
+per index. Keep array-level changes in the shared base.
+
 ## Known gotchas
 
 - `omarchy theme set` replaces `~/.local/state/omarchy/current/background` with the theme's
