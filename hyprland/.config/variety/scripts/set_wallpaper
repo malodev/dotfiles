@@ -37,6 +37,43 @@
 WP=$1
 SCRIPT_PATH="$(readlink -f "$0")"
 
+# --- Omarchy theme grade -----------------------------------------------------
+# Rotating photos are graded through the active Omarchy palette before they
+# reach the background service, so wallpapers carry the theme's colours instead
+# of fighting them. Override with OMARCHY_WALLPAPER_GRADE="mode:key:top" (see
+# scripts/omarchy-tint-wallpaper.sh) or set it to "off" to disable the grade.
+DOTFILES_ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/../../../.." 2>/dev/null && pwd || true)"
+GRADE_SCRIPT="${OMARCHY_TINT_SCRIPT:-${DOTFILES_ROOT:-$HOME/dotfiles}/scripts/omarchy-tint-wallpaper.sh}"
+GRADE_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/variety-graded"
+
+omarchy_grade_wallpaper() {
+    local src=$1 spec=${OMARCHY_WALLPAPER_GRADE:-theme:0.7:color5}
+    local mode key top out a b
+
+    [ "$spec" = "off" ] && { printf '%s' "$src"; return 0; }
+    [ -x "$GRADE_SCRIPT" ] || { printf '%s' "$src"; return 0; }
+
+    IFS=: read -r mode key top <<<"$spec"
+    mkdir -p "$GRADE_CACHE"
+    a="$GRADE_CACHE/graded-a.jpg"
+    b="$GRADE_CACHE/graded-b.jpg"
+    # Alternate the output name: Omarchy's background service ignores a set
+    # request for the path it is already showing, so a fixed name would freeze
+    # the wallpaper on the first grade.
+    if [ ! -f "$a" ] || { [ -f "$b" ] && [ "$a" -ot "$b" ]; }; then
+        out=$a
+    else
+        out=$b
+    fi
+
+    if "$GRADE_SCRIPT" "$src" "${mode:-theme}" "${key:-0.7}" "$out" "${top:-color5}" >/dev/null 2>&1 \
+        && [ -s "$out" ]; then
+        printf '%s' "$out"
+    else
+        printf '%s' "$src"
+    fi
+}
+
 detect_desktop() {
     if [ -n "$XDG_CURRENT_DESKTOP" ]; then
         case "${XDG_CURRENT_DESKTOP,,}" in
@@ -295,7 +332,7 @@ elif [ "$DE" == "hyprland" ]; then
     # Omarchy renders its background through Quickshell (omarchy-shell) instead of
     # swaybg/hyprpaper, so hand the image to Omarchy's own background service.
     if command -v omarchy >/dev/null 2>&1; then
-        omarchy theme bg set "$WP"
+        omarchy theme bg set "$(omarchy_grade_wallpaper "$WP")"
     elif ! wlroots_set; then
         if pgrep hyprpaper --quiet; then
             MONITOR_IDS=($(hyprctl monitors all -j | jq '.[].name' -r))
