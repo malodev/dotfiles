@@ -16,6 +16,8 @@ the desktop follows the active Omarchy theme, which is the source of most surpri
 - kitty theming (`linux.conf` includes the Omarchy palette; `macos.conf` deliberately does not)
 - herdr's `theme.name = "terminal"` plus the `[theme.custom]` pair that keeps the focused
   pane brighter than the others
+- machine-local shell overrides: `~/.config/omarchy/shell.local.json` merged over the tracked
+  `shell.json`, and the promote step that publishes edits back into the dotfiles
 - the gotchas: unchanged-path `background set`, kitty reloads only reaching new windows,
   ImageMagick `-clut` degrading to greyscale
 
@@ -25,6 +27,9 @@ palettes), **herdr** (config, theme tokens, pane border colours).
 
 ## Rules
 
+- Machine-local shell values belong in `~/.config/omarchy/shell.local.json` (gitignored), never
+  in the shared `shell.json`. After changing the bar or plugins on a machine that has a delta,
+  run `scripts/omarchy-shell-promote.sh` so the shared part reaches the dotfiles.
 - Leave macOS out of the Omarchy theming: no Omarchy palette or hook work in the Mac's
   config. `macos.conf` intentionally carries no colours, and the Mac's herdr follows its
   own kitty palette.
