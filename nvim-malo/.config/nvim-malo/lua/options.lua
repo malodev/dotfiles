@@ -64,10 +64,10 @@ vim.opt.relativenumber = true -- add numbers to each line on the left side
 
 -- highlight yanked text
 vim.api.nvim_create_autocmd("TextYankPost", {
-  desc = "Highlight when yankink text",
+  desc = "Highlight when yanking text",
   group = vim.api.nvim_create_augroup("yank-highlight", { clear = true }),
   callback = function()
-    vim.hl.hl_op()
+    vim.hl.on_yank()
   end,
 })
 
