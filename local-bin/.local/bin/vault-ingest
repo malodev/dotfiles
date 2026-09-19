@@ -2,29 +2,37 @@
 #
 # File everything waiting to be ingested, and say what happened.
 #
-# Bound to SUPER + SHIFT + I. Runs the vault ingestion for ReadItLater, then drains
-# any inbox stubs, so one keypress clears both queues. A lock stops it overlapping a
-# run started by the inbox path unit.
+# Called from Obsidian's "File captured notes" command, and usable from a shell.
+# Runs the vault ingestion for ReadItLater, then drains any inbox stubs, so one
+# invocation clears both queues. A lock stops it overlapping a run started by the
+# inbox path unit.
 #
 #   vault-ingest                 # the usual: ReadItLater, then the inbox
 #   vault-ingest --dry-run       # show the plan, change nothing
 #   vault-ingest --folder Life   # a different folder
+#   vault-ingest --quiet         # print the log instead of notifying (Obsidian)
 #
-# Any argument is passed through to ingest.py.
+# Arguments other than --quiet are passed through to ingest.py.
 
 set -uo pipefail
 
 vault="${VAULT:-$HOME/Nextcloud/Obsidian/MalosVault}"
 pipeline="$vault/Tools/vault-pipeline"
-
-notify() {
-    command -v notify-send >/dev/null 2>&1 && notify-send --app-name="Vault pipeline" --expire-time=8000 "$1" "$2" || true
-}
-
 log="${XDG_RUNTIME_DIR:-/tmp}/vault-ingest.log"
+
+quiet=""
+args=()
+for arg in "$@"; do
+    if [ "$arg" = "--quiet" ]; then
+        quiet="yes"
+    else
+        args+=("$arg")
+    fi
+done
+
 {
-    echo "=== $(date '+%Y-%m-%d %H:%M:%S') vault-ingest $* ==="
-    "$pipeline/ingest.sh" "$@"
+    echo "=== $(date '+%Y-%m-%d %H:%M:%S') vault-ingest ${args[*]-} ==="
+    "$pipeline/ingest.sh" ${args[@]+"${args[@]}"}
     status=$?
     if [ "$status" -eq 0 ]; then
         # Stubs captured on the phone, in case any are waiting.
@@ -33,13 +41,22 @@ log="${XDG_RUNTIME_DIR:-/tmp}/vault-ingest.log"
     echo "=== exit $status ==="
 } >"$log" 2>&1
 
-summary=$(grep -E 'ingested,|processed [0-9]+ of' "$log" | tail -2 | tr '\n' ' ')
+summary=$(grep -E 'ingested,|processed [0-9]+ of|inbox is empty' "$log" | tail -2 | tr '\n' ' ')
 [ -n "$summary" ] || summary="nothing to do"
 
-if grep -qE 'FAILED|could not fetch' "$log"; then
-    notify "Vault ingest finished with errors" "$summary — see $log"
-else
-    notify "Vault ingest finished" "$summary"
+if [ -n "$quiet" ]; then
+    cat "$log"
+    exit "$status"
+fi
+
+if command -v notify-send >/dev/null 2>&1; then
+    if grep -qE 'FAILED|could not fetch' "$log"; then
+        notify-send --app-name="Vault pipeline" --expire-time=10000 \
+            "Vault ingest finished with errors" "$summary see $log"
+    else
+        notify-send --app-name="Vault pipeline" --expire-time=8000 \
+            "Vault ingest finished" "$summary"
+    fi
 fi
 
 tail -20 "$log"
