@@ -17,16 +17,26 @@ sbar.add("event", "media_change")
 sbar.bar({
   height = 65, -- Width (since bar is vertical)
   position = "right", -- Vertical Layout
-  y_offset = 26,
+  y_offset = 50, -- must clear the menu bar or the bar draws over it. Menu bar
+  -- height on this display is 50px (check with:
+  --   osascript -e 'tell application "System Events" to get size of menu bar 1
+  --                 of application process "Finder"'
+  -- => "2294, 50"). The first item then starts ~12px lower, level with the
+  -- top edge of a `yabai -m window --grid 1:1:0:0:1:1` window.
   margin = 10,
   corner_radius = 9,
-  blur_radius = 20,
+  blur_radius = 0, -- was 20: blur is the most expensive thing the bar composites
   padding_left = 10,
   padding_right = 10,
   color = colors.transparent,
-  shadow = true,
+  shadow = false, -- was true: one more shadow per redraw
   sticky = true,
-  topmost = false,
+  -- topmost: "window" (kCGFloatingWindowLevel) sits above app windows but
+  -- BELOW system panels. Do not use `true`/on (= kCGStatusWindowLevel, the
+  -- "all" level): that paints the bar over Control Centre and the
+  -- notification history. Do not use false either (= kCGBackstopMenuLevel):
+  -- the bar renders but is invisible. See bar_manager_set_topmost().
+  topmost = "window",
 })
 
 -- 2. Default Item Settings
@@ -74,13 +84,24 @@ require("items.apple")
 require("items.front_app")
 
 -- Center Section (Workspaces)
-require("items.aerospace")
+-- Spaces strip for the native Mission Control spaces, driven by yabai
+-- signals (see items/yabai_spaces.lua).
+require("items.yabai_spaces")
+
+-- DISABLED: items.aerospace shells out to the `aerospace` binary, which is not
+-- installed, from a 5s periodic_refresh loop — it logged "sh: aerospace:
+-- command not found" every 5 seconds and drew 12 animated space items.
+-- Re-enable only if AeroSpace comes back (it creates the same space.* ids as
+-- items/yabai_spaces.lua, so only one of the two may be active).
+-- require("items.aerospace")
 require("items.media")
 require("items.volume")
 require("items.wifi")
 require("items.weather")
 require("items.git")
-require("items.cpu")
+-- DISABLED: items.cpu spawns the cpu_load event-provider helper, which pushes
+-- an event every 2 seconds. Re-enable for the CPU label popup.
+-- require("items.cpu")
 
 -- Bottom Section
 require("items.widgets") -- Battery, Clock

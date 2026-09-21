@@ -1,31 +1,43 @@
 #!/usr/bin/env sh
 
-# Load the optional scripting addition only after SIP and sudoers are configured.
-if sudo -n yabai --load-sa >/dev/null 2>&1; then
-  yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
-fi
+# yabai does ONE job here: moving a window to a specific native macOS Space
+# (`yabai -m window --space N`), driven by skhd. Tiling is done by macOS
+# itself (Tahoe window tiling) plus Rectangle, so yabai stays in float layout:
+# it never places a window in a tile. That is also what makes the "ghost
+# window" problem structurally impossible — a ghost can only squeeze real
+# windows by holding a tile of its own.
+#
+# No scripting addition is installed and SIP stays enabled; nothing below
+# needs either.
 
-# layout
-yabai -m config layout bsp
+# no tiling — macOS tiling + Rectangle own window placement
+yabai -m config layout float
 
-# padding and gaps
+# padding — inert in a float layout (nothing is tiled), but this is the inset
+# that `yabai -m window --grid` uses, so it is what skhd's shift+alt+m
+# "fill with border" binding (grid 1:1:0:0:1:1) leaves around the window.
+#
+# right_padding is asymmetric on purpose: it reserves the column the vertical
+# sketchybar occupies, so a filled window does not slide under the bar.
+#   bar width (height = 65) + bar margin (10) + 10px gap = 85
+# Change it together with the sketchybar bar geometry.
 yabai -m config top_padding    10
 yabai -m config bottom_padding 10
 yabai -m config left_padding   10
-yabai -m config right_padding  10
-yabai -m config window_gap     10
+yabai -m config right_padding  85
 
-# mouse
+# mouse — fn + drag to move/resize, still useful without tiling
+# (focus_follows_mouse autoraise needs the scripting addition to raise; it is
+#  inert here but harmless, autofocus behaviour still applies)
 yabai -m config focus_follows_mouse autoraise
 yabai -m config mouse_modifier  fn
 yabai -m config mouse_action1   move
 yabai -m config mouse_action2   resize
-yabai -m config mouse_drop_action swap
 
 # window appearance
 yabai -m config window_shadow float
 
-# rules — float system windows
+# rules — never manage system / dialog windows
 yabai -m rule --add app="^System Settings$"  manage=off
 yabai -m rule --add app="^System Preferences$" manage=off
 yabai -m rule --add app="^Archive Utility$"  manage=off
@@ -37,4 +49,15 @@ yabai -m rule --add app="^1Password$"        manage=off
 yabai -m rule --add title="Preferences|Settings" manage=off
 yabai -m rule --add title="Open|Save|Export|Import" manage=off
 
-echo "yabai config loaded"
+# NOTE — pinning an app to a Space with a RULE does NOT work here.
+# Verified 2026-09-21 (yabai v7.1.25, SIP on, no scripting addition):
+#   yabai -m rule --add label="safari-desktop-2" app="^Safari$" space=2
+# registers fine (`yabai -m rule --list` shows it) but never relocates a
+# window — neither for new windows nor via `yabai -m rule --apply`. The rule
+# engine needs the scripting addition for Space assignment.
+# What DOES work without the SA: `yabai -m window <id> --space N` — that is
+# what mlx-focus uses to park Safari on Desktop 2 at open time.
+# For a permanent per-app Space, use the native macOS binding instead:
+#   Dock → right-click app → Options → Assign To → This Desktop
+
+echo "yabai config loaded (float: space-moving only)"

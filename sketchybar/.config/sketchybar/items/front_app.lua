@@ -36,7 +36,7 @@ local front_app_label = sbar.add("item", "front_app.label", {
   icon = { drawing = false },
   padding_left = -17,
   padding_right = 29,
-  scroll_texts = true,
+  scroll_texts = false, -- marquee = continuous redraw; was true
   label = {
     string = "—",
     font = {

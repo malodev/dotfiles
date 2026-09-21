@@ -61,9 +61,12 @@ cask "font-hack-nerd-font" if OS.mac?
 cask "nikitabobko/tap/aerospace" if OS.mac?
 cask "amethyst" if OS.mac?
 cask "font-sketchybar-app-font" if OS.mac?
+cask "hammerspoon" if OS.mac?
 #
 # Mac formulas
 brew "FelixKratz/formulae/sketchybar" if OS.mac?
 brew "borders" if OS.mac?
+brew "asmvik/formulae/yabai" if OS.mac?
+brew "koekeishiya/formulae/skhd" if OS.mac?
 brew "reattach-to-user-namespace" if OS.mac?
 

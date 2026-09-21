@@ -42,7 +42,7 @@ local media = sbar.add("item", "media", {
   },
   width = settings.item_width,
   updates = true,
-  update_freq = 5,
+  update_freq = 30, -- was 5: a subprocess every 5s just to notice a track change
 })
 
 -- Song title label below icon
@@ -50,7 +50,7 @@ local media_label = sbar.add("item", "media.label", {
   position = "center",
   icon = { drawing = false },
   padding_left = -22,
-  scroll_texts = true,
+  scroll_texts = false, -- marquee = continuous redraw; was true
   label = {
     string = "—",
     font = {
