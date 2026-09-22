@@ -44,11 +44,22 @@ done
 summary=$(grep -E 'ingested,|processed [0-9]+ of|inbox is empty' "$log" | tail -2 | tr '\n' ' ')
 [ -n "$summary" ] || summary="nothing to do"
 
-# Notes that moved need Obsidian's link graph rebuilt before the dataview lists show them.
-# A folder listing never needs this, which is why the done folders are the durable record.
+# Ask Obsidian to re-render its dataview lists rather than telling you to reload by hand.
+# Dataview indexes metadata incrementally, so a batch of moves can leave its link graph
+# partial. Its own "force refresh" command re-runs the views. This needs the Advanced URI
+# plugin, and it is silently skipped when Obsidian is closed or the plugin is off.
+refresh_obsidian() {
+    [ -n "${XDG_RUNTIME_DIR:-}" ] || return 0
+    pgrep -f '[o]bsidian' >/dev/null 2>&1 || return 0
+    grep -q 'obsidian-advanced-uri' "$vault/.obsidian/community-plugins.json" 2>/dev/null || return 0
+    command -v xdg-open >/dev/null 2>&1 || return 0
+    xdg-open "obsidian://advanced-uri?vault=$(basename "$vault")&commandid=dataview-force-refresh-views" >/dev/null 2>&1 || true
+    echo "asked Obsidian to refresh its dataview views" >> "$log"
+}
+
 moved=$(grep -oE '^[0-9]+ ingested,' "$log" | head -1 | grep -oE '[0-9]+')
 if [ -n "$moved" ] && [ "$moved" -gt 0 ]; then
-    summary="$summary Reload Obsidian to refresh the dataview lists."
+    refresh_obsidian
 fi
 
 if [ -n "$quiet" ]; then
