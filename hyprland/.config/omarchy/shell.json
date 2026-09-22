@@ -19,7 +19,11 @@
       ],
       "center": [
         {
-          "id": "omarchy.workspaces"
+          "id": "mauro.workspaces"
+        },
+        {
+          "id": "omacom.elsewhen",
+          "zones": "Rome|Europe/Rome, Delhi|Asia/Kolkata, Tokyo|Asia/Tokyo, Los Angeles|America/Los_Angeles, New York|America/New_York"
         },
         {
           "id": "omarchy.clock",

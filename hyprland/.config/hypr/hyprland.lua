@@ -56,3 +56,15 @@ hl.on("window.title", tile_1password_settings)
 for _, window in ipairs(hl.get_windows({ class = "^1password$", title = "^Settings$" })) do
   tile_1password_settings(window)
 end
+
+-- Window rules that were only in the working copy when my stash parked them.
+o.window({ class = "^gimp$" }, { opaque = true })
+o.window(
+  { class = "^org\\.omarchy\\.btop$", tag = "floating-window" },
+  { size = { "(monitor_w * 0.6)", "(monitor_h * 0.7)" } }
+)
+o.window({ class = "^jetbrains-toolbox$" }, { center = true })
+o.window(
+  { class = "^org\\.omarchy\\.terminal$", tag = "floating-window" },
+  { size = { "(monitor_w * 0.6)", "(monitor_h * 0.7)" } }
+)
