@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# Fetch the missing transcripts of the vault's YouTube notes.
+#
+# ReadItLater's video template cannot carry a transcript, and YouTube does not always hand
+# one over at filing time, so this revisits the video notes that have none and fills them in
+# from the video's original caption track, in whatever language the video was spoken in.
+# Nothing is moved and nothing is reclassified: it only edits the transcript section.
+#
+#   vault-transcripts                 # fill in what is missing
+#   vault-transcripts --dry-run       # list what would be fetched
+#   vault-transcripts --force         # refetch every video note, taking the original track
+#   vault-transcripts --limit 5       # a handful, politely spaced
+#   vault-transcripts --only Floridi  # one note, by path substring
+#
+# Arguments are passed through to fill-transcripts.py.
+
+set -uo pipefail
+
+vault="${VAULT:-$HOME/Nextcloud/Obsidian/MalosVault}"
+pipeline="$vault/Tools/vault-pipeline"
+log="${XDG_RUNTIME_DIR:-/tmp}/vault-transcripts.log"
+
+lock="${XDG_RUNTIME_DIR:-/tmp}/malosvault-transcripts.lock"
+exec 9>"$lock" || exit 1
+if ! flock -n 9; then
+    command -v notify-send >/dev/null 2>&1 &&
+        notify-send --app-name="Vault pipeline" "Vault transcripts" "another run is already going"
+    exit 1
+fi
+
+{
+    echo "=== $(date '+%Y-%m-%d %H:%M:%S') vault-transcripts ${*:-} ==="
+    uv run --quiet --script "$pipeline/fill-transcripts.py" "$@"
+    status=$?
+    echo "=== exit $status ==="
+} >"$log" 2>&1
+
+summary=$(grep -E 'transcript\(s\) written|already has a transcript|note\(s\) without a transcript' "$log" | tail -1)
+[ -n "$summary" ] || summary="nothing to do"
+
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send --app-name="Vault pipeline" --expire-time=8000 "Vault transcripts" "$summary"
+fi
+
+tail -30 "$log"
+exit "$status"
