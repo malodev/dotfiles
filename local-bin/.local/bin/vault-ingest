@@ -44,6 +44,13 @@ done
 summary=$(grep -E 'ingested,|processed [0-9]+ of|inbox is empty' "$log" | tail -2 | tr '\n' ' ')
 [ -n "$summary" ] || summary="nothing to do"
 
+# Notes that moved need Obsidian's link graph rebuilt before the dataview lists show them.
+# A folder listing never needs this, which is why the done folders are the durable record.
+moved=$(grep -oE '^[0-9]+ ingested,' "$log" | head -1 | grep -oE '[0-9]+')
+if [ -n "$moved" ] && [ "$moved" -gt 0 ]; then
+    summary="$summary Reload Obsidian to refresh the dataview lists."
+fi
+
 if [ -n "$quiet" ]; then
     cat "$log"
     exit "$status"
