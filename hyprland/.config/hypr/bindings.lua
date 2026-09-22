@@ -26,9 +26,20 @@ o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
 hl.unbind("SUPER + SHIFT + R")
 o.bind("SUPER + SHIFT + R", "Screen recording", "omarchy-capture-screenrecording --stop-recording || omarchy-menu toggle trigger.capture.screenrecord")
 
+-- This keyboard has no PRINT key, so move the OCR text extraction to a real one.
+-- SUPER+SHIFT+O is Obsidian and SUPER+CTRL+O is taken, so SUPER+ALT+O it is.
+-- Language list comes from OMARCHY_OCR_LANGS (eng+ita), set in hyprland_local.lua.
+hl.unbind("SUPER + CTRL + PRINT")
+o.bind("SUPER + ALT + O", "Extract text (OCR) from screenshot", "omarchy-capture-text")
+
+-- Same stranded PRINT row: the color picker lived on SUPER+PRINT.
+hl.unbind("SUPER + PRINT")
+o.bind("SUPER + ALT + P", "Color picker", "pkill hyprpicker || hyprpicker -a")
+
 -- Quattro leaves SUPER+SHIFT+T free; use it for the Voxtype toggle and keep
 -- upstream's SUPER+CTRL+T Activity binding untouched.
 o.bind("SUPER + SHIFT + T", "Toggle Voxtype mode", "voxtype-mode-toggle")
+
 
 -- Scrolling/dwindle navigation. SUPER+L toggles the active workspace's
 -- layout, so shared keys must behave on both layout types. The native

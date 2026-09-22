@@ -37,22 +37,27 @@ o.window(
   { tile = true, fullscreen = false }
 )
 
--- 1Password creates Settings as a fixed-size floating Electron window and
--- rejects compositor resize requests. Its title changes from "1Password" to
--- "Settings" after mapping, so a static title rule cannot match it reliably.
-local function tile_1password_settings(window)
-  if window ~= nil
-      and window.class == "1password"
-      and window.title == "Settings"
-      and window.floating then
-    hl.dispatch(hl.dsp.window.float({ action = "unset", window = window }))
-  end
-end
+-- Keep GIMP always fully opaque (no active/inactive transparency).
+o.window({ class = "^gimp$" }, { opaque = true })
 
-hl.on("window.open", tile_1password_settings)
-hl.on("window.title", tile_1password_settings)
+-- Super+Ctrl+T (Activity/btop) lands in Omarchy's 875x600 floating default
+-- (applied by the floating-window tag, which beats plain class rules), so match
+-- that tag too and size it relative to whichever monitor it opens on.
+o.window(
+  { class = "^org\\.omarchy\\.btop$", tag = "floating-window" },
+  { size = { "(monitor_w * 0.6)", "(monitor_h * 0.7)" } }
+)
 
--- Apply the correction to Settings if this config is reloaded while it is open.
-for _, window in ipairs(hl.get_windows({ class = "^1password$", title = "^Settings$" })) do
-  tile_1password_settings(window)
-end
+-- JetBrains Toolbox remembers its float position, and it was once parked at
+-- x=-880 on a monitor starting at x=0 (invisible, off the left edge).
+-- Centering on open keeps it on screen whatever the monitor layout is.
+o.window({ class = "^jetbrains-toolbox$" }, { center = true })
+
+-- The update/install "presentation" terminal (org.omarchy.terminal, title
+-- Omarchy) otherwise inherits Omarchy's generic 875x600 float, which is too
+-- cramped for gum tables and logs (it even warns about missing columns).
+-- Same monitor-relative sizing as the btop window above.
+o.window(
+  { class = "^org\\.omarchy\\.terminal$", tag = "floating-window" },
+  { size = { "(monitor_w * 0.6)", "(monitor_h * 0.7)" } }
+)
