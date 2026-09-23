@@ -348,6 +348,24 @@ def _run_with_progress(client: "ControlClient", label: str, action: Callable[[],
     return outcome["result"]
 
 
+# Mirror of manager.py's mode sets. The server is the authority and re-validates every
+# one of these; the lists exist so --help and shell completion describe the truth, and so a
+# mode added host-side without updating the client fails as argparse's own "invalid
+# choice" instead of something subtler further down.
+SETTABLE_MODES = ("team", "studio", "ds4", "qwen-flash", "stop")
+LEASABLE_MODES = ("team", "ds4", "qwen-flash")
+RESTORE_MODES = SETTABLE_MODES
+
+
+def _add_force(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="override the card guards (a peer holding VRAM, or another owner generating); "
+             "never overrides a lease held by someone else",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pi-inference")
     parser.add_argument("--config", type=Path)
@@ -359,18 +377,23 @@ def build_parser() -> argparse.ArgumentParser:
     credential.add_argument("--replace", action="store_true", help="replace an existing credential (requires --install)")
     credential.add_argument("name", choices=["model-api", "control-api"])
     acquire = sub.add_parser("acquire")
-    acquire.add_argument("--mode", choices=["team", "ds4", "maintenance"], default="team")
+    acquire.add_argument("--mode", choices=list(LEASABLE_MODES) + ["maintenance"], default="team")
     acquire.add_argument("--owner")
-    acquire.add_argument("--expected-restore-mode", choices=["team", "studio", "ds4", "stop"])
+    acquire.add_argument("--expected-restore-mode", choices=list(RESTORE_MODES))
     acquire.add_argument("--ttl", type=int, default=None)
+    _add_force(acquire)
     renew = sub.add_parser("renew")
     renew.add_argument("--owner")
     renew.add_argument("--ttl", type=int, default=None)
     release = sub.add_parser("release")
     release.add_argument("--owner")
-    release.add_argument("--restore-mode", choices=["team", "studio", "ds4", "stop"])
-    for mode in ("team", "studio", "ds4", "stop"):
-        sub.add_parser(mode)
+    release.add_argument("--restore-mode", choices=list(RESTORE_MODES))
+    # --force on release is local-socket only, and the manager refuses it over TCP. Passing
+    # it from a remote host therefore fails with a clear 403 rather than doing something
+    # quietly different from what it does locally.
+    _add_force(release)
+    for mode in SETTABLE_MODES:
+        _add_force(sub.add_parser(mode))
     return parser
 
 
@@ -415,6 +438,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 }
                 if args.expected_restore_mode is not None:
                     request_body["expected_restore_mode"] = args.expected_restore_mode
+                if args.force:
+                    request_body["force"] = True
                 result = _run_with_progress(
                     client, f"acquiring {args.mode} lease",
                     lambda: client.request("POST", "/v1/leases", request_body),
@@ -433,7 +458,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             with _client_lock():
                 lease = _load_lease(owner)
                 _assert_lease_manager(lease, config)
-                body = {"restore_mode": args.restore_mode} if args.restore_mode else None
+                body: dict[str, Any] = {}
+                if args.restore_mode:
+                    body["restore_mode"] = args.restore_mode
+                if args.force:
+                    body["force"] = True
+                body = body or None
                 label = f"releasing lease, restoring {args.restore_mode} mode" if args.restore_mode else "releasing lease"
                 result = _run_with_progress(
                     client, label,
@@ -442,9 +472,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                 )
                 _remove_lease(owner)
         else:
+            mode_body: dict[str, Any] = {"mode": args.command}
+            if getattr(args, "force", False):
+                mode_body["force"] = True
             result = _run_with_progress(
                 client, f"switching to {args.command} mode",
-                lambda: client.request("POST", "/v1/mode", {"mode": args.command}),
+                lambda: client.request("POST", "/v1/mode", mode_body),
                 quiet=args.json,
             )
         _print(result, args.json)

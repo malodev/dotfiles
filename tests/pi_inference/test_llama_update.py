@@ -13,12 +13,12 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-MODULE = Path(__file__).parents[2] / "pi-inference-host/.local/lib/pi_inference_host/llama_update.py"
-SPEC = importlib.util.spec_from_file_location("pi_inference_host.llama_update", MODULE)
-llama_update = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = llama_update
-assert SPEC.loader
-SPEC.loader.exec_module(llama_update)
+# See _host.py: the host tree moved out of this repo in dcee88f and these tests
+# silently stopped loading for six weeks because of it.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _host  # noqa: E402
+
+llama_update = _host.load("llama_update")
 
 
 class FakeRunner:
