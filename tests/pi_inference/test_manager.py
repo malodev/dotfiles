@@ -165,6 +165,7 @@ def tenant_world(
     comfy: float = 0.0,
     comfy_active: bool = False,
     headroom: int = 512,
+    config_overrides: dict | None = None,
 ):
     """A controller whose card is a function of which units are up.
 
@@ -177,7 +178,9 @@ def tenant_world(
     states = dict(running or {})
     states.setdefault("comfyui.service", "active" if comfy_active else "inactive")
     calls: list[list[str]] = []
-    cfg = tenant_config(root, tenants=tenants, headroom=headroom)
+    cfg = dataclasses.replace(
+        tenant_config(root, tenants=tenants, headroom=headroom), **(config_overrides or {})
+    )
 
     def probe() -> tuple[float, float]:
         used = sum(peaks.get(unit, 0) for unit, state in states.items() if state == "active")
@@ -1035,8 +1038,8 @@ class ServiceControllerProgressTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.controller.progress)
         await self.controller.switch("team")
         self.assertIsNone(self.controller.progress)
-        self.assertIn("stopping studio", self.observed)
         self.assertIn("stopping ds4", self.observed)
+        self.assertIn("stopping qwen-flash.service", self.observed)
         self.assertIn("starting router", self.observed)
         self.assertIn("waiting for the router to become ready", self.observed)
 
@@ -1044,7 +1047,7 @@ class ServiceControllerProgressTest(unittest.IsolatedAsyncioTestCase):
         await self.controller.switch("ds4")
         self.assertIsNone(self.controller.progress)
         self.assertIn("stopping router", self.observed)
-        self.assertIn("stopping studio", self.observed)
+        self.assertIn("stopping qwen-flash.service", self.observed)
         self.assertIn("starting ds4", self.observed)
         self.assertIn("waiting for ds4 to become ready", self.observed)
 
@@ -1052,7 +1055,6 @@ class ServiceControllerProgressTest(unittest.IsolatedAsyncioTestCase):
         await self.controller.switch("qwen-flash")
         self.assertIsNone(self.controller.progress)
         self.assertIn("stopping router", self.observed)
-        self.assertIn("stopping studio", self.observed)
         self.assertIn("stopping ds4", self.observed)
         self.assertIn("starting qwen-flash.service", self.observed)
         self.assertIn("waiting for qwen-flash to become ready", self.observed)
@@ -1421,6 +1423,151 @@ class StateFileRecoveryTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.build().status())["mode"], "ds4")
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")), payload)
         self.assertFalse((self.root / "state.json.unreadable").exists())
+
+
+STUDIO_APP = manager.Tenant("unsloth.service", 0, "low", "Unsloth Studio (loaded GGUF)", "residual")
+# The real declared peaks from manager.toml, so the arithmetic in these tests is the arithmetic
+# the host does. `studio` deliberately has none: entering it loads nothing.
+MEASURED_PEAKS = {"team": 18432, "ds4": 30720, "qwen-flash": 30552}
+STUDIO_WORLD = {
+    "studio_unit": "unsloth.service",
+    "min_free_vram_mib": MEASURED_PEAKS,
+}
+
+
+class StudioDecouplingTest(unittest.IsolatedAsyncioTestCase):
+    """Studio is an app that may hold VRAM, not a card owner.
+
+    While `unsloth.service` was one of the owner units two things were unavoidable: `pi-inference
+    stop` closed the user's Studio session to reclaim memory the app was not holding, and an
+    always-on Studio would have looked like a permanent conflict. What these tests pin is both
+    halves of the trade: the app is never touched by a mode switch, and yet a GGUF loaded inside
+    it is still charged, still evicted when a model needs the room, and still a refusal when
+    nothing explains it.
+    """
+
+    async def asyncSetUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="pi-inference-studio-")
+        self.root = Path(self.temp.name)
+
+    async def asyncTearDown(self):
+        self.temp.cleanup()
+
+    def world(self, *, running: dict[str, str], gguf_mib: int = 0, extra_peaks: dict[str, int] | None = None):
+        """A card whose usage is the sum of what is up, with a GGUF inside Studio.
+
+        `gguf_mib` is memory the manager is never told about — no tenant declares a number for a
+        residual holder — which is the point: it has to be found by elimination or not at all.
+        """
+        peaks = {"unsloth.service": gguf_mib, "qwen-flash.service": MEASURED_PEAKS["qwen-flash"]}
+        peaks.update(extra_peaks or {})
+        return tenant_world(
+            self.root,
+            tenants=(STUDIO_APP,),
+            peaks=peaks,
+            running=running,
+            config_overrides=STUDIO_WORLD,
+        )
+
+    async def test_no_mode_switch_touches_the_app_unit(self):
+        for mode in ("team", "ds4", "qwen-flash", "stop", "maintenance"):
+            with self.subTest(mode=mode):
+                controller, calls, states = self.world(
+                    running={"unsloth.service": "active", "qwen-flash.service": "active"}
+                )
+                await controller.services.switch(mode)
+                self.assertFalse(
+                    [call for call in mutations(calls) if "unsloth.service" in call],
+                    f"{mode} went near Studio's unit",
+                )
+                self.assertEqual(states["unsloth.service"], "active")
+
+    async def test_entering_studio_stops_the_models_and_starts_the_app(self):
+        controller, calls, states = self.world(running={"qwen-flash.service": "active"})
+        status = await controller.set_mode({"mode": "studio"})
+        self.assertEqual(status["mode"], "studio")
+        self.assertEqual(states["unsloth.service"], "active", "the mode did not bring the app up")
+        self.assertEqual(states["qwen-flash.service"], "inactive")
+        self.assertIn("start unsloth.service", mutations(calls))
+        self.assertNotIn("start qwen-flash.service", mutations(calls))
+
+    async def test_handing_the_card_back_stops_a_loaded_gguf_and_spares_an_idle_app(self):
+        loaded, _calls, states = self.world(running={"unsloth.service": "active"}, gguf_mib=20480)
+        await loaded.services.switch("stop")
+        self.assertEqual(states["unsloth.service"], "inactive", "'free the card' left 20 GiB loaded")
+
+        idle, _calls, states = self.world(running={"unsloth.service": "active"})
+        await idle.services.switch("stop")
+        self.assertEqual(
+            states["unsloth.service"], "active", "an app holding nothing has no business being closed"
+        )
+
+    async def test_a_model_takes_the_card_from_a_loaded_gguf_by_itself(self):
+        controller, calls, states = self.world(
+            running={"unsloth.service": "active"},
+            gguf_mib=20480,
+            extra_peaks={"ds4": 30000},
+        )
+        status = await controller.set_mode({"mode": "ds4"})
+        self.assertEqual(status["mode"], "ds4")
+        self.assertEqual(states["unsloth.service"], "inactive")
+        self.assertIn("stop unsloth.service", mutations(calls))
+
+    async def test_an_evicted_app_waits_for_an_idle_card_instead_of_flapping(self):
+        controller, calls, states = self.world(
+            running={"unsloth.service": "active"}, gguf_mib=20480, extra_peaks={"ds4": 30000}
+        )
+        await controller.set_mode({"mode": "ds4"})
+        self.assertIn("stop unsloth.service", mutations(calls))
+        self.assertNotIn(
+            "start unsloth.service", mutations(calls),
+            "restarting the app under a loaded model hands back the memory the switch just took",
+        )
+        # Hand the card back and it is safe again: nothing else is on the card for its next
+        # allocation to collide with, so the reconcile may bring it up.
+        await controller.services.switch("stop")
+        self.assertEqual(states["unsloth.service"], "inactive", "handing the card back should stop the app too")
+        await controller.reconcile_tenants("test")
+        self.assertEqual(states["unsloth.service"], "active")
+
+    async def test_a_card_hungry_mode_without_a_peak_is_refused_not_skipped(self):
+        # `studio` left CARD_HUNGRY_MODES because entering it loads nothing and there is no
+        # measurement to declare. What remains in that set are the three owners, and a missing
+        # measurement among *those* must stop the transition: this is the hole `studio` fell
+        # through, where an undeclared peak meant the capacity check was skipped rather than
+        # failed, on the one check that keeps two 30 GiB models off one card.
+        controller, calls, _states = tenant_world(
+            self.root,
+            tenants=(),
+            peaks={"ds4": 30000},
+            running={},
+            config_overrides={"studio_unit": "unsloth.service", "min_free_vram_mib": {"team": 18432}},
+        )
+        with self.assertRaises(manager.ManagerError) as refused:
+            await controller.set_mode({"mode": "ds4"})
+        self.assertIn("no measured peak", str(refused.exception))
+        self.assertFalse([call for call in mutations(calls) if call.startswith("start")])
+
+    async def test_the_apps_absence_does_not_explain_a_rogue_holder(self):
+        # Residual attribution is a charge against a running app, not a licence for mystery
+        # memory: with Studio down the same bytes must refuse the switch again.
+        controller, _calls, _states = tenant_world(
+            self.root,
+            tenants=(STUDIO_APP,),
+            peaks={"x-another-workload.service": 8000},
+            running={"x-another-workload.service": "active"},
+            config_overrides=STUDIO_WORLD,
+        )
+        with self.assertRaises(manager.ManagerError) as refused:
+            await controller.set_mode({"mode": "team"})
+        self.assertIn("outside this manager", str(refused.exception))
+
+    async def test_status_still_reports_the_app(self):
+        controller, _calls, _states = self.world(running={"unsloth.service": "active"}, gguf_mib=20480)
+        status = await controller.status()
+        self.assertEqual(status["services"]["studio"], "active")
+        self.assertEqual([t["unit"] for t in status["tenants"]], ["unsloth.service"])
+        self.assertEqual(status["tenants"][0]["attribution"], "residual")
 
 
 if __name__ == "__main__":

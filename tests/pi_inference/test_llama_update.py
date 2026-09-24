@@ -311,6 +311,32 @@ class LlamaUpdateTest(unittest.TestCase):
         with self.assertRaisesRegex(llama_update.UpdateError, "not in a stable"):
             llama_update.manager_status(runner)
 
+    def test_manager_status_is_judged_over_the_card_owners(self):
+        # Studio left the owner set on 2026-09-23: it is an always-on app, so its unit says
+        # nothing about who holds the card, and including it would have made every healthy host
+        # look inconsistent. qwen-flash joined the axis for the opposite reason — a card owner
+        # this check could not see was a card owner it would happily promote over.
+        def view(services: dict[str, str], mode: str) -> llama_update.ManagerStatus:
+            return llama_update.manager_status(
+                FakeRunner({"mode": mode, "lease": None, "services": services})
+            )
+
+        quiet = {"router": "inactive", "studio": "active", "ds4": "inactive", "qwen": "inactive"}
+        self.assertEqual(
+            view({**quiet, "qwen": "active"}, "qwen-flash").mode, "qwen-flash"
+        )
+        self.assertEqual(view(quiet, "stop").restore_mode, "stop")
+        # `studio` declares no card owner, so it shares `stop`'s unit signature and restores to
+        # `stop`: the app is not what a promotion runs over.
+        studio = view(quiet, "studio")
+        self.assertEqual((studio.mode, studio.restore_mode), ("studio", "stop"))
+        both = {"router": "active", "studio": "active", "ds4": "inactive", "qwen": "active"}
+        with self.assertRaisesRegex(llama_update.UpdateError, "not in a stable state"):
+            view(both, "qwen-flash")
+        mismatch = {"router": "active", "studio": "inactive", "ds4": "inactive", "qwen": "inactive"}
+        with self.assertRaisesRegex(llama_update.UpdateError, "not in a stable, consistent state"):
+            view(mismatch, "qwen-flash")
+
     def test_rollback_rejects_path_traversal(self):
         args = argparse.Namespace(
             root=self.root,
