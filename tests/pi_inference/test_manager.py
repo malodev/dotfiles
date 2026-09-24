@@ -437,6 +437,49 @@ class ManagerTest(unittest.IsolatedAsyncioTestCase):
             server.close()
             await server.wait_closed()
 
+    async def test_client_hangup_during_the_reply_is_not_a_crash(self):
+        """A client that vanishes before reading its reply must not raise out of the callback.
+
+        `curl` interrupted, an abandoned panel poll, the CLI killed mid-call: the answer is already
+        computed and the socket is gone. Letting ConnectionResetError escape makes asyncio log
+        "Unhandled exception in client_connected_cb" with a traceback, which put three ERROR lines
+        in the control plane's journal for a request that had succeeded — in the one log a real
+        transition failure has to be findable in.
+        """
+        class _HangupWriter:
+            def __init__(self) -> None:
+                self.written = 0
+                self.closed = False
+
+            def get_extra_info(self, key: str, default: object = None) -> object:
+                return default
+
+            def write(self, data: bytes) -> None:
+                self.written += len(data)
+
+            async def drain(self) -> None:
+                raise ConnectionResetError("Connection lost")
+
+            def close(self) -> None:
+                self.closed = True
+
+            async def wait_closed(self) -> None:
+                return None
+
+        http = manager.HTTPServer(self.manager, "control-token")
+        reader = asyncio.StreamReader()
+        reader.feed_data(b"GET /v1/status HTTP/1.1\r\nHost: localhost\r\n"
+                         b"Authorization: Bearer control-token\r\n\r\n")
+        reader.feed_eof()
+        writer = _HangupWriter()
+        with self.assertLogs("pi-inference-manager", level="DEBUG") as captured:
+            await http.handle(reader, writer, False)
+        self.assertGreater(writer.written, 0, "the reply was prepared, the client just never read it")
+        self.assertTrue(writer.closed, "the socket is closed either way")
+        output = "\n".join(captured.output)
+        self.assertIn("response_dropped", output)
+        self.assertNotIn("Traceback", output)
+
     async def test_tcp_http_requires_control_bearer_token(self):
         http = manager.HTTPServer(self.manager, "control-token")
         server = await asyncio.start_server(lambda reader, writer: http.handle(reader, writer, False), "127.0.0.1", 0)
