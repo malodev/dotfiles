@@ -4,6 +4,5 @@
     "ctrl+alt+y"
   ],
   "pi-sub-bar.toggle": "ctrl+alt+k",
-  "plannotator.open": "ctrl+alt+p",
-  "deleteToLineStart": []
+  "plannotator.open": "ctrl+alt+p"
 }
