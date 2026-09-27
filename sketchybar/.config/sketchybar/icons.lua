@@ -36,6 +36,4 @@ return {
     connected = "􀙇",
     disconnected = "􀙈",
   },
-
-  cpu = "",
 }

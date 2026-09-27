@@ -87,21 +87,11 @@ require("items.front_app")
 -- Spaces strip for the native Mission Control spaces, driven by yabai
 -- signals (see items/yabai_spaces.lua).
 require("items.yabai_spaces")
-
--- DISABLED: items.aerospace shells out to the `aerospace` binary, which is not
--- installed, from a 5s periodic_refresh loop — it logged "sh: aerospace:
--- command not found" every 5 seconds and drew 12 animated space items.
--- Re-enable only if AeroSpace comes back (it creates the same space.* ids as
--- items/yabai_spaces.lua, so only one of the two may be active).
--- require("items.aerospace")
 require("items.media")
 require("items.volume")
 require("items.wifi")
 require("items.weather")
 require("items.git")
--- DISABLED: items.cpu spawns the cpu_load event-provider helper, which pushes
--- an event every 2 seconds. Re-enable for the CPU label popup.
--- require("items.cpu")
 
 -- Bottom Section
 require("items.widgets") -- Battery, Clock
