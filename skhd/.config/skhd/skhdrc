@@ -1,49 +1,42 @@
-# skhd drives yabai for space moving only. yabai runs in float layout (see
-# ~/.config/yabai/yabairc) — there is no tiling, so no ghost-window squeezing
-# and no yabai-fix-layout.sh watchdog. macOS Tiling handles window placement.
-
-# Switch to workspace N with Option-N.
-# (Alternative without skhd: System Settings -> Keyboard -> Keyboard Shortcuts
-#  -> Mission Control -> enable "Switch to Desktop N" and assign Option-N.
-#  That is OS-level, so kitty's Secure Keyboard Entry cannot eat it.)
-alt - 1 : yabai -m space --focus 1
-alt - 2 : yabai -m space --focus 2
-alt - 3 : yabai -m space --focus 3
-alt - 4 : yabai -m space --focus 4
-alt - 5 : yabai -m space --focus 5
-alt - 6 : yabai -m space --focus 6
-alt - 7 : yabai -m space --focus 7
-alt - 8 : yabai -m space --focus 8
-alt - 9 : yabai -m space --focus 9
-alt - 0 : yabai -m space --focus 10
-
-# Move the focused window to workspace N and follow it with Option-Shift-N.
-shift + alt - 1 : yabai -m window --space 1 --focus
-shift + alt - 2 : yabai -m window --space 2 --focus
-shift + alt - 3 : yabai -m window --space 3 --focus
-shift + alt - 4 : yabai -m window --space 4 --focus
-shift + alt - 5 : yabai -m window --space 5 --focus
-shift + alt - 6 : yabai -m window --space 6 --focus
-shift + alt - 7 : yabai -m window --space 7 --focus
-shift + alt - 8 : yabai -m window --space 8 --focus
-shift + alt - 9 : yabai -m window --space 9 --focus
-shift + alt - 0 : yabai -m window --space 10 --focus
-
-# Fill the focused window into its whole space, keeping a border
-# (the padding values in ~/.config/yabai/yabairc, 10px) with Option-Shift-M.
-shift + alt - m : yabai -m window --grid 1:1:0:0:1:1
-
-# Focus windows with Option-H/J/K/L.
-alt - h : yabai -m window --focus west
-alt - j : yabai -m window --focus south
-alt - k : yabai -m window --focus north
-alt - l : yabai -m window --focus east
-
-# Toggle floating mode — removed: every window is floating now (layout float).
-# shift + alt - f : yabai -m window --toggle float
-
-# Swap windows with Option-Shift-H/J/K/L.
-shift + alt - h : yabai -m window --swap west
-shift + alt - j : yabai -m window --swap south
-shift + alt - k : yabai -m window --swap north
-shift + alt - l : yabai -m window --swap east
+# No bindings live here anymore.
+#
+# skhd is a CGEventTap, and macOS Secure Event Input blinds every event tap
+# session-wide: while some app holds SE (kitty's toggle, a password prompt,
+# loginwindow's lock screen), macOS delivers no key events to taps at all. On
+# 2026-09-26 that took every binding in this file down at once, and it stayed
+# down until a reboot, because a leaked SE token cannot be released by anything
+# but a new session.
+#
+# So every hotkey now lives where SE cannot reach it:
+#
+#   Option+1..0         native macOS "Switch to Desktop 1..10" hotkeys
+#                       (symbolichotkeys ids 118..127, enabled in
+#                        ~/Library/Preferences/com.apple.symbolichotkeys.plist
+#                        and registered live via SkyLight's
+#                        CGSSetSymbolicHotKeyEnabled). loginwindow-level, so SE
+#                        cannot eat them.
+#   Option+Shift+1..0   Karabiner-Elements -> scripts/yabai_move_window_to_space.sh N
+#   Option+H/J/K/L      focus window west/south/north/east
+#   Option+Shift+H/J/K/L  swap window west/south/north/east
+#   Option+Shift+M      fill the focused window into its Space (grid 1:1:0:0:1:1)
+#
+# The last three go through Karabiner-Elements -> scripts/yabai_window_action.sh.
+# Karabiner grabs the keyboard at the HID layer (kIOHIDOptionsTypeSeizeDevice) and
+# re-injects through its DriverKit virtual HID device with no CGEventTap
+# fallback, which is why it keeps remapping while SE is on. The rules are in
+# ~/.config/karabiner/karabiner.json, duplicated in both profiles so switching
+# profiles does not lose them.
+#
+# skhd is installed but disabled: `launchctl disable gui/$(id -u)/com.koekeishiya.skhd`
+# plus a bootout of the same label. Its launchd plist is still in
+# ~/Library/LaunchAgents, so it comes back with:
+#   launchctl enable gui/$(id -u)/com.koekeishiya.skhd
+#   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.koekeishiya.skhd.plist
+# Add bindings here only if you want that fallback; they work whenever SE happens
+# to be off. scripts/ensure_skhd_running.sh still runs (it detects and reports a
+# stuck SE token and pins kitty's SE preference to false) -- it just no longer
+# starts or supervises skhd.
+#
+# Layout note: yabai runs in float layout (see ~/.config/yabai/yabairc) -- there
+# is no tiling, so no ghost-window squeezing and no yabai-fix-layout.sh watchdog.
+# macOS Tiling handles window placement.
