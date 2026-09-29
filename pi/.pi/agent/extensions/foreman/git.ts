@@ -22,13 +22,21 @@ export async function headSha(repo: string): Promise<string> {
 
 const RUNTIME_DIR = "foreman/.run";
 
-/** Keep runtime files (state, logs) out of every commit without touching the owner's .gitignore. */
+/**
+ * Never committed, whatever the Builder forgets to put in .gitignore: Foreman's own runtime files and
+ * the dependency/test-output directories a fullstack project produces. Written to .git/info/exclude so
+ * the owner's tracked files and .gitignore stay untouched.
+ */
+const EXCLUDES = [`/${RUNTIME_DIR}/`, "node_modules/", ".venv/", "__pycache__/", "test-results/", "playwright-report/"];
+
 async function excludeRuntimeDir(repo: string): Promise<void> {
   const excludePath = join(repo, (await git(repo, ["rev-parse", "--git-path", "info/exclude"])).trim());
   const existing = await readFile(excludePath, "utf8").catch(() => "");
-  if (existing.split("\n").includes(`/${RUNTIME_DIR}/`)) return;
+  const present = new Set(existing.split("\n"));
+  const missing = EXCLUDES.filter((line) => !present.has(line));
+  if (missing.length === 0) return;
   await mkdir(join(excludePath, ".."), { recursive: true });
-  await appendFile(excludePath, `${existing && !existing.endsWith("\n") ? "\n" : ""}/${RUNTIME_DIR}/\n`);
+  await appendFile(excludePath, `${existing && !existing.endsWith("\n") ? "\n" : ""}${missing.join("\n")}\n`);
 }
 
 /**

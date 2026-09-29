@@ -37,6 +37,23 @@ Two files in `foreman/`:
 - **Self-contained goals.** The Builder sees only the goal, files, and tests. Put decisions it needs into the goal text (names, formats, edge cases), not into your head.
 - **A first version.** Cut anything not needed for a working MVP. List what you cut in `plan.md`.
 
+## Web apps: UI and end-to-end tasks
+
+Tests run headless and offline, inside a sandbox, one task at a time. For anything with a UI:
+
+- Prefer one process: a small backend that also serves the frontend, with no build step, so a task
+  does not need a bundler. Add the dependencies a task needs in that task.
+- Browser tests use Playwright Test. The browsers are already installed; follow any version note under
+  "Facts about this machine" exactly, and never download browsers. Let `playwright.config` start the app
+  itself (`webServer`), on a fixed high port, with a throwaway data file, so `npm test` needs no setup.
+- Test how the UI renders through the DOM, not pixels: roles and labels (`getByRole`), visibility,
+  text content, empty and error states, no console errors, and layout at a phone width (375px) and a
+  desktop width (for example, no horizontal scrolling and controls inside the viewport). Avoid
+  screenshot comparisons; they break on every font or engine change.
+- Put API tests and UI tests in separate tasks, and end with an end-to-end task that walks the main
+  user flow through the real UI, including a reload to prove persistence.
+- The first task creates `.gitignore` (dependencies and test output) and the test runner.
+
 ## How to work
 
 1. Understand the request. If it is an idea or intent, ask the owner the few questions that change the plan (who uses it, the stack if it matters, what the first version must do). Do not interrogate; propose sensible defaults and confirm them in one message.

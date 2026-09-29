@@ -271,3 +271,22 @@ describe("credential hiding", () => {
     }
   });
 });
+
+import { findBrowsersPath } from "../sandbox.ts";
+
+describe("browser support", () => {
+  it("exposes the host's Playwright browsers and disables in-sandbox downloads", () => {
+    const args = bwrapArgs({ role: "builder", cwd: "/w", tmp: "/tmp", uid: 1000, browsersPath: "/home/x/.cache/ms-playwright" }).join(" ");
+    assert.match(args, /--setenv PLAYWRIGHT_BROWSERS_PATH \/home\/x\/\.cache\/ms-playwright/);
+    assert.match(args, /--setenv PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD 1/);
+    assert.ok(!bwrapArgs({ role: "builder", cwd: "/w", tmp: "/tmp", uid: 1000 }).join(" ").includes("PLAYWRIGHT"));
+  });
+
+  it("finds a browsers directory only when it exists", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "foreman-home-"));
+    delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+    assert.equal(await findBrowsersPath(dir), undefined);
+    await mkdir(join(dir, ".cache/ms-playwright"), { recursive: true });
+    assert.equal(await findBrowsersPath(dir), join(dir, ".cache/ms-playwright"));
+  });
+});

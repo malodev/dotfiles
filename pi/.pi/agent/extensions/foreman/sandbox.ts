@@ -36,8 +36,8 @@ export type RoleRunner = (request: RoleRequest) => Promise<RoleResult>;
  * DBus is hidden, /tmp is writable, and only the Builder may write the repository.
  * The Reviewer's read-only access is therefore enforced by the kernel, not the prompt.
  */
-export function bwrapArgs(options: { role: "builder" | "reviewer"; cwd: string; tmp: string; uid: number; hide?: HiddenMounts }): string[] {
-  const { role, cwd, tmp, uid, hide } = options;
+export function bwrapArgs(options: { role: "builder" | "reviewer"; cwd: string; tmp: string; uid: number; hide?: HiddenMounts; browsersPath?: string }): string[] {
+  const { role, cwd, tmp, uid, hide, browsersPath } = options;
   return [
     "--die-with-parent",
     "--unshare-pid", "--unshare-ipc", "--unshare-uts",
@@ -56,6 +56,9 @@ export function bwrapArgs(options: { role: "builder" | "reviewer"; cwd: string; 
     "--setenv", "npm_config_update_notifier", "false",
     "--setenv", "UV_CACHE_DIR", join(tmp, "foreman-uv-cache"),
     "--setenv", "XDG_CACHE_HOME", join(tmp, "foreman-xdg-cache"),
+    // Browsers for UI/e2e tests are read from the host cache; downloading inside the sandbox would
+    // hit the throwaway XDG cache above and repeat on every run.
+    ...(browsersPath ? ["--setenv", "PLAYWRIGHT_BROWSERS_PATH", browsersPath, "--setenv", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"] : []),
   ];
 }
 
@@ -110,6 +113,13 @@ export async function hiddenMounts(candidates: HiddenMounts, keep: { cwd: string
     return [...found];
   };
   return { dirs: await usable(candidates.dirs, true), files: await usable(candidates.files, false) };
+}
+
+/** Where Playwright browsers already live on this machine, if anywhere. */
+export async function findBrowsersPath(home = homedir()): Promise<string | undefined> {
+  const candidate = process.env.PLAYWRIGHT_BROWSERS_PATH || join(home, ".cache/ms-playwright");
+  const info = await stat(candidate).catch(() => undefined);
+  return info?.isDirectory() ? candidate : undefined;
 }
 
 const DEFAULT_TOOLS = { builder: "read,grep,find,ls,bash,edit,write", reviewer: "read,grep,find,ls,bash" } as const;
@@ -186,7 +196,7 @@ export async function runPiRole(request: RoleRequest): Promise<RoleResult> {
     ];
     const bwrap = process.env.FOREMAN_BWRAP_BIN || "bwrap";
     const hide = await hiddenMounts(await sensitivePaths(homedir()), { cwd: request.cwd, tmp: tmpdir() });
-    const sandbox = bwrapArgs({ role: request.role, cwd: request.cwd, tmp: tmpdir(), uid: process.getuid?.() ?? 1000, hide });
+    const sandbox = bwrapArgs({ role: request.role, cwd: request.cwd, tmp: tmpdir(), uid: process.getuid?.() ?? 1000, hide, browsersPath: await findBrowsersPath() });
     return await execute(request, bwrap, [...sandbox, piBin, ...piArgs], { ...process.env, PI_SUBAGENT_DEPTH: "1", PI_CODING_AGENT_DIR: agentDir });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -272,7 +282,7 @@ export interface CommandResult {
 export async function runSandboxedCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<CommandResult> {
   const bwrap = process.env.FOREMAN_BWRAP_BIN || "bwrap";
   const hide = await hiddenMounts(await sensitivePaths(homedir()), { cwd, tmp: tmpdir() });
-  const args = [...bwrapArgs({ role: "builder", cwd, tmp: tmpdir(), uid: process.getuid?.() ?? 1000, hide }), "bash", "-c", command];
+  const args = [...bwrapArgs({ role: "builder", cwd, tmp: tmpdir(), uid: process.getuid?.() ?? 1000, hide, browsersPath: await findBrowsersPath() }), "bash", "-c", command];
   return new Promise((resolvePromise) => {
     const child = spawn(bwrap, args, { cwd, shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";

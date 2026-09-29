@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { commitAll, currentBranch, dirtyOutsideForeman, ensureWorkBranch, git, headSha } from "../git.ts";
@@ -74,5 +74,25 @@ describe("commitPaths", () => {
     assert.deepEqual(await dirtyOutsideForeman(repo), ["other.txt"], "unrelated work is left alone");
     assert.equal(await commitPaths(repo, ["foreman/tasks.yaml"], "again"), undefined);
     assert.equal(await commitPaths(repo, ["foreman/nope.md"], "none"), undefined);
+  });
+});
+
+describe("build junk never reaches a commit", () => {
+  it("keeps node_modules and test output out of commits without the Builder writing a .gitignore", async () => {
+    const repo = await tempRepo();
+    await ensureWorkBranch(repo, "r");
+    await ensureWorkBranch(repo, "again"); // idempotent: no duplicate exclude lines
+    await mkdir(join(repo, "node_modules/pkg"), { recursive: true });
+    await writeFile(join(repo, "node_modules/pkg/index.js"), "x");
+    await mkdir(join(repo, "test-results"), { recursive: true });
+    await writeFile(join(repo, "test-results/trace.zip"), "x");
+    await mkdir(join(repo, "web/node_modules/pkg"), { recursive: true });
+    await writeFile(join(repo, "web/node_modules/pkg/index.js"), "x");
+    await writeFile(join(repo, "app.js"), "real work");
+    const result = await commitAll(repo, "foreman: t01");
+    assert.equal(result.empty, false);
+    assert.equal((await git(repo, ["show", "--name-only", "--format=", "HEAD"])).trim(), "app.js");
+    const exclude = (await readFile(join(repo, ".git/info/exclude"), "utf8")).split("\n");
+    assert.equal(exclude.filter((line) => line === "node_modules/").length, 1);
   });
 });
