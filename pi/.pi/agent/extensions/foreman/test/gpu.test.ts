@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Gpu, providerOf, shellLeaseClient, type CommandRunner, type LeaseClient } from "../gpu.ts";
+import { Gpu, providerOf, readHostMode, shellLeaseClient, type CommandRunner, type LeaseClient } from "../gpu.ts";
 
 function fakeClient() {
   const calls: string[] = [];
@@ -137,5 +137,20 @@ describe("shellLeaseClient", () => {
     assert.equal(seen[0].env.PI_INFERENCE_TTL, "300");
     assert.match(String(seen[0].env.PI_INFERENCE_OWNER), /:foreman:/);
     assert.equal(seen[0].env.PI_INFERENCE_OWNER, seen[2].env.PI_INFERENCE_OWNER);
+  });
+});
+
+describe("readHostMode", () => {
+  it("returns the mode the manager reports", async () => {
+    const seen: string[][] = [];
+    const mode = await readHostMode("pi-inference", async (_command, args) => { seen.push(args); return JSON.stringify({ mode: "ds4", lease: null }); });
+    assert.equal(mode, "ds4");
+    assert.deepEqual(seen, [["--json", "status"]]);
+  });
+
+  it("fails closed on an unreachable manager, invalid JSON, or a missing mode", async () => {
+    await assert.rejects(readHostMode("x", async () => { throw new Error("connection refused"); }), /Could not read the host mode: connection refused/);
+    await assert.rejects(readHostMode("x", async () => "not json"), /invalid JSON/);
+    await assert.rejects(readHostMode("x", async () => "{}"), /reported none/);
   });
 });

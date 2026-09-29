@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadAgent } from "./agents.ts";
 import { architectKickoff, resolvePlanInput } from "./plan.ts";
-import { loadConfig, modelId, type ForemanConfig, type RoleProfile } from "./config.ts";
+import { applyHostMode, loadConfig, modelId, type ForemanConfig, type RoleProfile } from "./config.ts";
 import { runQueue } from "./run.ts";
 import { finalBoard, formatStatus, progressBoard, type Board } from "./report.ts";
 import { Gpu, providerOf, type LeaseClient, type ShellLeaseConfig } from "./gpu.ts";
@@ -31,6 +31,8 @@ export interface Services {
   runRole: RoleRunner;
   runCommand: CommandRunner;
   makeLeaseClient(config: ShellLeaseConfig): LeaseClient;
+  /** The host's current mode, from the manager. */
+  readMode(command: string): Promise<string>;
   /** Start the interactive Architect session. `profile` selects its model when configured. */
   startArchitect(host: Host, kickoff: string, profile: RoleProfile | undefined): Promise<void>;
 }
@@ -99,6 +101,16 @@ export class Foreman {
     return { dir, plan: join(dir, "plan.md"), tasks: join(dir, "tasks.yaml"), state: join(dir, ".run/state.json"), logs: join(dir, ".run/logs") };
   }
 
+  /**
+   * Config for the host's current mode. Only consulted when a local (managed) provider is involved;
+   * with cloud models alone the host mode is irrelevant.
+   */
+  private async effectiveConfig(host: Host): Promise<ForemanConfig> {
+    const base = await loadConfig(this.services.configPaths(host.cwd));
+    if (base.gpu.managedProviders.length === 0 && Object.keys(base.modes).length === 0) return base;
+    return applyHostMode(base, await this.services.readMode(base.gpu.command));
+  }
+
   private newGpu(config: ForemanConfig, host: Host): Gpu {
     const client = this.services.makeLeaseClient({
       command: config.gpu.command,
@@ -123,11 +135,11 @@ export class Foreman {
     host.setWidget?.(undefined);
     if (this.active) throw new Error("A run is in progress. Use /foreman stop first.");
     const input = await resolvePlanInput(argument, host.cwd);
-    const config = await loadConfig(this.services.configPaths(host.cwd));
+    const config = await this.effectiveConfig(host);
     const check = `node ${join(this.services.extensionDir, "check.ts")} foreman/tasks.yaml`;
     const architect = config.roles.architect;
     const role = await loadAgent(join(this.services.extensionDir, "agents/architect.md")).then((agent) => agent.body).catch(() => "");
-    const kickoff = architectKickoff(input, check, role);
+    const kickoff = architectKickoff(input, check, role, config.notes);
     // A local Architect model needs the card too. Keep the lease through planning; `run` takes it over.
     if (architect && config.gpu.managedProviders.includes(architect.provider)) {
       this.planGpu ??= this.newGpu(config, host);
@@ -141,7 +153,7 @@ export class Foreman {
   private async run(host: Host): Promise<void> {
     if (this.active) throw new Error("A run is already in progress. Use /foreman status, /foreman pause or /foreman stop.");
     const paths = this.paths(host.cwd);
-    const config = await loadConfig(this.services.configPaths(host.cwd));
+    const config = await this.effectiveConfig(host);
 
     const text = await readFile(paths.tasks, "utf8").catch(() => undefined);
     if (text === undefined) throw new Error("No foreman/tasks.yaml. Run /foreman plan first.");
@@ -217,7 +229,14 @@ export class Foreman {
     const { tasks, errors } = text ? loadTasks(text) : { tasks: [], errors: [] };
     const state = this.active ? this.active.store.get() : await loadState(paths.state);
     const invalid = errors.length ? `\ntasks.yaml has ${errors.length} problem(s); run: node ${join(this.services.extensionDir, "check.ts")} foreman/tasks.yaml` : "";
-    host.notify(formatStatus(tasks, state) + invalid + (this.active ? "\n(running)" : ""));
+    const models = await this.effectiveConfig(host).then(
+      (config) => `\nmode: ${config.gpu.mode}${config.gpu.managedProviders.length ? "" : " (not consulted: no local provider)"}\nmodels: ${(["architect", "builder", "reviewer"] as const).flatMap((role) => {
+        const profile = config.roles[role];
+        return profile ? [`${role} ${modelId(profile)}`] : [];
+      }).join(" · ")}`,
+      (error) => `\nmodels: unavailable — ${error instanceof Error ? error.message : String(error)}`,
+    );
+    host.notify(formatStatus(tasks, state) + models + invalid + (this.active ? "\n(running)" : ""));
   }
 
   private async withStore<T>(host: Host, change: (state: import("./state.ts").State) => import("./state.ts").State): Promise<void> {

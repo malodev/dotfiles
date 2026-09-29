@@ -24,7 +24,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
   await mkdir(join(repo, ".pi"), { recursive: true });
   const roles: Record<string, unknown> = { builder: { provider: "local", model: "m1" }, reviewer: { same_as: "builder" } };
   if (options.architect) roles.architect = { provider: "local", model: "big" };
-  await writeFile(join(repo, ".pi/foreman.json"), JSON.stringify({ roles, gpu: { managedProviders: ["local"] } }));
+  await writeFile(join(repo, ".pi/foreman.json"), JSON.stringify({ roles, gpu: { managedProviders: ["local"] }, modes: { ds4: { provider: "ds4", model: "flash" } } }));
   await git(repo, ["add", "-A"]);
   await git(repo, ["commit", "-q", "-m", "config"]);
 
@@ -45,13 +45,15 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
   const client: LeaseClient = { acquire: async () => { lease.push("acquire"); }, renew: async () => {}, release: async () => { lease.push("release"); } };
   const roleCalls: RoleRequest[] = [];
   const kickoffs: string[] = [];
-  const state = { runRole: undefined as RoleRunner | undefined };
+  const state = { runRole: undefined as RoleRunner | undefined, mode: "team" };
+  const leaseModes: string[] = [];
   const services: Services = {
     extensionDir: "/ext",
     configPaths: (cwd) => [join(cwd, ".pi/foreman.json")],
     runRole: async (request) => { roleCalls.push(request); return state.runRole!(request); },
     runCommand: bashRunner,
-    makeLeaseClient: () => client,
+    makeLeaseClient: (config) => { leaseModes.push(config.mode); return client; },
+    readMode: async () => state.mode,
     startArchitect: async (h, kickoff) => {
       kickoffs.push(kickoff);
       await mkdir(join(h.cwd, "foreman"), { recursive: true });
@@ -71,7 +73,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     };
   };
   const fileFor = (request: RoleRequest) => (request.task.includes("Task t01") ? "a.txt" : "b.txt");
-  return { repo, foreman, host, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
+  return { repo, foreman, host, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
 }
 
 describe("foreman commands (smoke)", () => {
@@ -129,6 +131,48 @@ describe("foreman commands (smoke)", () => {
     t.state.runRole = t.writer(t.fileFor);
     await t.foreman.handle("run", t.host);
     assert.equal(t.widgets[before], undefined, "the old result is cleared as soon as the next run begins");
+  });
+
+  it("status shows the effective models", async () => {
+    const t = await setup({ architect: true });
+    await t.foreman.handle("status", t.host);
+    assert.match(t.last().message, /models: architect local\/big · builder local\/m1 · reviewer local\/m1/);
+  });
+
+  it("in ds4 mode one fixed model serves all three roles and the lease is taken in ds4", async () => {
+    const t = await setup({ architect: true });
+    t.state.mode = "ds4";
+    await t.foreman.handle("plan idea here", t.host);
+    t.state.runRole = t.writer(t.fileFor);
+    await t.foreman.handle("run", t.host);
+    assert.match(t.last().message, /All 2 task\(s\) done/);
+    assert.deepEqual([...new Set(t.roleCalls.map((call) => call.model))], ["ds4/flash"], "builder and reviewer both use the mode's model");
+    assert.deepEqual([...new Set(t.leaseModes)], ["ds4"]);
+    assert.deepEqual(t.lease, ["acquire", "release"], "a single lease, no swaps between roles");
+  });
+
+  it("refuses to run in studio mode and touches nothing", async () => {
+    const t = await setup();
+    await t.foreman.handle("plan idea here", t.host);
+    t.state.mode = "studio";
+    await t.foreman.handle("run", t.host);
+    assert.equal(t.last().level, "error");
+    assert.match(t.last().message, /studio mode[\s\S]*switch the mode in the panel/);
+    assert.deepEqual(t.lease, [], "no lease taken, nothing switched");
+    assert.equal(t.roleCalls.length, 0);
+    assert.equal((await git(t.repo, ["rev-parse", "--abbrev-ref", "HEAD"])).trim(), "main", "no branch created");
+  });
+
+  it("status reports the mode, and explains a refusal instead of failing", async () => {
+    const t = await setup();
+    await t.foreman.handle("status", t.host);
+    assert.match(t.last().message, /mode: team\nmodels: builder local\/m1/);
+    t.state.mode = "ds4";
+    await t.foreman.handle("status", t.host);
+    assert.match(t.last().message, /mode: ds4\nmodels: architect ds4\/flash · builder ds4\/flash · reviewer ds4\/flash/);
+    t.state.mode = "maintenance";
+    await t.foreman.handle("status", t.host);
+    assert.match(t.last().message, /models: unavailable — The host is in maintenance mode/);
   });
 
   it("hands the planning lease to the run instead of releasing and re-acquiring", async () => {

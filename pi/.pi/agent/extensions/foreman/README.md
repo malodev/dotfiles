@@ -21,10 +21,23 @@ it waits until you `/foreman unblock` it.
 
 ## Configure
 
-Copy `foreman.example.json` to `~/.pi/agent/foreman.json` (global) and/or `.pi/foreman.json`
-(per project, wins). Set `roles.builder`. `roles.reviewer` can be `{ "same_as": "builder" }`, which
-avoids any model swap. `roles.architect` is optional; without it, planning uses your current model.
-List local providers under `gpu.managedProviders` so Foreman takes a `pi-inference` lease for them.
+Everything lives in one file, `~/.pi/agent/foreman.json` (global), optionally overridden per project
+by `.pi/foreman.json`. Copy `foreman.example.json` to start.
+
+- `roles`: `architect`, `builder`, `reviewer`, each `{ "provider", "model", "thinking" }`. The Reviewer
+  may be `{ "same_as": "builder" }`, which avoids a model swap on every task. Only the Builder is
+  required; without an Architect, planning uses your current model.
+- `modes`: the one model each of `ds4` and `qwen-flash` serves. Foreman reads the host's live mode
+  (from the manager) on every `/foreman plan` and `/foreman run`: in `team` it uses `roles`; in `ds4` or
+  `qwen-flash` it uses that mode's model for all three roles and takes the lease in that mode; in any other
+  mode (studio, stop, maintenance) it refuses and tells you to switch the mode in the panel. It never
+  switches the host away from what it is running. With only cloud models configured the mode is not consulted.
+- `limits`, `gpu` (`managedProviders` lists the providers that need a `pi-inference` lease) and `notes`:
+  facts about this machine that are passed to the Architect, such as a required Playwright version.
+
+The model panel (Settings → Models → Team roles) edits the `roles` block of this file and keeps
+everything else. `/foreman status` shows the effective models. Changes apply to the next command.
+A Reviewer on a different model than the Builder means a model swap on every task.
 
 ## Develop
 

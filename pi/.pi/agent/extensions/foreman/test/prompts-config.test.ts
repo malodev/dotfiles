@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { loadConfig } from "../config.ts";
+import { applyHostMode, loadConfig } from "../config.ts";
 import { builderTask, parseVerdict, reviewerTask, tail } from "../prompts.ts";
 
 const task = { id: "t1", goal: "Do it", dependsOn: [], files: ["a.ts"], successTests: ["npm test"] };
@@ -65,4 +65,60 @@ describe("loadConfig", () => {
     await assert.rejects(loadConfig([await writeConfig({ roles, gpu: { leaseTtlSeconds: 100, renewIntervalSeconds: 90, expiryMarginSeconds: 20 } })]), /less than/);
     await assert.rejects(loadConfig([await writeConfig({ roles: { ...roles, reviewer: { same_as: "architect" } } })]), /same_as/);
   });
+});
+
+describe("notes", () => {
+  it("are layered and validated", async () => {
+    const a = await writeConfig({ roles: { builder: { provider: "l", model: "m" }, reviewer: { same_as: "builder" } }, notes: ["one"] });
+    const b = await writeConfig({ notes: ["two"] });
+    assert.deepEqual((await loadConfig([a, b])).notes, ["one", "two"]);
+    assert.deepEqual((await loadConfig([a])).notes, ["one"]);
+    const bad = await writeConfig({ roles: { builder: { provider: "l", model: "m" }, reviewer: { same_as: "builder" } }, notes: [1] });
+    await assert.rejects(loadConfig([bad]), /notes/);
+  });
+});
+
+describe("host modes", () => {
+  const base = async () => loadConfig([await writeConfig({
+    roles: { architect: { provider: "pi-llama", model: "pi/A" }, builder: { provider: "pi-llama", model: "pi/B" }, reviewer: { provider: "pi-llama", model: "pi/C" } },
+    gpu: { managedProviders: ["pi-llama"] },
+    modes: { ds4: { provider: "ds4", model: "deepseek-v4-flash" }, "qwen-flash": { provider: "qwen-flash", model: "malos/qwen3.8-flash-next", thinking: "low" } },
+  })]);
+
+  it("team keeps the roles block and leases in team mode", async () => {
+    const config = applyHostMode(await base(), "team");
+    assert.equal(config.roles.reviewer.model, "pi/C");
+    assert.equal(config.gpu.mode, "team");
+  });
+
+  it("ds4 and qwen-flash use their one model for every role, manage that provider, and lease in that mode", async () => {
+    const ds4 = applyHostMode(await base(), "ds4");
+    assert.deepEqual([ds4.roles.architect, ds4.roles.builder, ds4.roles.reviewer].map((role) => `${role?.provider}/${role?.model}`), Array(3).fill("ds4/deepseek-v4-flash"));
+    assert.equal(ds4.gpu.mode, "ds4");
+    assert.deepEqual(ds4.gpu.managedProviders, ["pi-llama", "ds4"]);
+    const qwen = applyHostMode(await base(), "qwen-flash");
+    assert.equal(qwen.roles.builder.thinking, "low");
+    assert.equal(qwen.gpu.mode, "qwen-flash");
+  });
+
+  it("refuses studio, stop, maintenance and unknown, and a mode with no configured model", async () => {
+    for (const mode of ["studio", "stop", "maintenance", "unknown"]) {
+      assert.throws(() => applyHostMode({ ...awaitedBase }, mode), new RegExp(`${mode} mode[\\s\\S]*team, ds4 or qwen-flash`));
+    }
+    assert.throws(() => applyHostMode({ ...awaitedBase, modes: {} }, "ds4"), /no "modes\.ds4" model/);
+  });
+
+  it("validates the modes section", async () => {
+    await assert.rejects(loadConfig([await writeConfig({ roles: { builder: { provider: "l", model: "m" }, reviewer: { same_as: "builder" } }, modes: { ds4: { provider: "ds4" } } })]), /roles\.modes\.ds4/);
+  });
+});
+
+let awaitedBase: Awaited<ReturnType<typeof loadConfig>>;
+import { before } from "node:test";
+before(async () => {
+  awaitedBase = await loadConfig([await writeConfig({
+    roles: { builder: { provider: "pi-llama", model: "pi/B" }, reviewer: { same_as: "builder" } },
+    gpu: { managedProviders: ["pi-llama"] },
+    modes: { ds4: { provider: "ds4", model: "deepseek-v4-flash" } },
+  })]);
 });

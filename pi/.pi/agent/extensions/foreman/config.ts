@@ -6,7 +6,18 @@ export interface RoleProfile {
   thinking?: string;
 }
 
+export type RoleName = "architect" | "builder" | "reviewer";
+
+/** Host modes in which one fixed model serves all three roles (the roles block is used in `team`). */
+export const SINGLE_MODEL_MODES = ["ds4", "qwen-flash"] as const;
+
 export interface ForemanConfig {
+  /** The single model each of ds4 / qwen-flash serves, used for all three roles in that mode. */
+  modes: Partial<Record<(typeof SINGLE_MODEL_MODES)[number], RoleProfile>>;
+  /** Which file each role's model came from, so `status` can show where to change it. */
+  roleSources: Partial<Record<RoleName, string>>;
+  /** Facts about this machine the Architect must plan around (tool versions, offline browsers, ...). */
+  notes: string[];
   roles: { architect?: RoleProfile; builder: RoleProfile; reviewer: RoleProfile };
   limits: {
     buildAttempts: number;
@@ -79,11 +90,14 @@ function profile(raw: Raw | undefined, name: string): RoleProfile {
 
 /** Later layers win, one section at a time. Files that do not exist are skipped. */
 export async function loadConfig(paths: string[]): Promise<ForemanConfig> {
-  const merged: Raw = { roles: {}, limits: {}, gpu: {} };
+  const merged: Raw = { roles: {}, limits: {}, gpu: {}, modes: {}, notes: [] };
+  const roleSources: Partial<Record<RoleName, string>> = {};
   for (const path of paths) {
     const layer = await readJson(path);
     if (!layer) continue;
-    for (const section of ["roles", "limits", "gpu"]) Object.assign(merged[section], layer[section] ?? {});
+    for (const name of Object.keys(layer.roles ?? {})) roleSources[name as RoleName] = path;
+    for (const section of ["roles", "limits", "gpu", "modes"]) Object.assign(merged[section], layer[section] ?? {});
+    if (layer.notes !== undefined) merged.notes = [...merged.notes, ...(Array.isArray(layer.notes) ? layer.notes : [layer.notes])];
   }
   const limits = { ...DEFAULTS.limits, ...merged.limits };
   for (const [key, value] of Object.entries(limits)) positiveInteger(value, `limits.${key}`);
@@ -96,6 +110,12 @@ export async function loadConfig(paths: string[]): Promise<ForemanConfig> {
     throw new Error("gpu.renewIntervalSeconds + gpu.expiryMarginSeconds must be less than gpu.leaseTtlSeconds");
   }
 
+  const modes: ForemanConfig["modes"] = {};
+  for (const mode of SINGLE_MODEL_MODES) {
+    if (merged.modes[mode] !== undefined) modes[mode] = profile(merged.modes[mode], `modes.${mode}`);
+  }
+  const notes = merged.notes ?? [];
+  if (!Array.isArray(notes) || notes.some((note: unknown) => typeof note !== "string")) throw new Error("notes must be a list of strings");
   const roles = merged.roles;
   const builder = profile(roles.builder, "builder");
   const reviewerRaw = roles.reviewer;
@@ -106,11 +126,38 @@ export async function loadConfig(paths: string[]): Promise<ForemanConfig> {
   } else {
     reviewer = profile(reviewerRaw, "reviewer");
   }
+  if (reviewerRaw?.same_as !== undefined) roleSources.reviewer = `${roleSources.reviewer ?? "config"} (same as builder)`;
   return {
+    notes,
+    modes,
+    roleSources,
     roles: { ...(roles.architect ? { architect: profile(roles.architect, "architect") } : {}), builder, reviewer },
     limits,
     gpu,
   };
+}
+
+/**
+ * The config as it applies to the host's current mode. In `team` the roles block rules. In `ds4` and
+ * `qwen-flash` the one model that mode serves is used for all three roles, and the lease is taken in
+ * that mode. Any other mode (studio, stop, maintenance, unknown) is refused rather than switched away
+ * from, so a run never evicts what the card is doing.
+ */
+export function applyHostMode(config: ForemanConfig, mode: string): ForemanConfig {
+  if (mode === "team") return { ...config, gpu: { ...config.gpu, mode } };
+  if ((SINGLE_MODEL_MODES as readonly string[]).includes(mode)) {
+    const single = config.modes[mode as (typeof SINGLE_MODEL_MODES)[number]];
+    if (!single) {
+      throw new Error(`The host is in ${mode} mode but foreman.json has no "modes.${mode}" model. Add { "provider", "model" } there.`);
+    }
+    return {
+      ...config,
+      roles: { architect: single, builder: single, reviewer: single },
+      roleSources: { architect: `modes.${mode}`, builder: `modes.${mode}`, reviewer: `modes.${mode}` },
+      gpu: { ...config.gpu, mode, managedProviders: [...new Set([...config.gpu.managedProviders, single.provider])] },
+    };
+  }
+  throw new Error(`The host is in ${mode} mode. Foreman needs team, ds4 or qwen-flash: switch the mode in the panel first.`);
 }
 
 export function modelId(role: RoleProfile): string {

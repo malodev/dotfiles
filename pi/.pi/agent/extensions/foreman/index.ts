@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Foreman, SUBCOMMANDS, type Host } from "./commands.ts";
-import { shellLeaseClient } from "./gpu.ts";
+import { readHostMode, shellLeaseClient } from "./gpu.ts";
 import { runPiRole, runSandboxedCommand } from "./sandbox.ts";
 
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +15,7 @@ export default async function foremanExtension(pi: ExtensionAPI): Promise<void> 
     runRole: runPiRole,
     runCommand: runSandboxedCommand,
     makeLeaseClient: shellLeaseClient,
+    readMode: (command) => readHostMode(command),
     // The Architect works in the current session. ctx.newSession() would start on the default model
     // and re-create this extension's runtime, orphaning the planning lease, so it is not used.
     startArchitect: async (host, kickoff, profile) => {

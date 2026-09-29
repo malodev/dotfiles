@@ -1,7 +1,25 @@
 {
+  "notes": [
+    "Facts about this machine the Architect must plan around, for example a required tool version."
+  ],
   "roles": {
-    "builder": { "provider": "REPLACE_WITH_PROVIDER", "model": "REPLACE_WITH_MODEL" },
-    "reviewer": { "same_as": "builder" }
+    "builder": {
+      "provider": "REPLACE_WITH_PROVIDER",
+      "model": "REPLACE_WITH_MODEL"
+    },
+    "reviewer": {
+      "same_as": "builder"
+    }
+  },
+  "modes": {
+    "ds4": {
+      "provider": "REPLACE_WITH_PROVIDER",
+      "model": "REPLACE_WITH_MODEL"
+    },
+    "qwen-flash": {
+      "provider": "REPLACE_WITH_PROVIDER",
+      "model": "REPLACE_WITH_MODEL"
+    }
   },
   "gpu": {
     "managedProviders": []

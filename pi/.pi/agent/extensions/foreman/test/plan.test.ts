@@ -112,3 +112,11 @@ describe("boards", () => {
     assert.match(plain(finalBoard({ kind: "paused" }, 7, 3, "b").lines), /paused: 3\/7 done/);
   });
 });
+
+describe("kickoff notes", () => {
+  it("lists machine facts for the Architect", () => {
+    const text = architectKickoff({ kind: "idea", text: "x" }, "check", "", ["Use playwright 1.62.1"]);
+    assert.match(text, /Facts about this machine[\s\S]*- Use playwright 1\.62\.1/);
+    assert.ok(!architectKickoff({ kind: "idea", text: "x" }, "check").includes("Facts about this machine"));
+  });
+});

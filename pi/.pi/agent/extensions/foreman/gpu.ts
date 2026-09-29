@@ -140,3 +140,30 @@ function execFileRun(command: string, args: string[], env: NodeJS.ProcessEnv, ti
     });
   });
 }
+
+/** The host's current mode (team, studio, ds4, qwen-flash, stop, maintenance), from `pi-inference --json status`. */
+export async function readHostMode(command: string, exec: (command: string, args: string[]) => Promise<string> = execFileText): Promise<string> {
+  let stdout: string;
+  try {
+    stdout = await exec(command, ["--json", "status"]);
+  } catch (error) {
+    throw new Error(`Could not read the host mode: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  let mode: unknown;
+  try {
+    mode = JSON.parse(stdout)?.mode;
+  } catch {
+    throw new Error("Could not read the host mode: the manager returned invalid JSON");
+  }
+  if (typeof mode !== "string" || !mode) throw new Error("Could not read the host mode: the manager reported none");
+  return mode;
+}
+
+function execFileText(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { timeout: 30_000 }, (error, stdout, stderr) => {
+      if (error) reject(new Error((stderr || stdout || error.message).trim()));
+      else resolve(stdout);
+    });
+  });
+}
