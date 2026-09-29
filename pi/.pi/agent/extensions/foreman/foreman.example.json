@@ -1,0 +1,9 @@
+{
+  "roles": {
+    "builder": { "provider": "REPLACE_WITH_PROVIDER", "model": "REPLACE_WITH_MODEL" },
+    "reviewer": { "same_as": "builder" }
+  },
+  "gpu": {
+    "managedProviders": []
+  }
+}
