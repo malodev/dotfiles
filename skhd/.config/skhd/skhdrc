@@ -18,9 +18,27 @@
 #   Option+Shift+1..0   Karabiner-Elements -> scripts/yabai_move_window_to_space.sh N
 #   Option+H/J/K/L      focus window west/south/north/east
 #   Option+Shift+H/J/K/L  swap window west/south/north/east
-#   Option+Shift+M      fill the focused window into its Space (grid 1:1:0:0:1:1)
+#                       yabai's west|south|north|east are TREE selectors, and
+#                       float layout has no tree, so these fall back to a
+#                       geometry pick among the visible windows on the Space
+#                       (centre-based; overlapping windows can surprise).
+#   Option+Shift+M      maximize the focused window into its Space (grid
+#                       1:1:0:0:1:1). If that Space is bsp/stack it is switched to
+#                       float first -- tiling re-flows and would undo the grid,
+#                       leaving the window looking floated but not maximized.
+#   Option+Shift+T      toggle the current Space between float and bsp (yabai
+#                       layout; scripts/yabai_toggle_layout.sh). Note that bsp
+#                       hands window placement to yabai, which the yabairc below
+#                       deliberately avoids, and switching back to float does not
+#                       restore the frames your windows had before.
+#   Option+Shift+R      restart yabai (scripts/yabai_restart.sh) -- the remedy for
+#                       its stale window records, where an app that recreated its
+#                       window reads in yabai as 0x0 and every geometry command
+#                       (fill, move, resize, bsp placement) silently does nothing.
 #
-# The last three go through Karabiner-Elements -> scripts/yabai_window_action.sh.
+# Everything except the desktop switcher goes through Karabiner-Elements: the
+# window actions via scripts/yabai_window_action.sh, the layout toggle via
+# scripts/yabai_toggle_layout.sh, the yabai restart via scripts/yabai_restart.sh.
 # Karabiner grabs the keyboard at the HID layer (kIOHIDOptionsTypeSeizeDevice) and
 # re-injects through its DriverKit virtual HID device with no CGEventTap
 # fallback, which is why it keeps remapping while SE is on. The rules are in
