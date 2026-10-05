@@ -234,6 +234,19 @@ describe("the Architect prompt stays small", () => {
     assert.match(body, /Do not (draft|rehearse)[\s\S]*check/i);
   });
 
+  it("has no contradictory rules about when tests exist (the cause of a 28-minute reasoning spiral on ds4)", async () => {
+    const core = parseAgentMarkdown(await load("architect")).body;
+    const web = parseAgentMarkdown(await load("architect-web")).body;
+    // Tests ship with the feature they test; they are not a separate task...
+    assert.match(core, /tests? (are|is) written in the same task|same task/i);
+    assert.ok(!/different tasks|separate tasks/i.test(web), "the web guide must not require separate API-test and UI-test tasks");
+    // ...so "fails before, passes after" cannot be demanded of a tests-only task.
+    assert.ok(!/fails before/i.test(core), "the strict fails-before rule invites a paradox for tests written in the same task");
+    // Each command names its own test file instead of one shared script that must be re-wired every task.
+    assert.match(core, /name the test file|names? the test file/i);
+    assert.match(core, /node --test test\/\S+\.test\.ts/);
+  });
+
   it("keeps web-app rules out of the always-on prompt and in a guide read on demand", async () => {
     const core = parseAgentMarkdown(await load("architect")).body;
     const web = parseAgentMarkdown(await load("architect-web")).body;
