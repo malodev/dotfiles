@@ -33,6 +33,7 @@ interface Harness {
   calls: RoleRequest[];
   leaseCalls: string[];
   prepared: string[];
+  phases: string[];
   run: (options?: { runRole?: RoleRunner; reviewerModel?: string; signal?: AbortSignal }) => ReturnType<typeof runQueue>;
   gpu: Gpu;
   statePath: string;
@@ -47,6 +48,7 @@ async function harness(plan = PLAN): Promise<Harness> {
   const calls: RoleRequest[] = [];
   const leaseCalls: string[] = [];
   const prepared: string[] = [];
+  const phases: string[] = [];
   const client: LeaseClient = {
     async acquire() { leaseCalls.push("acquire"); },
     async renew() { leaseCalls.push("renew"); },
@@ -57,7 +59,7 @@ async function harness(plan = PLAN): Promise<Harness> {
   const store = await openStore(statePath);
   await store.update((state) => syncTasks(state, tasks));
   const h: Harness = {
-    repo, calls, leaseCalls, prepared, gpu, statePath, store,
+    repo, calls, leaseCalls, prepared, phases, gpu, statePath, store,
     run: async (options = {}) => runQueue({
       repo,
       tasks,
@@ -69,6 +71,7 @@ async function harness(plan = PLAN): Promise<Harness> {
       reviewer: { model: options.reviewerModel ?? "local/m1" },
       prompts: { builder: "builder.md", reviewer: "reviewer.md" },
       runRole: async (request) => { calls.push(request); return options.runRole!(request); },
+      phase: (text) => { phases.push(text); },
       runCommand: bashRunner,
       commit: (message) => commitAll(repo, message),
       prepareReview: async () => { await git(repo, ["add", "-N", "."]); prepared.push("review"); },
@@ -132,6 +135,19 @@ describe("runQueue", () => {
     await h.run({ runRole });
     assert.equal(seen.trim(), "a.txt", "an untracked new file appears in git diff once marked intent-to-add");
     assert.equal(h.prepared.length, 2);
+  });
+
+  it("announces each phase so the operator can see what is running", async () => {
+    const h = await harness("- id: t01\n  goal: g\n  success_tests: ['grep -q ok a.txt', 'true']\n");
+    const summary = await h.run({ runRole: scripted(h.repo, () => "ok") });
+    assert.equal(summary.kind, "idle");
+    assert.deepEqual(h.phases, [
+      "Builder · attempt 1/3 · local/m1",
+      "Testing 1/2 · grep -q ok a.txt",
+      "Testing 2/2 · true",
+      "Reviewer · review 1/2 · local/m1",
+      "Committing",
+    ]);
   });
 
   it("uses one lease and zero swaps when the reviewer shares the builder's model", async () => {
@@ -261,5 +277,69 @@ describe("runQueue", () => {
     const summary = await h.run({ runRole });
     assert.deepEqual(summary, { kind: "idle", completed: ["t01"] });
     assert.equal((await git(h.repo, ["rev-parse", "HEAD"])).trim(), before);
+  });
+});
+
+describe("reviewer failures", () => {
+  const emptyReviewer = (extra: Partial<RoleResult> = {}) => result("", { toolCount: 3, stopReason: "length", ...extra });
+
+  function builderThenReviewer(h: Harness, reviewer: RoleRunner): RoleRunner {
+    return async (request) => {
+      if (request.role === "reviewer") return reviewer(request);
+      await writeFile(join(h.repo, request.task.includes("Task t01") ? "a.txt" : "b.txt"), "ok");
+      return result("built");
+    };
+  }
+
+  it("records why the reviewer produced nothing, in the log and in the block reason", async () => {
+    const h = await harness();
+    const summary = await h.run({ runRole: builderThenReviewer(h, async () => emptyReviewer({ durationMs: 4200, stderr: "router: model still loading" })) });
+    assert.equal(summary.kind, "blocked");
+    assert.match(summary.reason ?? "", /Reviewer returned no verdict in 2 attempts/);
+    assert.match(summary.reason ?? "", /empty reply.*stop reason length.*3 tool calls/, "the cause is in the message itself");
+    const log = await readFile(join(h.repo, "foreman/.run/logs/t01-attempt1-review-failure.txt"), "utf8");
+    for (const part of ["model: local/m1", "stop reason: length", "tool calls: 3", "router: model still loading", "review 1", "review 2"]) assert.ok(log.includes(part), part);
+  });
+
+  it("says when the reviewer errored rather than answered", async () => {
+    const h = await harness();
+    const summary = await h.run({ runRole: builderThenReviewer(h, async () => result("", { toolCount: 0, exitCode: 1, error: "wrong or missing model: expected local/m1, got local/x" })) });
+    assert.match(summary.reason ?? "", /Reviewer returned no verdict[\s\S]*wrong or missing model/);
+  });
+
+  it("tells the second review attempt what was wrong with the first", async () => {
+    const h = await harness();
+    const tasks: string[] = [];
+    await h.run({
+      runRole: builderThenReviewer(h, async (request) => {
+        tasks.push(request.task);
+        return tasks.length === 1 ? result("The change looks fine to me.") : result("## Verdict\nAPPROVE");
+      }),
+    });
+    assert.ok(!/previous reply/i.test(tasks[0]));
+    assert.match(tasks[1], /previous reply[\s\S]*did not contain[\s\S]*## Verdict/i);
+    assert.match(tasks[1], /looks fine to me/, "it sees what it said last time");
+  });
+
+  it("after a reviewer failure, unblock retries only the review and keeps the builder's work", async () => {
+    const h = await harness();
+    const first = await h.run({ runRole: builderThenReviewer(h, async () => emptyReviewer()) });
+    assert.equal(first.kind, "blocked");
+    assert.equal(JSON.parse(await readFile(h.statePath, "utf8")).tasks.t01.stage, "review");
+
+    await h.store.update((state) => unblock(state, "t01"));
+    const builderCallsBefore = h.calls.filter((call) => call.role === "builder").length;
+    const second = await h.run({ runRole: builderThenReviewer(h, async () => result(APPROVE)) });
+    assert.deepEqual(second, { kind: "idle", completed: ["t01", "t02"] });
+    const builderCalls = h.calls.filter((call) => call.role === "builder");
+    assert.equal(builderCalls.length - builderCallsBefore, 1, "only t02 needed a builder; t01 went straight back to review");
+    assert.equal(JSON.parse(await readFile(h.statePath, "utf8")).tasks.t01.stage, undefined, "the stage is cleared once used");
+  });
+
+  it("a builder failure still restarts from the builder after unblock", async () => {
+    const h = await harness();
+    const first = await h.run({ runRole: scripted(h.repo, () => "nope") });
+    assert.equal(first.kind, "blocked");
+    assert.equal(JSON.parse(await readFile(h.statePath, "utf8")).tasks.t01.stage, undefined);
   });
 });

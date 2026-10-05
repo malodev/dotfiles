@@ -5,7 +5,8 @@ import { describe, it } from "node:test";
 import { Foreman, type Host, type Services } from "../commands.ts";
 import type { LeaseClient } from "../gpu.ts";
 import { git } from "../git.ts";
-import type { RoleRequest, RoleResult, RoleRunner } from "../sandbox.ts";
+import type { PreviewDeps } from "../preview.ts";
+import type { RoleRequest, RoleResult, RoleRunner, RunningApp } from "../sandbox.ts";
 import { bashRunner, tempRepo } from "./helpers.ts";
 
 const TASKS = `- id: t01
@@ -37,7 +38,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     cwd: repo,
     notify: (message, level = "info") => messages.push({ level, message }),
     setStatus: (text) => statuses.push(text),
-    setWidget: (lines) => widgets.push(lines),
+    setWidget: (content) => widgets.push(typeof content === "function" ? content(100) : content),
     setTitle: (title) => titles.push(title),
     bell: () => { bells += 1; },
   };
@@ -45,7 +46,11 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
   const client: LeaseClient = { acquire: async () => { lease.push("acquire"); }, renew: async () => {}, release: async () => { lease.push("release"); } };
   const roleCalls: RoleRequest[] = [];
   const kickoffs: string[] = [];
-  const state = { runRole: undefined as RoleRunner | undefined, mode: "team" };
+  const state = { runRole: undefined as RoleRunner | undefined, mode: "team", previewExitsAtOnce: false };
+  const opened: string[] = [];
+  const previewLog: string[] = [];
+  let previewPortFree = true;
+  let openFails = false;
   const leaseModes: string[] = [];
   const services: Services = {
     extensionDir: "/ext",
@@ -54,6 +59,23 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     runCommand: bashRunner,
     makeLeaseClient: (config) => { leaseModes.push(config.mode); return client; },
     readMode: async () => state.mode,
+    openUrl: async (target) => { if (openFails) throw new Error("no browser"); opened.push(target); },
+    preview: {
+      start: async (command, options) => {
+        previewLog.push(`start ${command}`);
+        if (state.previewExitsAtOnce) {
+          options.onOutput?.("Error: Cannot find module './server.ts'");
+          return { exited: Promise.resolve(1), stop: async () => {} } satisfies RunningApp;
+        }
+        const app: RunningApp = { exited: new Promise(() => {}), stop: async () => { previewLog.push("stop"); } };
+        return app;
+      },
+      watch: () => ({ close: () => { previewLog.push("unwatch"); } }),
+      isPortFree: async () => previewPortFree,
+      waitForPort: async () => { await new Promise((resolve) => setTimeout(resolve, 25)); return true; }, // a real port check is never instant
+      makeDataDir: async () => "/tmp/preview-data",
+      removeDir: async () => {},
+    } satisfies Omit<PreviewDeps, "notify">,
     startArchitect: async (h, kickoff) => {
       kickoffs.push(kickoff);
       await mkdir(join(h.cwd, "foreman"), { recursive: true });
@@ -73,7 +95,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     };
   };
   const fileFor = (request: RoleRequest) => (request.task.includes("Task t01") ? "a.txt" : "b.txt");
-  return { repo, foreman, host, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
+  return { repo, foreman, host, opened, previewLog, setPortFree: (value: boolean) => { previewPortFree = value; }, setOpenFails: (value: boolean) => { openFails = value; }, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
 }
 
 describe("foreman commands (smoke)", () => {
@@ -113,8 +135,8 @@ describe("foreman commands (smoke)", () => {
     t.state.runRole = t.writer(t.fileFor);
     await t.foreman.handle("run", t.host);
     const strip = (lines?: string[]) => (lines ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
-    assert.ok(t.widgets.some((lines) => /working on t01/.test(strip(lines))), "progress names the running task");
-    assert.match(strip(t.widgets[t.widgets.length - 1]), /finished: all 2 task\(s\) done/, "the last thing left on screen is the result");
+    assert.ok(t.widgets.some((lines) => /▸ t01[\s\S]*Now\s+/.test(strip(lines))), "the panel marks the running task and says what is happening now");
+    assert.match(strip(t.widgets[t.widgets.length - 1]), /finished[\s\S]*✓2 done[\s\S]*git log --oneline main\.\./, "the last thing left on screen is the result");
     assert.match(t.titles[t.titles.length - 1], /done 2\/2/);
     assert.equal(t.bell(), 1);
   });
@@ -125,7 +147,7 @@ describe("foreman commands (smoke)", () => {
     t.state.runRole = t.writer(t.fileFor, () => "nope");
     await t.foreman.handle("run", t.host);
     const strip = (lines?: string[]) => (lines ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
-    assert.match(strip(t.widgets[t.widgets.length - 1]), /blocked on t01/);
+    assert.match(strip(t.widgets[t.widgets.length - 1]), /blocked[\s\S]*✖ t01[\s\S]*\/foreman unblock t01/);
     const before = t.widgets.length;
     await t.foreman.handle("unblock t01", t.host);
     t.state.runRole = t.writer(t.fileFor);
@@ -293,5 +315,145 @@ describe("foreman commands (smoke)", () => {
     await t.foreman.handle("plan", t.host);
     assert.equal(t.last().level, "error");
     assert.match(t.last().message, /Usage: \/foreman plan/);
+  });
+});
+
+
+describe("preview and recordings commands", () => {
+  const PREVIEW = JSON.stringify({ command: "node server.js", port: 4173, env: { PORT: "{port}" } });
+  const withPreview = async () => {
+    const t = await setup();
+    await mkdir(join(t.repo, "foreman"), { recursive: true });
+    await writeFile(join(t.repo, "foreman/preview.json"), PREVIEW);
+    return t;
+  };
+
+  it("starts the preview, opens it in the browser, and explains what it follows", async () => {
+    const t = await withPreview();
+    await t.foreman.handle("preview", t.host);
+    assert.deepEqual(t.previewLog.slice(0, 1), ["start node server.js"]);
+    assert.deepEqual(t.opened, ["http://127.0.0.1:4173"]);
+    assert.match(t.last().message, /^Preview running\.\nOpen: http:\/\/127\.0\.0\.1:4173\n[\s\S]*saved files[\s\S]*\/foreman preview stop/, "the link is on its own line, right after the headline");
+    await t.foreman.shutdown();
+  });
+
+  it("still shows the link when no browser could be opened", async () => {
+    const t = await withPreview();
+    t.setOpenFails(true);
+    await t.foreman.handle("preview", t.host);
+    assert.match(t.last().message, /Open: http:\/\/127\.0\.0\.1:4173[\s\S]*could not open a browser[\s\S]*open the link yourself/i);
+    assert.equal(t.previewLog.filter((entry) => entry.startsWith("start")).length, 1, "the preview itself is running anyway");
+    await t.foreman.shutdown();
+  });
+
+  it("says where the preview will be even when the app cannot start yet", async () => {
+    const t = await withPreview();
+    t.state.previewExitsAtOnce = true;
+    await t.foreman.handle("preview", t.host);
+    assert.match(t.last().message, /exited right away[\s\S]*Address once it runs: http:\/\/127\.0\.0\.1:4173/);
+  });
+
+  it("status and the final result keep showing the link while the preview runs", async () => {
+    const t = await withPreview();
+    await t.foreman.handle("plan idea here", t.host);
+    await t.foreman.handle("preview", t.host);
+    await t.foreman.handle("status", t.host);
+    assert.match(t.last().message, /preview: http:\/\/127\.0\.0\.1:4173/);
+    t.state.runRole = t.writer(t.fileFor);
+    await t.foreman.handle("run", t.host);
+    const strip = (lines?: string[]) => (lines ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+    assert.match(strip(t.widgets[t.widgets.length - 1]), /finished[\s\S]*Preview\s+http:\/\/127\.0\.0\.1:4173/, "the result panel still has the link");
+    await t.foreman.handle("preview stop", t.host);
+    await t.foreman.handle("status", t.host);
+    assert.ok(!/preview: http/.test(t.last().message));
+    await t.foreman.shutdown();
+  });
+
+  it("a second /foreman preview reopens the running one instead of starting another", async () => {
+    const t = await withPreview();
+    await t.foreman.handle("preview", t.host);
+    await t.foreman.handle("preview", t.host);
+    assert.equal(t.previewLog.filter((entry) => entry.startsWith("start")).length, 1);
+    assert.equal(t.opened.length, 2);
+    await t.foreman.shutdown();
+  });
+
+  it("preview stop stops it, and shutdown stops it too", async () => {
+    const t = await withPreview();
+    await t.foreman.handle("preview", t.host);
+    await t.foreman.handle("preview stop", t.host);
+    assert.ok(t.previewLog.includes("stop") && t.previewLog.includes("unwatch"));
+    assert.match(t.last().message, /Preview stopped/);
+    await t.foreman.handle("preview stop", t.host);
+    assert.match(t.last().message, /No preview is running/);
+    await t.foreman.handle("preview", t.host);
+    const before = t.previewLog.length;
+    await t.foreman.shutdown();
+    assert.ok(t.previewLog.length > before && t.previewLog.includes("stop"));
+  });
+
+  it("explains a missing preview.json and a busy port instead of failing silently", async () => {
+    const t = await setup();
+    await t.foreman.handle("preview", t.host);
+    assert.equal(t.last().level, "error");
+    assert.match(t.last().message, /No foreman\/preview\.json/);
+    await mkdir(join(t.repo, "foreman"), { recursive: true });
+    await writeFile(join(t.repo, "foreman/preview.json"), PREVIEW);
+    t.setPortFree(false);
+    await t.foreman.handle("preview", t.host);
+    assert.match(t.last().message, /port 4173 is already in use/);
+    assert.deepEqual(t.opened, []);
+  });
+
+  it("answers at once and explains that the app may not be built yet", async () => {
+    const t = await withPreview();
+    await t.foreman.handle("plan idea here", t.host);
+    t.setPortFree(false);
+    await t.foreman.handle("preview", t.host);
+    const infos = t.messages.map((entry) => entry.message);
+    const startingAt = infos.findIndex((message) => /Starting the preview on port 4173/.test(message));
+    const errorAt = infos.findIndex((message) => /already in use/.test(message));
+    assert.ok(startingAt >= 0 && errorAt > startingAt, "immediate feedback comes before any outcome");
+    t.setPortFree(true);
+    t.state.previewExitsAtOnce = true;
+    await t.foreman.handle("preview", t.host);
+    assert.match(t.last().message, /exited right away[\s\S]*0 of 2 tasks are done[\s\S]*may not exist yet/);
+  });
+
+  it("shows the preview address in the live panel while a run is going", async () => {
+    const t = await withPreview();
+    await t.foreman.handle("plan idea here", t.host);
+    await t.foreman.handle("preview", t.host);
+    t.state.runRole = t.writer(t.fileFor);
+    await t.foreman.handle("run", t.host);
+    const strip = (lines?: string[]) => (lines ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+    assert.ok(t.widgets.some((lines) => /Preview\s+http:\/\/127\.0\.0\.1:4173/.test(strip(lines))));
+    await t.foreman.shutdown();
+  });
+
+  it("keeps videos and screenshots from each test run and opens them with /foreman recordings", async () => {
+    const t = await setup();
+    await t.foreman.handle("plan idea here", t.host);
+    // Make t01's success test also leave Playwright-style output behind.
+    const yaml = await readFile(join(t.repo, "foreman/tasks.yaml"), "utf8");
+    await writeFile(join(t.repo, "foreman/tasks.yaml"), yaml.replace('"grep -q ok a.txt"', '"mkdir -p test-results/notes-chromium && echo v > test-results/notes-chromium/video.webm && echo s > test-results/notes-chromium/shot.png && grep -q ok a.txt"'));
+    t.state.runRole = t.writer(t.fileFor);
+    await t.foreman.handle("run", t.host);
+    assert.match(t.last().message, /All 2 task\(s\) done/);
+    const index = join(t.repo, "foreman/.run/artifacts/t01-attempt1/index.html");
+    assert.match(await readFile(index, "utf8"), /video\.webm/);
+    assert.ok(t.statuses.some((status) => /recorded 1 video, 1 screenshot/.test(status ?? "")), "the run said what it recorded");
+    assert.equal((await git(t.repo, ["ls-files", "--", "test-results", "foreman/.run"])).trim(), "", "recordings are never committed");
+
+    await t.foreman.handle("recordings", t.host);
+    assert.deepEqual(t.opened, [`file://${index}`]);
+    assert.match(t.last().message, /t01-attempt1/);
+    t.setOpenFails(true);
+    await t.foreman.handle("recordings", t.host);
+    assert.match(t.last().message, /could not open a browser[\s\S]*t01-attempt1[\s\S]*index\.html/, "the file path is still shown");
+    t.setOpenFails(false);
+    await t.foreman.handle("recordings nothing-here", t.host);
+    assert.match(t.last().message, /No recordings/);
+    await assert.rejects(readFile(join(t.repo, "foreman/.run/artifacts/t02-attempt1/index.html")), "t02's tests recorded nothing, so t01's stale output is not credited to it");
   });
 });

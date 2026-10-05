@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Foreman, SUBCOMMANDS, type Host } from "./commands.ts";
 import { readHostMode, shellLeaseClient } from "./gpu.ts";
-import { runPiRole, runSandboxedCommand } from "./sandbox.ts";
+import { realPreviewDeps } from "./preview.ts";
+import { runPiRole, runSandboxedCommand, spawnSandboxedApp } from "./sandbox.ts";
+import { spawn } from "node:child_process";
 
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +18,16 @@ export default async function foremanExtension(pi: ExtensionAPI): Promise<void> 
     runCommand: runSandboxedCommand,
     makeLeaseClient: shellLeaseClient,
     readMode: (command) => readHostMode(command),
+    // Opens the owner's default browser or viewer on their own desktop; not sandboxed, by design.
+    openUrl: (target) => new Promise<void>((resolve, reject) => {
+      const child = spawn("xdg-open", [target], { detached: true, stdio: "ignore" });
+      // xdg-open normally returns at once; if it lingers (a browser started in the foreground), stop waiting.
+      const done = setTimeout(resolve, 3000);
+      child.on("error", (error) => { clearTimeout(done); reject(error); });
+      child.on("exit", (code) => { clearTimeout(done); code === 0 || code === null ? resolve() : reject(new Error(`xdg-open exited with ${code}`)); });
+      child.unref();
+    }),
+    preview: { ...realPreviewDeps, start: (command, options) => spawnSandboxedApp(command, options) },
     // The Architect works in the current session. ctx.newSession() would start on the default model
     // and re-create this extension's runtime, orphaning the planning lease, so it is not used.
     startArchitect: async (host, kickoff, profile) => {
@@ -36,7 +48,11 @@ export default async function foremanExtension(pi: ExtensionAPI): Promise<void> 
     cwd: ctx.cwd,
     notify: (message, level) => ctx.ui.notify(message, level),
     setStatus: (text) => ctx.ui.setStatus("foreman", text),
-    setWidget: (lines) => ctx.ui.setWidget("foreman", lines),
+    // A function is redrawn at the terminal's current width; plain lines are shown as they are.
+    setWidget: (content) => {
+      if (typeof content === "function") ctx.ui.setWidget("foreman", () => ({ render: content, invalidate: () => {} }));
+      else ctx.ui.setWidget("foreman", content);
+    },
     setTitle: (title) => ctx.ui.setTitle(title),
     bell: () => { process.stdout.write("\x07"); },
   });

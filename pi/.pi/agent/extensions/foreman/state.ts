@@ -12,6 +12,8 @@ export interface TaskState {
   blockedReason?: string;
   /** Owner note from /foreman unblock, handed to the Builder. */
   note?: string;
+  /** Set when only the review failed: the next run goes straight back to review and keeps the Builder's work. */
+  stage?: "review";
   /** Path (relative to the foreman dir) of the last failure output. */
   lastFailure?: string;
   commit?: string;
@@ -99,11 +101,16 @@ export function recoverInterrupted(state: State): State {
   return { ...state, tasks };
 }
 
+export function setStage(state: State, id: string, stage: "review" | undefined): State {
+  return withTask(state, id, { stage });
+}
+
 export function unblock(state: State, id: string, note?: string): State {
   const task = state.tasks[id];
   if (!task) throw new Error(`unknown task "${id}"`);
   if (task.status !== "blocked") throw new Error(`task "${id}" is not blocked (it is ${task.status})`);
-  return withTask(state, id, { status: "pending", attempts: 0, blockedReason: undefined, note });
+  // A review-only failure keeps its attempts and stage: the Builder is not rerun.
+  return withTask(state, id, { status: "pending", attempts: task.stage === "review" ? task.attempts : 0, blockedReason: undefined, note });
 }
 
 export function setPaused(state: State, paused: boolean): State {

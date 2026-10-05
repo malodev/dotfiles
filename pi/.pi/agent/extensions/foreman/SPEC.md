@@ -178,6 +178,15 @@ foreman/
    `foreman/.run/` and are excluded through `.git/info/exclude`, so they never enter a commit.
 3. Grilling is part of the Architect conversation, not a separate flag.
 
+## Watching the UI
+
+`/foreman preview` runs `foreman/preview.json`'s command in a sandbox with the repository read-only, on its
+own port and data dir, restarted by a debounced file watcher; `/foreman recordings` opens the videos,
+screenshots and traces that each task's tests wrote to `test-results/` (copied to `foreman/.run/artifacts/`
+after every test run; `test-results/` is cleared before each so recordings are not misattributed). The
+test browser is headless; showing it live would need a virtual display streamed to the owner, or access to
+the owner's desktop session, and was deliberately not built.
+
 ## Known limits
 
 - The sandbox mounts the host read-only, but hides credentials the roles never need: the

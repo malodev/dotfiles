@@ -23,9 +23,12 @@ export function builderTask(task: Task, attempt: number, maxAttempts: number, fe
   ].join("\n");
 }
 
-export function reviewerTask(task: Task, cycle: number): string {
+export function reviewerTask(task: Task, cycle: number, previousReply?: { text: string }): string {
   return [
     `Review task ${task.id} (review ${cycle}).`,
+    ...(previousReply
+      ? ["", `Your previous reply did not contain an exact \`## Verdict\` section, so it could not be used. ${previousReply.text.trim() ? `It was:\n${tail(previousReply.text, 1200)}\n` : "It was empty. "}Reply again, and finish with the exact \`## Verdict\` section below.`]
+      : []),
     section("Goal", task.goal),
     section("Success tests (already run by the harness and passing)", task.successTests.map((command) => `- ${command}`).join("\n")),
     "\nInspect the uncommitted changes with `git status` and `git diff`. Judge only whether the goal is met by the changes, not style.",

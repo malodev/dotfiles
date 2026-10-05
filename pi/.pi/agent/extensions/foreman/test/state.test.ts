@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { loadTasks } from "../tasks.ts";
 import {
   emptyState, loadState, markBlocked, markDone, markRunning, nextTask, recoverInterrupted,
-  saveState, syncTasks, unblock, type State,
+  saveState, setAttempts, setStage, syncTasks, unblock, type State,
 } from "../state.ts";
 
 const tasks = loadTasks(`
@@ -60,6 +60,16 @@ describe("transitions", () => {
     assert.equal(state.tasks.a.status, "blocked");
     assert.match(state.tasks.a.blockedReason ?? "", /interrupted/);
     assert.equal(state.tasks.b.status, "pending");
+  });
+
+  it("unblock keeps the attempts and review stage of a task that only failed review", () => {
+    let state = markBlocked(setAttempts(fresh(), "a", 2), "a", "reviewer silent");
+    state = setStage(state, "a", "review");
+    const after = unblock(state, "a", "note");
+    assert.equal(after.tasks.a.stage, "review");
+    assert.equal(after.tasks.a.attempts, 2, "the builder is not rerun, so its attempts are not reset");
+    assert.equal(unblock(markBlocked(setAttempts(fresh(), "a", 2), "a", "why"), "a").tasks.a.attempts, 0);
+    assert.equal(setStage(state, "a", undefined).tasks.a.stage, undefined);
   });
 
   it("unblock resets a blocked task, keeps the note, and rejects other states", () => {

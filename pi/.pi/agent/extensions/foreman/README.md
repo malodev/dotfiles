@@ -11,6 +11,8 @@ local models that can only run one at a time on a single GPU. See [SPEC.md](SPEC
 /foreman run                            Builder → tests → Reviewer → commit, task by task
 /foreman status                         progress
 /foreman unblock <task-id> [note]       retry a blocked task, optionally with guidance
+/foreman preview [stop]                 open the app being built in your browser
+/foreman recordings [task-id]           open the videos and screenshots kept from test runs
 /foreman pause                          stop after the current task
 /foreman stop                           abort the running task now
 ```
@@ -18,6 +20,26 @@ local models that can only run one at a time on a single GPU. See [SPEC.md](SPEC
 Work is committed on a `foreman/<timestamp>` branch. You merge it yourself. Foreman never pushes.
 A task that fails `limits.buildAttempts` times, or is interrupted, is blocked and everything behind
 it waits until you `/foreman unblock` it.
+
+## The progress panel
+
+While a run is going (and after it ends) a boxed panel sits above the editor: a header with the run state,
+total time, done/open counts and a progress bar; the task list with icons (`✓` done, `▸` running, `✖` blocked,
+`·` pending) that collapses to `… +N more` around the current task; then what is happening now (phase, its
+elapsed time, the latest output line), the commands that verify the current task, the preview link and the
+files to look at. It redraws to the terminal's width. The layout is borrowed from the pi-goal-x panel.
+
+## Watching the UI
+
+- **Preview** (`/foreman preview`): the app the Architect described in `foreman/preview.json` runs in the
+  sandbox with the repository mounted read-only, on its own port and with its own data folder, and opens in
+  your browser (the address is also printed as `Open: http://127.0.0.1:<port>`, and stays in the progress panel and `/foreman status` while it runs). It follows the Builder's saved files: refresh the page, and the app restarts by itself
+  (after a short pause) whenever a source file changes. It can show half-finished work. Your clicking
+  cannot disturb the tests, which use a different port and data. `/foreman preview stop` ends it.
+- **Recordings** (`/foreman recordings [task-id]`): after each task's success tests, videos, screenshots
+  and traces written to `test-results/` are copied to `foreman/.run/artifacts/<task>-attempt<N>/`, with an
+  `index.html` that plays them. They are never committed. The progress panel says when they were recorded.
+- The test browser itself runs headless inside the sandbox and is not shown live.
 
 ## Configure
 
