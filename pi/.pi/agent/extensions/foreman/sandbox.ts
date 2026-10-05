@@ -26,6 +26,8 @@ export interface RoleResult {
   exitCode: number;
   stderr: string;
   error?: string;
+  /** Wall-clock time of the run, for diagnosing a slow or silent role. */
+  durationMs?: number;
 }
 
 /** The seam the cycle depends on. Tests inject a fake; production uses runPiRole. */
@@ -36,8 +38,8 @@ export type RoleRunner = (request: RoleRequest) => Promise<RoleResult>;
  * DBus is hidden, /tmp is writable, and only the Builder may write the repository.
  * The Reviewer's read-only access is therefore enforced by the kernel, not the prompt.
  */
-export function bwrapArgs(options: { role: "builder" | "reviewer"; cwd: string; tmp: string; uid: number; hide?: HiddenMounts; browsersPath?: string }): string[] {
-  const { role, cwd, tmp, uid, hide, browsersPath } = options;
+export function bwrapArgs(options: { role: "builder" | "reviewer"; cwd: string; tmp: string; uid: number; hide?: HiddenMounts; browsersPath?: string; extraEnv?: Record<string, string> }): string[] {
+  const { role, cwd, tmp, uid, hide, browsersPath, extraEnv } = options;
   return [
     "--die-with-parent",
     "--unshare-pid", "--unshare-ipc", "--unshare-uts",
@@ -59,6 +61,7 @@ export function bwrapArgs(options: { role: "builder" | "reviewer"; cwd: string; 
     // Browsers for UI/e2e tests are read from the host cache; downloading inside the sandbox would
     // hit the throwaway XDG cache above and repeat on every run.
     ...(browsersPath ? ["--setenv", "PLAYWRIGHT_BROWSERS_PATH", browsersPath, "--setenv", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"] : []),
+    ...Object.entries(extraEnv ?? {}).flatMap(([name, value]) => ["--setenv", name, value]),
   ];
 }
 
@@ -214,6 +217,7 @@ function execute(request: RoleRequest, program: string, args: string[], env: Nod
     let responseProvider: string | undefined;
     let responseModel: string | undefined;
     let error: string | undefined;
+    const startedAt = Date.now();
     let lastActivity = Date.now();
 
     const kill = () => {
@@ -268,7 +272,7 @@ function execute(request: RoleRequest, program: string, args: string[], env: Nod
         error ||= `wrong or missing model: expected ${request.model}, got ${responseProvider ?? "none"}/${responseModel ?? "none"}`;
       }
       if (!output.trim() && toolCount === 0) error ||= "role produced no output and ran no tools";
-      resolve({ output, toolCount, stopReason, responseModel, exitCode, stderr, error });
+      resolve({ output, toolCount, stopReason, responseModel, exitCode, stderr, error, durationMs: Date.now() - startedAt });
     });
   });
 }
@@ -279,7 +283,7 @@ export interface CommandResult {
 }
 
 /** Runs one success-test command in the Builder sandbox (repo writable, host read-only). */
-export async function runSandboxedCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<CommandResult> {
+export async function runSandboxedCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal, onLine?: (line: string) => void): Promise<CommandResult> {
   const bwrap = process.env.FOREMAN_BWRAP_BIN || "bwrap";
   const hide = await hiddenMounts(await sensitivePaths(homedir()), { cwd, tmp: tmpdir() });
   const args = [...bwrapArgs({ role: "builder", cwd, tmp: tmpdir(), uid: process.getuid?.() ?? 1000, hide, browsersPath: await findBrowsersPath() }), "bash", "-c", command];
@@ -295,8 +299,18 @@ export async function runSandboxedCommand(command: string, cwd: string, timeoutM
     const onAbort = () => { note = "\n[foreman] aborted"; kill(); };
     if (signal?.aborted) onAbort();
     else signal?.addEventListener("abort", onAbort, { once: true });
-    child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString(); });
-    child.stderr.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+    // Report each finished, non-empty output line so a long test run is not silent.
+    const pending = { out: "", err: "" };
+    const feed = (stream: "out" | "err", chunk: Buffer) => {
+      const text = chunk.toString();
+      output += text;
+      if (!onLine) return;
+      const lines = (pending[stream] + text).split("\n");
+      pending[stream] = lines.pop() ?? "";
+      for (const line of lines) if (line.trim()) onLine(line.trim().slice(0, 160));
+    };
+    child.stdout.on("data", (chunk: Buffer) => feed("out", chunk));
+    child.stderr.on("data", (chunk: Buffer) => feed("err", chunk));
     child.on("error", (error) => { note = `\n[foreman] failed to start: ${error.message}`; });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -307,3 +321,51 @@ export async function runSandboxedCommand(command: string, cwd: string, timeoutM
 }
 
 export type CommandRunner = typeof runSandboxedCommand;
+
+export interface RunningApp {
+  /** Resolves with the exit code (null if killed by a signal) when the app ends. */
+  exited: Promise<number | null>;
+  /** Stops the app and everything it started. Safe to call more than once and after it has exited. */
+  stop(): Promise<void>;
+}
+
+/**
+ * Runs the project's app for the live preview. The repository is mounted read-only (the app can read
+ * the Builder's latest saved files but cannot change them); anything it writes must go under /tmp.
+ * The sandbox shares the host's network, so the app is reachable on the host's localhost.
+ */
+export async function spawnSandboxedApp(
+  command: string,
+  options: { cwd: string; env: Record<string, string>; onOutput?: (line: string) => void },
+): Promise<RunningApp> {
+  const bwrap = process.env.FOREMAN_BWRAP_BIN || "bwrap";
+  const hide = await hiddenMounts(await sensitivePaths(homedir()), { cwd: options.cwd, tmp: tmpdir() });
+  const args = [
+    ...bwrapArgs({ role: "reviewer", cwd: options.cwd, tmp: tmpdir(), uid: process.getuid?.() ?? 1000, hide, extraEnv: options.env }),
+    "bash", "-c", command,
+  ];
+  const child = spawn(bwrap, args, { cwd: options.cwd, shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  const pending = { out: "", err: "" };
+  const feed = (stream: "out" | "err", chunk: Buffer) => {
+    const lines = (pending[stream] + chunk.toString()).split("\n");
+    pending[stream] = lines.pop() ?? "";
+    for (const line of lines) if (line.trim()) options.onOutput?.(line.trim().slice(0, 200));
+  };
+  child.stdout.on("data", (chunk: Buffer) => feed("out", chunk));
+  child.stderr.on("data", (chunk: Buffer) => feed("err", chunk));
+  let finished = false;
+  const exited = new Promise<number | null>((resolveExit) => {
+    child.on("error", (error) => { options.onOutput?.(`failed to start: ${error.message}`); finished = true; resolveExit(1); });
+    child.on("close", (code) => { finished = true; resolveExit(code); });
+  });
+  return {
+    exited,
+    async stop() {
+      if (finished) return;
+      try { if (child.pid) process.kill(-child.pid, "SIGTERM"); } catch { /* already gone */ }
+      const forced = setTimeout(() => { try { if (child.pid) process.kill(-child.pid, "SIGKILL"); } catch { /* already gone */ } }, 3000);
+      await exited;
+      clearTimeout(forced);
+    },
+  };
+}

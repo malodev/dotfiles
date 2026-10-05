@@ -290,3 +290,76 @@ describe("browser support", () => {
     assert.equal(await findBrowsersPath(dir), join(dir, ".cache/ms-playwright"));
   });
 });
+
+describe("runSandboxedCommand progress", () => {
+  it("reports the latest non-empty output line while the command runs", async () => {
+    const dir = await mkdtemp(join(process.env.HOME ?? tmpdir(), ".foreman-test-"));
+    try {
+      const lines: string[] = [];
+      const result = await runSandboxedCommand("echo first; echo; echo '  second line  '; echo third >&2", dir, 10_000, undefined, (line) => lines.push(line));
+      assert.equal(result.code, 0);
+      assert.deepEqual(lines, ["first", "second line", "third"]);
+    } finally {
+      const { rm } = await import("node:fs/promises");
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+import { spawnSandboxedApp } from "../sandbox.ts";
+import { createServer } from "node:net";
+
+async function freePort(): Promise<number> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const port = (server.address() as { port: number }).port;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function fetchText(port: number, retries = 40): Promise<string> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await (await fetch(`http://127.0.0.1:${port}/`)).text();
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw new Error(`nothing listening on ${port}`);
+}
+
+describe("spawnSandboxedApp", () => {
+  it("serves the working files from a read-only mount, live, on the host's localhost", async () => {
+    const dir = await mkdtemp(join(process.env.HOME ?? tmpdir(), ".foreman-test-"));
+    await writeFile(join(dir, "index.html"), "version one");
+    await writeFile(join(dir, "server.js"), `const http=require("http"),fs=require("fs");
+http.createServer((q,r)=>{ let w="writable"; try{fs.writeFileSync("probe.txt","x")}catch{w="readonly"} r.end(fs.readFileSync("index.html","utf8")+"|"+w+"|"+process.env.DATA_DIR) }).listen(process.env.PORT,"127.0.0.1");`);
+    const port = await freePort();
+    const lines: string[] = [];
+    const app = await spawnSandboxedApp("node server.js", { cwd: dir, env: { PORT: String(port), DATA_DIR: "/tmp/somewhere" }, onOutput: (line) => lines.push(line) });
+    try {
+      assert.equal(await fetchText(port), "version one|readonly|/tmp/somewhere", "reachable from the host, repo read-only, env passed");
+      await writeFile(join(dir, "index.html"), "version two");
+      assert.match(await fetchText(port), /^version two\|/, "a file saved on the host shows up in the running preview");
+      await assert.rejects(stat(join(dir, "probe.txt")), "the app could not write into the repository");
+    } finally {
+      await app.stop();
+    }
+    await assert.rejects(fetch(`http://127.0.0.1:${port}/`), "the server is gone after stop");
+    const { rm } = await import("node:fs/promises");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("reports output lines and the exit code when the app dies", async () => {
+    const dir = await mkdtemp(join(process.env.HOME ?? tmpdir(), ".foreman-test-"));
+    const lines: string[] = [];
+    const app = await spawnSandboxedApp("echo starting; echo boom >&2; exit 3", { cwd: dir, env: {}, onOutput: (line) => lines.push(line) });
+    assert.equal(await app.exited, 3);
+    assert.deepEqual(lines.sort(), ["boom", "starting"]);
+    await app.stop(); // safe after exit
+    const { rm } = await import("node:fs/promises");
+    await rm(dir, { recursive: true, force: true });
+  });
+});
