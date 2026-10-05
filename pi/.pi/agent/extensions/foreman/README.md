@@ -11,6 +11,7 @@ local models that can only run one at a time on a single GPU. See [SPEC.md](SPEC
 /foreman run                            Builder → tests → Reviewer → commit, task by task
 /foreman status                         progress
 /foreman unblock <task-id> [note]       retry a blocked task, optionally with guidance
+/foreman models [role=provider/model …] choose the models for architect, builder and reviewer on this host
 /foreman preview [stop]                 open the app being built in your browser
 /foreman recordings [task-id]           open the videos and screenshots kept from test runs
 /foreman pause                          stop after the current task
@@ -41,24 +42,47 @@ files to look at. It redraws to the terminal's width. The layout is borrowed fro
   `index.html` that plays them. They are never committed. The progress panel says when they were recorded.
 - The test browser itself runs headless inside the sandbox and is not shown live.
 
+## Choosing models on any host
+
+`/foreman models` sets the role models on the host where pi runs, and creates `~/.pi/agent/foreman.json`
+if it does not exist. It needs no panel, so it is how you configure a remote host.
+
+- **Menu** (`/foreman models` with no arguments, in an interactive pi): for each role it asks for a filter
+  word (for example `sol` or `qwen flash`), lists the matching models, then asks for the thinking level
+  that model supports. It lists only models this host's pi can use, so it never offers one you are not
+  logged in to.
+- **One line:** `/foreman models architect=openai-codex/gpt-… builder=qwen-flash/malos/… reviewer=same`.
+  Add `:high` (or another level) to a model for its thinking level. `reviewer=same` uses the builder's model.
+- **`--project`** writes `.pi/foreman.json` for the current project instead of the global file. A project
+  file wins over the global one, so Foreman tells you when a project file would hide your change.
+- It keeps every other setting in the file, refuses to touch a file that is not valid JSON, and refuses
+  models this host does not have or local models that need two different GPU modes.
+
+Models can be mixed: for example a cloud model for the Architect and Reviewer and a local model on this
+machine for the Builder. Cloud roles need nothing from the GPU host; a local role needs the host in the
+mode that serves it (`pi-llama` needs team, `ds4` needs ds4, `qwen-flash` needs qwen-flash), and Foreman
+says which role is the problem if it is not. At the start of `/foreman plan` and `/foreman run` it checks
+that every role's model exists in this host's pi, so a host that is logged in differently fails early
+and clearly instead of after the Builder has worked.
+
 ## Configure
 
 Everything lives in one file, `~/.pi/agent/foreman.json` (global), optionally overridden per project
-by `.pi/foreman.json`. Copy `foreman.example.json` to start.
+by `.pi/foreman.json`. Copy `foreman.example.json` to start, or let `/foreman models` create it.
 
+- `selection`: `"local"` (the roles follow the host mode, as the panel's local view does) or `"mixed"`
+  (the roles are used exactly as written, cloud and local together). `/foreman models` writes `"mixed"`.
 - `roles`: `architect`, `builder`, `reviewer`, each `{ "provider", "model", "thinking" }`. The Reviewer
   may be `{ "same_as": "builder" }`, which avoids a model swap on every task. Only the Builder is
   required; without an Architect, planning uses your current model.
-- `modes`: the one model each of `ds4` and `qwen-flash` serves. Foreman reads the host's live mode
-  (from the manager) on every `/foreman plan` and `/foreman run`: in `team` it uses `roles`; in `ds4` or
-  `qwen-flash` it uses that mode's model for all three roles and takes the lease in that mode; in any other
-  mode (studio, stop, maintenance) it refuses and tells you to switch the mode in the panel. It never
-  switches the host away from what it is running. With only cloud models configured the mode is not consulted.
-- `limits`, `gpu` (`managedProviders` lists the providers that need a `pi-inference` lease) and `notes`:
-  facts about this machine that are passed to the Architect, such as a required Playwright version.
+- `modes`: the one model each of `ds4` and `qwen-flash` serves, used for all three roles when
+  `selection` is `"local"` and the host is in that mode.
+- `limits`, `gpu` (`managedProviders`; `providerModes` maps each local provider to the host mode that
+  serves it) and `notes`: facts about this machine that are passed to the Architect, such as a required
+  Playwright version.
 
-The model panel (Settings → Models → Team roles) edits the `roles` block of this file and keeps
-everything else. `/foreman status` shows the effective models. Changes apply to the next command.
+The model panel (Settings → Models → Team roles) edits the `roles` block of this file on the GPU host and
+keeps everything else. `/foreman status` shows the effective models. Changes apply to the next command.
 A Reviewer on a different model than the Builder means a model swap on every task.
 
 ## Develop

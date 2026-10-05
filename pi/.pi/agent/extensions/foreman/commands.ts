@@ -4,7 +4,8 @@ import { collectArtifacts, describeArtifacts, findRecordings } from "./artifacts
 import { loadAgent } from "./agents.ts";
 import { Preview, readPreviewConfig, type PreviewDeps } from "./preview.ts";
 import { architectKickoff, resolvePlanInput } from "./plan.ts";
-import { applyHostMode, loadConfig, modelId, type ForemanConfig, type RoleProfile } from "./config.ts";
+import { applyHostMode, loadConfig, localRoles, modelId, type ForemanConfig, type RoleProfile } from "./config.ts";
+import { checkRoles, modelsCommand, type ModelInfo, type RoleChoice, type RoleChoices } from "./models.ts";
 import { runQueue } from "./run.ts";
 import { finalBoard, formatStatus, progressBoard, type Board, type PanelInput } from "./report.ts";
 import { Gpu, providerOf, type LeaseClient, type ShellLeaseConfig } from "./gpu.ts";
@@ -24,6 +25,11 @@ export interface Host {
   setTitle?(title: string): void;
   /** Terminal bell, to draw attention when a run ends. */
   bell?(): void;
+  /** Models this host's pi can use (it lists only those with working credentials). Undefined: unknown, skip checks. */
+  models?(): ModelInfo[] | undefined;
+  /** Interactive prompts, when pi has a UI. */
+  select?(title: string, options: string[]): Promise<string | undefined>;
+  input?(title: string, placeholder?: string): Promise<string | undefined>;
 }
 
 export interface Services {
@@ -48,13 +54,28 @@ const USAGE = [
   "/foreman run                            build every task in order until done or blocked",
   "/foreman status                         show progress",
   "/foreman unblock <task-id> [note]       retry a blocked task, optionally with guidance",
+  "/foreman models [role=provider/model ...] choose the models for architect, builder and reviewer on this host",
   "/foreman preview [stop]                 open the app being built in your browser, following the Builder's saved files",
   "/foreman recordings [task-id]           open the videos and screenshots kept from the test runs",
   "/foreman pause                          stop after the current task",
   "/foreman stop                           abort the running task now",
 ].join("\n");
 
-export const SUBCOMMANDS = ["plan", "run", "status", "unblock", "pause", "stop", "preview", "recordings"] as const;
+/** The config object in a file; {} when there is no file, an error when it is not valid JSON. */
+async function readConfigObject(path: string): Promise<Record<string, any>> {
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error: any) {
+    if (error?.code === "ENOENT") return {};
+    throw error;
+  }
+  const value = JSON.parse(text);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("the file must contain a JSON object");
+  return value;
+}
+
+export const SUBCOMMANDS = ["plan", "run", "status", "unblock", "pause", "stop", "models", "preview", "recordings"] as const;
 
 interface ActiveRun {
   controller: AbortController;
@@ -85,6 +106,7 @@ export class Foreman {
         case "unblock": return await this.unblock(rest, host);
         case "pause": return await this.pause(host);
         case "stop": return this.stop(host);
+        case "models": return await this.models(rest, host);
         case "preview": return await this.previewCommand(rest, host);
         case "recordings": return await this.recordings(rest, host);
         default: host.notify(USAGE, name ? "warning" : "info");
@@ -120,8 +142,45 @@ export class Foreman {
    */
   private async effectiveConfig(host: Host): Promise<ForemanConfig> {
     const base = await loadConfig(this.services.configPaths(host.cwd));
-    if (base.gpu.managedProviders.length === 0 && Object.keys(base.modes).length === 0) return base;
-    return applyHostMode(base, await this.services.readMode(base.gpu.command));
+    const usesLocal = base.selection === "mixed"
+      ? localRoles(base).length > 0
+      : base.gpu.managedProviders.length > 0 || Object.keys(base.modes).length > 0;
+    const resolved = usesLocal ? applyHostMode(base, await this.services.readMode(base.gpu.command)) : base;
+    this.assertModelsAvailable(resolved, host);
+    return resolved;
+  }
+
+  private async models(argument: string, host: Host): Promise<void> {
+    const available = host.models?.();
+    if (!available) throw new Error("This pi did not report which models it can use, so /foreman models cannot offer or check any.");
+    const paths = this.services.configPaths(host.cwd);
+    const globalPath = paths[0];
+    const projectPath = paths[paths.length - 1];
+    await modelsCommand(argument, host, {
+      models: available,
+      writePath: (project) => (project ? projectPath : globalPath),
+      current: (project) => readConfigObject(project ? projectPath : globalPath),
+    });
+    // A project file wins over the global one, so a global change may seem to do nothing there.
+    if (!argument.includes("--project") && projectPath !== globalPath) {
+      const project = await readConfigObject(projectPath).catch(() => ({} as Record<string, any>));
+      if (project.roles) host.notify(`Note: ${projectPath} also sets roles for this project and takes priority over ${globalPath}. Use --project to change it.`, "warning");
+    }
+  }
+
+  /** Every role's model must exist in this host's pi. Checked up front, not after the Builder has worked. */
+  private assertModelsAvailable(config: ForemanConfig, host: Host): void {
+    const models = host.models?.();
+    if (!models) return;
+    const choices: RoleChoices = {};
+    for (const role of ["architect", "builder", "reviewer"] as const) {
+      const profile = config.roles[role];
+      if (!profile) continue;
+      const same = role === "reviewer" && config.roles.builder && profile.provider === config.roles.builder.provider && profile.model === config.roles.builder.model;
+      choices[role] = same ? "same" : ({ provider: profile.provider, model: profile.model } satisfies RoleChoice);
+    }
+    const errors = checkRoles(choices, models);
+    if (errors.length) throw new Error(`${errors.join("\n")}\nChange them with /foreman models.`);
   }
 
   private newGpu(config: ForemanConfig, host: Host): Gpu {

@@ -55,6 +55,17 @@ export default async function foremanExtension(pi: ExtensionAPI): Promise<void> 
     },
     setTitle: (title) => ctx.ui.setTitle(title),
     bell: () => { process.stdout.write("\x07"); },
+    // The models this pi can actually use (it only lists those with working credentials).
+    models: () => ctx.modelRegistry.getAvailable().map((model) => ({
+      provider: model.provider,
+      id: model.id,
+      name: model.name,
+      reasoning: model.reasoning,
+      contextWindow: model.contextWindow,
+      thinkingLevelMap: model.thinkingLevelMap as Record<string, string | null | undefined> | undefined,
+    })),
+    select: (title, options) => ctx.ui.select(title, options),
+    input: (title, placeholder) => ctx.ui.input(title, placeholder),
   });
 
   pi.registerCommand("foreman", {

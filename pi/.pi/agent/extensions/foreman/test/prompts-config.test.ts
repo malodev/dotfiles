@@ -122,3 +122,45 @@ before(async () => {
     modes: { ds4: { provider: "ds4", model: "deepseek-v4-flash" } },
   })]);
 });
+
+describe("mixed selections (cloud and local roles together)", () => {
+  const mixed = async (roles: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    loadConfig([await writeConfig({ selection: "mixed", roles, gpu: { managedProviders: [] }, modes: { ds4: { provider: "ds4", model: "deepseek-v4-flash" } }, ...extra })]);
+  const cloud = { provider: "openai-codex", model: "gpt-sol" };
+
+  it("defaults to the local selection, and rejects an unknown one", async () => {
+    const config = await loadConfig([await writeConfig({ roles: { builder: { provider: "l", model: "m" }, reviewer: { same_as: "builder" } } })]);
+    assert.equal(config.selection, "local");
+    assert.equal(config.gpu.providerModes["pi-llama"], "team");
+    await assert.rejects(loadConfig([await writeConfig({ selection: "weird", roles: { builder: { provider: "l", model: "m" }, reviewer: { same_as: "builder" } } })]), /selection/);
+  });
+
+  it("all-cloud roles need no particular host mode, even studio", async () => {
+    const config = await mixed({ architect: cloud, builder: cloud, reviewer: { same_as: "builder" } });
+    assert.doesNotThrow(() => applyHostMode(config, "studio"));
+    assert.equal(applyHostMode(config, "studio").roles.builder.model, "gpt-sol");
+  });
+
+  it("a local role needs the host in the matching mode, and the cloud roles stay as chosen", async () => {
+    const config = await mixed({ architect: cloud, builder: { provider: "qwen-flash", model: "malos/qwen3.8-flash-next" }, reviewer: cloud });
+    const resolved = applyHostMode(config, "qwen-flash");
+    assert.equal(resolved.roles.architect?.provider, "openai-codex");
+    assert.equal(resolved.roles.builder.provider, "qwen-flash");
+    assert.equal(resolved.roles.reviewer.provider, "openai-codex", "cloud roles are not replaced");
+    assert.equal(resolved.gpu.mode, "qwen-flash");
+    assert.deepEqual(resolved.gpu.managedProviders, ["qwen-flash"]);
+    assert.throws(() => applyHostMode(config, "team"), /Builder uses qwen-flash.*needs host mode qwen-flash.*host is in team mode.*Switch the mode/s);
+    assert.throws(() => applyHostMode(config, "studio"), /needs host mode qwen-flash/);
+  });
+
+  it("does not replace mixed roles with the ds4 single model, unlike the local selection", async () => {
+    const config = await mixed({ architect: cloud, builder: { provider: "pi-llama", model: "pi/Q" }, reviewer: { same_as: "builder" } });
+    assert.equal(applyHostMode(config, "team").roles.builder.model, "pi/Q");
+    assert.throws(() => applyHostMode(config, "ds4"), /needs host mode team/);
+  });
+
+  it("refuses local roles that need different modes", async () => {
+    const config = await mixed({ architect: { provider: "ds4", model: "deepseek-v4-flash" }, builder: { provider: "pi-llama", model: "pi/Q" }, reviewer: { same_as: "builder" } });
+    assert.throws(() => applyHostMode(config, "team"), /more than one host mode.*ds4.*team/s);
+  });
+});

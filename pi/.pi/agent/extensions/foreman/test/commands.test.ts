@@ -40,6 +40,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     setStatus: (text) => statuses.push(text),
     setWidget: (content) => widgets.push(typeof content === "function" ? content(100) : content),
     setTitle: (title) => titles.push(title),
+    models: () => catalog.value,
     bell: () => { bells += 1; },
   };
   const lease: string[] = [];
@@ -51,6 +52,9 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
   const previewLog: string[] = [];
   let previewPortFree = true;
   let openFails = false;
+  const modeReads: string[] = [];
+  const catalog = { value: undefined as import("../models.ts").ModelInfo[] | undefined };
+  const prompts = { inputs: [] as (string | undefined)[], selects: [] as (string | undefined)[] };
   const leaseModes: string[] = [];
   const services: Services = {
     extensionDir: "/ext",
@@ -58,7 +62,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     runRole: async (request) => { roleCalls.push(request); return state.runRole!(request); },
     runCommand: bashRunner,
     makeLeaseClient: (config) => { leaseModes.push(config.mode); return client; },
-    readMode: async () => state.mode,
+    readMode: async () => { modeReads.push(state.mode); return state.mode; },
     openUrl: async (target) => { if (openFails) throw new Error("no browser"); opened.push(target); },
     preview: {
       start: async (command, options) => {
@@ -95,7 +99,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     };
   };
   const fileFor = (request: RoleRequest) => (request.task.includes("Task t01") ? "a.txt" : "b.txt");
-  return { repo, foreman, host, opened, previewLog, setPortFree: (value: boolean) => { previewPortFree = value; }, setOpenFails: (value: boolean) => { openFails = value; }, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
+  return { repo, foreman, host, modeReads, catalog, prompts, opened, previewLog, setPortFree: (value: boolean) => { previewPortFree = value; }, setOpenFails: (value: boolean) => { openFails = value; }, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
 }
 
 describe("foreman commands (smoke)", () => {
@@ -455,5 +459,66 @@ describe("preview and recordings commands", () => {
     await t.foreman.handle("recordings nothing-here", t.host);
     assert.match(t.last().message, /No recordings/);
     await assert.rejects(readFile(join(t.repo, "foreman/.run/artifacts/t02-attempt1/index.html")), "t02's tests recorded nothing, so t01's stale output is not credited to it");
+  });
+});
+
+
+describe("models command and early availability check", () => {
+  const info = (provider: string, id: string) => ({ provider, id, name: id, reasoning: true, contextWindow: 262144 });
+  const writeProjectConfig = async (repo: string, json: unknown) => {
+    await writeFile(join(repo, ".pi/foreman.json"), JSON.stringify(json));
+    await git(repo, ["add", "-A"]);
+    await git(repo, ["commit", "-q", "-m", "config"]);
+  };
+  const CLOUD = { provider: "openai-codex", model: "gpt-sol" };
+
+  it("/foreman models writes the roles to the config file this host reads", async () => {
+    const t = await setup();
+    t.catalog.value = [info("openai-codex", "gpt-sol"), info("local", "m1")];
+    await t.foreman.handle("models architect=openai-codex/gpt-sol builder=local/m1 reviewer=same", t.host);
+    const written = JSON.parse(await readFile(join(t.repo, ".pi/foreman.json"), "utf8"));
+    assert.equal(written.roles.architect.model, "gpt-sol");
+    assert.deepEqual(written.roles.reviewer, { same_as: "builder" });
+    assert.equal(written.selection, "mixed");
+    assert.match(t.last().message, /Saved[\s\S]*foreman\.json/);
+  });
+
+  it("plan and run stop before doing anything when a role's model is not available on this host", async () => {
+    const t = await setup({ architect: true });
+    t.catalog.value = [info("local", "m1")]; // the architect (local/big) is missing
+    await t.foreman.handle("plan idea here", t.host);
+    assert.equal(t.last().level, "error");
+    assert.match(t.last().message, /Architect model local\/big is not available on this machine/);
+    assert.equal(t.kickoffs.length, 0, "the Architect was not started");
+    assert.equal((await git(t.repo, ["rev-parse", "--abbrev-ref", "HEAD"])).trim(), "main");
+    t.catalog.value = [info("local", "m1"), info("local", "big")];
+    await t.foreman.handle("plan idea here", t.host);
+    assert.equal(t.kickoffs.length, 1, "with the model present it proceeds");
+  });
+
+  it("a mixed cloud-only selection never asks the host for its mode, even when the host is in studio", async () => {
+    const t = await setup();
+    await writeProjectConfig(t.repo, { selection: "mixed", roles: { architect: CLOUD, builder: CLOUD, reviewer: { same_as: "builder" } } });
+    t.state.mode = "studio";
+    await t.foreman.handle("plan idea here", t.host);
+    assert.equal(t.kickoffs.length, 1);
+    assert.deepEqual(t.modeReads, [], "no mode lookup for cloud-only roles");
+    t.state.runRole = t.writer(t.fileFor);
+    await t.foreman.handle("run", t.host);
+    assert.match(t.last().message, /All 2 task\(s\) done/);
+    assert.deepEqual(t.lease, [], "no GPU lease either");
+  });
+
+  it("a mixed selection with a local role needs the host in that role's mode, and says which role", async () => {
+    const t = await setup();
+    await writeProjectConfig(t.repo, { selection: "mixed", roles: { architect: CLOUD, builder: { provider: "qwen-flash", model: "malos/q" }, reviewer: CLOUD } });
+    t.state.mode = "team";
+    await t.foreman.handle("plan idea here", t.host);
+    assert.equal(t.last().level, "error");
+    assert.match(t.last().message, /Builder uses qwen-flash.*needs host mode qwen-flash.*host is in team mode/s);
+    assert.equal(t.kickoffs.length, 0);
+    t.state.mode = "qwen-flash";
+    await t.foreman.handle("plan idea here", t.host);
+    assert.equal(t.kickoffs.length, 1);
   });
 });
