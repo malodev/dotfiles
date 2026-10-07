@@ -205,19 +205,45 @@ stow_collect_conflicts() {
     [[ $saw_conflict -eq 1 ]]
 }
 
+#=============================================================================
+# PER-PACKAGE STOW OPTIONS
+#=============================================================================
+# By default stow "folds" directories: if ~/.pi does not exist it replaces the
+# whole tree with a single symlink into the repo. Every file the machine then
+# writes under ~/.pi lands in the repo working tree, which is why pi carries
+# runtime state, vendored node_modules and per-host symlinks.
+#
+# Packages listed here are stowed with --no-folding instead: real directories
+# are created in $HOME and each individual file is symlinked. Machine-dependent
+# files stay real files next to the linked ones and never enter the repo.
+stow_package_flags() {
+    local pkg="$1"
+
+    case "$pkg" in
+        pi) echo "--no-folding" ;;
+        *) ;;
+    esac
+}
+
 stow_package_preflight() {
     local pkg="$1"
     local output
+    local -a stow_flags=()
+    local flags_str=""
+
+    # Intentional word splitting: flags are plain tokens like --no-folding.
+    stow_flags=($(stow_package_flags "$pkg"))
+    [[ ${#stow_flags[@]} -gt 0 ]] && flags_str="${stow_flags[*]} "
 
     ensure_stow_target_dirs "$pkg"
 
-    log_dry_run "  stow preflight -d $SCRIPT_DIR -t $HOME $pkg"
+    log_dry_run "  stow preflight -d $SCRIPT_DIR -t $HOME ${flags_str}$pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
         return 0
     fi
 
     log_info "Checking stow conflicts for $pkg..."
-    output=$(stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "$pkg" 2>&1) && {
+    output=$(stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "${stow_flags[@]}" "$pkg" 2>&1) && {
         printf '%s\n' "$output" | tee -a "$LOG_FILE"
         return 0
     }
@@ -231,7 +257,7 @@ stow_package_preflight() {
     # Before failing, try relocating shell config files to _local files
     if relocate_shell_configs_to_local "$pkg"; then
         log_info "Re-checking stow after relocating shell configs..."
-        output=$(stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "$pkg" 2>&1) && {
+        output=$(stow -d "$SCRIPT_DIR" -t "$HOME" -n -v "${stow_flags[@]}" "$pkg" 2>&1) && {
             printf '%s\n' "$output" | tee -a "$LOG_FILE"
             return 0
         }
@@ -331,10 +357,16 @@ relocate_shell_configs_to_local() {
 
 stow_package() {
     local pkg="$1"
+    local -a stow_flags=()
+    local flags_str=""
+
+    # Intentional word splitting: flags are plain tokens like --no-folding.
+    stow_flags=($(stow_package_flags "$pkg"))
+    [[ ${#stow_flags[@]} -gt 0 ]] && flags_str="${stow_flags[*]} "
 
     ensure_stow_target_dirs "$pkg"
 
-    log_dry_run "  stow -d $SCRIPT_DIR -t $HOME $pkg"
+    log_dry_run "  stow -d $SCRIPT_DIR -t $HOME ${flags_str}$pkg"
     if [[ "$DRY_RUN" == "1" ]]; then
         return 0
     fi
@@ -348,7 +380,7 @@ stow_package() {
     relocate_shell_configs_to_local "$pkg" || true
 
     log_info "Stowing $pkg..."
-    stow -d "$SCRIPT_DIR" -t "$HOME" -v "$pkg" 2>&1 | tee -a "$LOG_FILE"
+    stow -d "$SCRIPT_DIR" -t "$HOME" -v "${stow_flags[@]}" "$pkg" 2>&1 | tee -a "$LOG_FILE"
 }
 
 report_stow_conflicts() {
