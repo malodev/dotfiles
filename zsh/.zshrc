@@ -244,6 +244,3 @@ bindkey "^[[B" history-substring-search-down
 [[ -f ~/.zshrc_macair ]] && source ~/.zshrc_macair
 
 # >>> END MANAGED CONFIG <<<
-
-# opencode
-export PATH=/Users/mauro/.opencode/bin:$PATH

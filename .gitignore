@@ -7,6 +7,7 @@ lazyvim.json
 .tmp*
 *.bak
 *.bak.*
+*.bak-*
 *.state
 *.log
 zed/.config/zed/conversations
@@ -31,4 +32,14 @@ package-lock.json
 /pi/.pi/.task-forge
 /pi/.pi/agent/settings.json
 /pi/.pi/agent/auth.json
-/pi/mattpocock-skills
+/pi/.pi/agent/skills/omarchy-app
+/pi/.pi/agent/skills/omarchy
+/pi/.pi/agent/skills/diagnose-crash
+/pi/.pi/agent/extensions/mlxmon.ts
+/pi/.pi/agent/extensions/vllm-mlx.ts
+
+# Omarchy owns ~/.config/omarchy/shell.json. It rewrites it whenever the bar or
+# a plugin changes (keeping its own shell.json.bak-* beside it), so the copy
+# sitting here is a per-machine snapshot that only ever goes stale. Managed by
+# the Omarchy system, not by the dotfiles.
+/hyprland/.config/omarchy/shell.json
