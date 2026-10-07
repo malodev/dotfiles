@@ -220,7 +220,11 @@ stow_package_flags() {
     local pkg="$1"
 
     case "$pkg" in
-        pi) echo "--no-folding" ;;
+        # These target directories are written to by other tools (Omarchy's
+        # upgrades, editors dropping .bak files beside a live config). Folding
+        # makes ~/.config/hypr and ~/.config/kitty symlinks into the checkout,
+        # so that cruft lands in the working tree.
+        pi|hyprland|kitty) echo "--no-folding" ;;
         *) ;;
     esac
 }
