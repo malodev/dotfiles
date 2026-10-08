@@ -37,6 +37,11 @@ package-lock.json
 # content is per-host, so they are runtime state rather than configuration.
 /pi/.pi/agent/models.json
 /pi/.pi/agent/mcp-adapter.json
+
+# pi also rewrites this (it records its own keybinding fields, e.g.
+# deleteToLineStart) and that kept dirtying the tree. Shared defaults live in
+# keybindings.json.template and are seeded by scripts/init-pi-settings.sh.
+/pi/.pi/agent/keybindings.json
 /pi/.pi/agent/skills/omarchy-app
 /pi/.pi/agent/skills/omarchy
 /pi/.pi/agent/skills/diagnose-crash
