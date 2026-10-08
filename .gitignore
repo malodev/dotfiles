@@ -32,6 +32,11 @@ package-lock.json
 /pi/.pi/.task-forge
 /pi/.pi/agent/settings.json
 /pi/.pi/agent/auth.json
+
+# pi rewrites both of these itself (model picker, MCP server installs) and the
+# content is per-host, so they are runtime state rather than configuration.
+/pi/.pi/agent/models.json
+/pi/.pi/agent/mcp-adapter.json
 /pi/.pi/agent/skills/omarchy-app
 /pi/.pi/agent/skills/omarchy
 /pi/.pi/agent/skills/diagnose-crash

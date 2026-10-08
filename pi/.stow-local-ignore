@@ -25,6 +25,7 @@ mattpocock-skills
 
 # pi runtime state kept out of the repo
 .pi/agent/models.json
+.pi/agent/mcp-adapter.json
 
 # Owned by scripts/link-pi-agent-entries.sh instead of stow. These two
 # directories mix dotfile-managed entries with machine-local ones (skills
