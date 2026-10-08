@@ -209,6 +209,39 @@ link_pi_agent_entries() {
 }
 
 #=============================================================================
+# GIT LFS
+#=============================================================================
+# The dotfiles no longer ship the generated git-lfs hooks: core.hooksPath is
+# global here, so those hooks ran in every repo and exited 2 wherever git-lfs
+# was missing, breaking commit, merge, checkout and push for all of them. This
+# only sets the LFS filters, with --skip-repo so that no generated hook is
+# written into the checkout, which core.hooksPath points inside of.
+setup_git_lfs() {
+    # The git package lives in the dev group
+    if [[ "$(get_group_selection dev 2>/dev/null || echo 0)" != "1" ]]; then
+        return
+    fi
+
+    if ! command -v git-lfs &>/dev/null; then
+        log_warn "git-lfs not found — skipping LFS filter setup"
+        log_info "Install git-lfs and run: git lfs install --skip-repo"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log_dry_run "git lfs install --skip-repo"
+        return
+    fi
+
+    log_info "Setting up Git LFS filters (without hooks)..."
+    if git lfs install --skip-repo 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Git LFS filters configured"
+    else
+        log_error "git lfs install --skip-repo failed"
+    fi
+}
+
+#=============================================================================
 # MAIN INSTALLATION FLOW
 #=============================================================================
 main() {
@@ -235,6 +268,7 @@ main() {
     run_install_programs
     run_stow_preflight_for_selection
     run_stow_and_post_steps
+    setup_git_lfs
     setup_agent_skills
     link_pi_agent_entries
     mise_sync_tools
