@@ -292,6 +292,12 @@ link_one_entry() {
     while IFS= read -r candidate; do
         [[ "$candidate" == "$dest_dir" ]] && continue
         run mkdir -p "$candidate"
+        # Same ownership rule as the primary link above: a real entry or a live
+        # link that is not ours stays untouched.
+        if [[ -e "$candidate/$name" ]] && ! is_ours "$candidate/$name"; then
+            info "keep     $rel at $(dir_label "$candidate")/ (not ours)"
+            continue
+        fi
         run ln -sfn "$dst" "$candidate/$name"
         info "mirrored $rel -> $(dir_label "$candidate")/"
     done < <(entry_dest_dirs "$rel")
@@ -509,6 +515,15 @@ unfold_dir() {
         while IFS= read -r candidate; do
             [[ "$candidate" == "$dest_dir" ]] && continue
             run mkdir -p "$candidate"
+            # Never write inside something we do not own: a real entry, or a live
+            # link that resolves outside the repo. That keeps the submodule
+            # linker's names its own and stops the mirror from dropping a link
+            # inside a local directory. A dangling foreign link is replaced,
+            # because this entry owns the name in the repo now.
+            if [[ -e "$candidate/$name" ]] && ! is_ours "$candidate/$name"; then
+                info "keep     $rel at $(dir_label "$candidate")/ (not ours)"
+                continue
+            fi
             run ln -sfn "$final" "$candidate/$name"
             info "mirrored $rel -> $(dir_label "$candidate")/"
         done < <(entry_dest_dirs "$rel")
