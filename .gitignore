@@ -38,6 +38,10 @@ package-lock.json
 /pi/.pi/agent/extensions/mlxmon.ts
 /pi/.pi/agent/extensions/vllm-mlx.ts
 
+# pi-web-access writes its cache next to web-search.json, so every search
+# dirties the working tree with files that are one machine's runtime state.
+/pi/.config/pi/web-search-cache/
+
 # Omarchy owns ~/.config/omarchy/shell.json. It rewrites it whenever the bar or
 # a plugin changes (keeping its own shell.json.bak-* beside it), so the copy
 # sitting here is a per-machine snapshot that only ever goes stale. Managed by
