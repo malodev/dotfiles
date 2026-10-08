@@ -147,44 +147,23 @@ Themes are per-client in herdr (the client renders the UI), so a running client 
 `reload config` action — or a restart — to pick up config changes; a server reload is not
 enough.
 
-## Machine-local shell overrides
+## Bar and plugin config is per machine
 
 Omarchy's shell reads exactly one config file: `~/.config/omarchy/shell.json` (the user file
 wins over the bundled `$OMARCHY_PATH/config/omarchy/shell.json`). There is no local or merge
-layer — unlike Hyprland's `require_optional().module("hypr.hyprland_local")` — so a value that
-must differ per machine needs a delta that this repo merges in:
+layer — unlike Hyprland's `require_optional().module("hypr.hyprland_local")`.
 
-| Path | Role |
-| --- | --- |
-| `hyprland/.config/omarchy/shell.json` | shared base, tracked |
-| `~/.config/omarchy/shell.local.json` | this machine's delta, gitignored (`*.local.json`) |
-| `~/.config/omarchy/shell.json` | what the shell reads: `base * delta` on a delta machine, otherwise a symlink to the base |
-| `~/.local/state/omarchy/shell.generated.json` | what the script generated last, used to detect drift |
+Omarchy rewrites that file whenever the bar or a plugin changes (`omarchy bar set`, plugin
+toggles, UI edits), keeping its own `shell.json.bak-*` beside it. It is therefore **that
+machine's** state, not a shared setting, and it is deliberately **not tracked** in this repo
+(see `.gitignore`). Each machine simply holds its own values — the iMac's `lock: 300` lives in
+its own copy — so there is nothing to merge and nothing to promote.
 
-- **Without a delta** (malos-home): the live file stays a symlink into the repo, so Omarchy's
-  own writes (`omarchy bar set`, plugin toggles, UI edits) appear as ordinary git diffs.
-- **With a delta** (the iMac keeps `lock: 300` while the base never locks): the live file is
-  generated from base + delta. Before regenerating, any change made to the live file since the
-  last generation is **promoted** into the tracked base with the delta-owned keys removed — so
-  UI/CLI edits on that machine are never silently dropped. They land as a git diff in that
-  machine's checkout, to review and commit.
+If two machines should end up with the same layout, copy the file across or redo the change in
+the UI. There is no sync step.
 
-```sh
-scripts/omarchy-shell-apply-local.sh            # promote drift (if any), regenerate live, reload
-scripts/omarchy-shell-apply-local.sh --promote  # force the promotion first
-scripts/omarchy-shell-promote.sh                # "publish my edits" — same as --promote
-```
-
-`hyprland/.config/omarchy/hooks/post-boot.d/apply-shell-local.sh` runs the apply step after
-login, so an Omarchy rewrite or a fresh stow cannot lose the delta.
-`hyprland/.stow-local-ignore` keeps `omarchy/shell.json` out of stow's reach (stow would
-otherwise fight the generated file); the script links it instead on machines with no delta,
-and the shell hot-reloads the result (`FileView { watchChanges: true, atomicWrites: true }`,
-which is why the script writes tmp + rename).
-
-The merge is a recursive **object** merge: arrays are replaced wholesale (jq semantics), so a
-delta that carries e.g. `bar.layout.left` owns that array entirely instead of merging it
-per index. Keep array-level changes in the shared base.
+`hyprland/.stow-local-ignore` keeps `omarchy/shell.json` out of stow's reach, so a stow run
+cannot clobber what Omarchy wrote.
 
 ## Known gotchas
 

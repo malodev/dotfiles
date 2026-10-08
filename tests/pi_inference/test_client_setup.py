@@ -138,7 +138,11 @@ class ClientSetupTest(unittest.TestCase):
             http_calls.append((url, kwargs))
             return responses.pop(0)
 
-        args = SimpleNamespace(model="model", with_pi=False)
+        args = SimpleNamespace(
+            model="model",
+            with_pi=False,
+            modes=[("team", "https://llm.test/v1/chat/completions", "model")],
+        )
         with patch.object(setup, "run", side_effect=fake_run), patch.object(
             setup, "http_json", side_effect=fake_http
         ):
@@ -156,7 +160,9 @@ class ClientSetupTest(unittest.TestCase):
         client.parent.mkdir(parents=True)
         client.write_text("#!/bin/sh\n")
         with self.assertRaisesRegex(setup.SetupError, "must be distinct"):
-            setup.verify(SimpleNamespace(model="model", with_pi=False), client, home)
+            setup.verify(
+                SimpleNamespace(model="model", with_pi=False, modes=[]), client, home
+            )
 
 
 if __name__ == "__main__":

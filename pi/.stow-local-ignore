@@ -1,1 +1,42 @@
+# IMPORTANT: stow REPLACES its built-in ignore list when a package contains a
+# .stow-local-ignore file — it does not merge. The repo-root .stow-local-ignore
+# is never read (stow only consults the package-local file and
+# ~/.stow-global-ignore), so the built-in defaults are repeated here.
+RCS
+.+,v
+CVS
+\.\#.+
+\.cvsignore
+\.svn
+_darcs
+\.hg
+\.git
+\.gitignore
+\.gitmodules
+.+~
+\#.*\#
+^/README.*
+^/LICENSE.*
+^/COPYING
+
+# Upstream skill submodule: exposed through ~/.agents/skills by its own linker
+# (scripts/link-skills.sh), never stowed into $HOME.
+mattpocock-skills
+
+# pi runtime state kept out of the repo
 .pi/agent/models.json
+
+# Owned by scripts/link-pi-agent-entries.sh instead of stow. These two
+# directories mix dotfile-managed entries with machine-local ones (skills
+# shipped by the OS, extension hooks pointing at one host's paths), and stow
+# cannot express that split: it either folds the whole directory into the repo
+# or links file by file and aborts on absolute symlinks.
+\.pi/agent/extensions$
+\.pi/agent/skills$
+
+# Build artifacts and vendored deps: never link these into $HOME. Required once
+# the package is stowed with --no-folding, otherwise stow would walk into them
+# and create a symlink per file.
+node_modules
+__pycache__
+\.pyc$

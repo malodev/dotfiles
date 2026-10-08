@@ -4,32 +4,35 @@
     "layout": {
       "left": [
         {
+          "id": "omarchy.menu"
+        },
+        {
           "id": "omarchy.media"
         },
         {
-          "id": "omarchy.menu"
+          "id": "quickshell.spotify"
         },
         {
           "id": "omarchy.active-window"
         },
         {
-          "id": "omaplug",
-          "autoCheckUpdates": true
+          "id": "mauro.workspaces"
         }
       ],
       "center": [
         {
-          "id": "mauro.workspaces"
-        },
-        {
-          "id": "omacom.elsewhen",
-          "zones": "Rome|Europe/Rome, Delhi|Asia/Kolkata, Tokyo|Asia/Tokyo, Los Angeles|America/Los_Angeles, New York|America/New_York"
+          "id": "omarchy.indicators"
         },
         {
           "id": "omarchy.clock",
           "format": "HH:mm",
           "formatAlt": "dddd dd/MM/yyyy",
-          "verticalFormat": "HH\nmm"
+          "verticalFormat": "HH\nmm",
+          "weekStartDay": "sunday"
+        },
+        {
+          "id": "omarchy.elsewhen",
+          "zones": "Rome|Europe/Rome, Delhi|Asia/Kolkata, Tokyo|Asia/Tokyo, Los Angeles|America/Los_Angeles, New York|America/New_York"
         },
         {
           "id": "omarchy.weather"
@@ -38,13 +41,17 @@
           "id": "omarchy.network"
         },
         {
+          "id": "omaplug",
+          "autoCheckUpdates": true
+        },
+        {
           "id": "omarchy.system-update"
         },
         {
-          "id": "omarchy.indicators"
-        },
-        {
-          "id": "omarchy.agents"
+          "id": "omarchy.agents",
+          "settings": {
+            "refreshIntervalSec": 300
+          }
         },
         {
           "id": "voxtype-mode",
@@ -56,10 +63,18 @@
       ],
       "right": [
         {
-          "id": "quickshell.spotify"
+          "id": "omarchy.tray"
         },
         {
-          "id": "omarchy.tray"
+          "id": "mauro.rt100",
+          "label": "metrics"
+        },
+        {
+          "id": "abduldotdev.camera"
+        },
+        {
+          "id": "omakdeconnect",
+          "preferredDeviceId": "6aa1023e_93c9_486b_b1f0_8e10d8907dac"
         },
         {
           "id": "akshar.radio-atlas"

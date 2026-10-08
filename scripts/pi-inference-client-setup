@@ -156,8 +156,6 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
 
     for mode, model_url, model_id in args.modes:
         print(f"\n--- Verifying mode={mode}, model={model_id} ---")
-    for mode, model_url, model_id in args.modes:
-        print(f"\n--- Verifying mode={mode}, model={model_id} ---")
 
         # Switch the host to the target mode before acquiring the lease.
         # pi-inference acquire --mode X requires the host to already be in mode X.

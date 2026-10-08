@@ -123,6 +123,92 @@ install_node_dependencies() {
 }
 
 #=============================================================================
+# SHARED AGENT SKILLS
+#=============================================================================
+# Upstream skills live in the pi/mattpocock-skills submodule and are linked
+# per-skill into ~/.agents/skills (read by pi, Codex and other Agent Skills
+# harnesses) and ~/.claude/skills. The linker is non-pruning: entries it does
+# not own, e.g. skills installed locally or by the OS, are left untouched.
+setup_agent_skills() {
+    # Only run if the pi-agent group was selected
+    if [[ "$(get_group_selection pi-agent 2>/dev/null || echo 0)" != "1" ]]; then
+        return
+    fi
+
+    if [[ -f "$SCRIPT_DIR/.gitmodules" ]]; then
+        if [[ "$DRY_RUN" == "1" ]]; then
+            log_dry_run "git submodule update --init --recursive (in $SCRIPT_DIR)"
+        else
+            log_info "Initializing skill submodule..."
+            git -C "$SCRIPT_DIR" submodule update --init --recursive 2>&1 | tee -a "$LOG_FILE" \
+                || log_warn "Submodule init failed — shared agent skills will not be linked"
+        fi
+    fi
+
+    local linker="$SCRIPT_DIR/pi/mattpocock-skills/scripts/link-skills.sh"
+    if [[ ! -x "$linker" ]]; then
+        log_warn "Skill linker not found: $linker — skipping shared agent skills"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log_dry_run "$linker"
+        return
+    fi
+
+    log_info "Linking shared agent skills into ~/.agents/skills and ~/.claude/skills..."
+    if "$linker" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Shared agent skills linked"
+    else
+        log_error "Linking shared agent skills failed"
+    fi
+}
+
+#=============================================================================
+# PI AGENT EXTENSIONS AND SKILLS
+#=============================================================================
+# ~/.pi/agent/extensions and ~/.pi/agent/skills have to hold dotfile-managed
+# entries and machine-local ones at the same time, which stow cannot express.
+# They are excluded from stow (.stow-local-ignore) and owned by this linker:
+# it symlinks the repo's entries one per entry and never touches anything it
+# did not create, so OS-installed skills and host-specific hooks stay put.
+link_pi_agent_entries() {
+    if [[ "$(get_group_selection pi-agent 2>/dev/null || echo 0)" != "1" ]]; then
+        return
+    fi
+
+    local linker="$SCRIPT_DIR/scripts/link-pi-agent-entries.sh"
+    if [[ ! -x "$linker" ]]; then
+        log_warn "Pi agent entry linker not found: $linker — skipping"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log_dry_run "$linker"
+        return
+    fi
+
+    log_info "Linking pi agent extensions and skills..."
+    local output rc=0
+    output=$("$linker" 2>&1) || rc=$?
+    [[ -n "$output" ]] && printf '%s\n' "$output" | tee -a "$LOG_FILE"
+
+    case "$rc" in
+        0)
+            log_success "Pi agent extensions and skills linked"
+            ;;
+        2)
+            log_warn "pi agent extensions/skills are still one symlink into the repo"
+            log_warn "Migrate them to per-entry links with:"
+            log_warn "  $linker --unfold"
+            ;;
+        *)
+            log_error "Linking pi agent extensions and skills failed"
+            ;;
+    esac
+}
+
+#=============================================================================
 # MAIN INSTALLATION FLOW
 #=============================================================================
 main() {
@@ -149,6 +235,8 @@ main() {
     run_install_programs
     run_stow_preflight_for_selection
     run_stow_and_post_steps
+    setup_agent_skills
+    link_pi_agent_entries
     mise_sync_tools
     install_node_dependencies
     show_final_summary
