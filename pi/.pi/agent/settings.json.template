@@ -2,10 +2,11 @@
   "packages": [
     "npm:pi-markdown-preview",
     "npm:pi-connect",
-    "npm:pi-mcp-adapter",
+    "npm:pi-goal-x",
+    "npm:pi-web-access",
     "npm:@tmustier/pi-usage-extension",
     "npm:@marckrenn/pi-sub-bar",
-    "npm:@ifi/pi-plan",
+    "npm:@ogulcancelik/pi-herdr",
     "npm:@ifi/oh-pi-themes",
     "npm:@ifi/pi-web-remote",
     "npm:pi-powerline-footer"
