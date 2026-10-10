@@ -112,15 +112,34 @@ export class Gpu {
 }
 
 export interface ShellLeaseConfig {
+  /** What this lease is for ("plan" or "run"), shown in the owner so a holder can be recognised. */
+  label?: string;
+  /** The project directory name, shown in the owner. */
+  project?: string;
   command: string;
   mode: string;
   ttlSeconds: number;
   acquireTimeoutSeconds: number;
 }
 
+const safePart = (text: string, fallback: string): string => {
+  const cleaned = text.replace(/[^A-Za-z0-9._+-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  return cleaned || fallback;
+};
+
+/**
+ * The lease owner is the only thing the control plane shows about a holder, in errors and in the panel,
+ * so it says who: `host:pid:foreman:<plan|run>:<project>:<id>` (letters, digits and ._:@/+- only, under
+ * 240 characters, as the manager requires).
+ */
+export function leaseOwner(config: Pick<ShellLeaseConfig, "label" | "project">): string {
+  const host = safePart(hostname(), "host");
+  return `${/^[A-Za-z0-9]/.test(host) ? host : `h${host}`}:${process.pid}:foreman:${safePart(config.label ?? "run", "run")}:${safePart(config.project ?? "", "unknown")}:${randomUUID().slice(0, 8)}`;
+}
+
 /** Talks to the `pi-inference` CLI. The owner id is fixed for the life of the client. */
 export function shellLeaseClient(config: ShellLeaseConfig, run = execFileRun): LeaseClient {
-  const owner = `${hostname()}:${process.pid}:foreman:${randomUUID()}`;
+  const owner = leaseOwner(config);
   const env = { ...process.env, PI_INFERENCE_OWNER: owner, PI_INFERENCE_TTL: String(config.ttlSeconds) };
   const call = (args: string[], timeoutSeconds: number) => run(config.command, args, env, timeoutSeconds * 1000);
   return {

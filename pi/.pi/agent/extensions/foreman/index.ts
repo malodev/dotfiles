@@ -78,5 +78,14 @@ export default async function foremanExtension(pi: ExtensionAPI): Promise<void> 
     handler: async (args, ctx) => foreman.handle(args, hostFor(ctx)),
   });
 
+  // The Architect holds the GPU lease only while it is answering, never while the conversation is idle.
+  pi.on("before_agent_start", async (_event, ctx) => {
+    const host = { cwd: ctx.cwd, notify: (message: string, level?: "info" | "warning" | "error") => ctx.ui.notify(message, level), setStatus: (text: string | undefined) => ctx.ui.setStatus("foreman", text) };
+    await foreman.beforeTurn(host, ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined, () => ctx.abort());
+  });
+  pi.on("agent_settled", async () => {
+    await foreman.afterTurn();
+  });
+
   pi.on("session_shutdown", async () => foreman.shutdown());
 }

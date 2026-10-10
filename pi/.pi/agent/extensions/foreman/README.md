@@ -22,6 +22,19 @@ Work is committed on a `foreman/<timestamp>` branch. You merge it yourself. Fore
 A task that fails `limits.buildAttempts` times, or is interrupted, is blocked and everything behind
 it waits until you `/foreman unblock` it.
 
+## The GPU lease
+
+A local model needs the card, so Foreman takes a `pi-inference` lease, and only for as long as it is
+actually using it:
+
+- **Planning:** the lease is taken when the Architect starts answering and released when the answer ends.
+  An idle pi window never locks the GPU, so the panel can always switch modes between answers. If the host
+  is in the wrong mode, or someone else holds the lease, that answer is stopped with a message saying why.
+- **A run:** one lease for the whole run, with a heartbeat, released at the end.
+- **Who holds it:** the lease owner reads `host:pid:foreman:<plan|run>:<project>:<id>`, for example
+  `malos-home:3764932:foreman:plan:foreman-test:ccd0b5d2`. It shows up in the manager's errors and in the
+  panel, so a holder on any machine can be found: host, the pi process, what it is doing, and which project.
+
 ## The progress panel
 
 While a run is going (and after it ends) a boxed panel sits above the editor: a header with the run state,

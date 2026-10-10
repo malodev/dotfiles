@@ -25,7 +25,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
   await mkdir(join(repo, ".pi"), { recursive: true });
   const roles: Record<string, unknown> = { builder: { provider: "local", model: "m1" }, reviewer: { same_as: "builder" } };
   if (options.architect) roles.architect = { provider: "local", model: "big" };
-  await writeFile(join(repo, ".pi/foreman.json"), JSON.stringify({ roles, gpu: { managedProviders: ["local"] }, modes: { ds4: { provider: "ds4", model: "flash" } } }));
+  await writeFile(join(repo, ".pi/foreman.json"), JSON.stringify({ roles, gpu: { managedProviders: ["local"], providerModes: { local: "team" } }, modes: { ds4: { provider: "ds4", model: "flash" } } }));
   await git(repo, ["add", "-A"]);
   await git(repo, ["commit", "-q", "-m", "config"]);
 
@@ -44,7 +44,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     bell: () => { bells += 1; },
   };
   const lease: string[] = [];
-  const client: LeaseClient = { acquire: async () => { lease.push("acquire"); }, renew: async () => {}, release: async () => { lease.push("release"); } };
+  const client: LeaseClient = { acquire: async () => { if (acquireFails) throw new Error("GPU lease is held by someone else"); lease.push("acquire"); }, renew: async () => {}, release: async () => { lease.push("release"); } };
   const roleCalls: RoleRequest[] = [];
   const kickoffs: string[] = [];
   const state = { runRole: undefined as RoleRunner | undefined, mode: "team", previewExitsAtOnce: false };
@@ -52,6 +52,8 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
   const previewLog: string[] = [];
   let previewPortFree = true;
   let openFails = false;
+  let acquireFails = false;
+  const leaseConfigs: { label?: string; project?: string; mode: string }[] = [];
   const modeReads: string[] = [];
   const catalog = { value: undefined as import("../models.ts").ModelInfo[] | undefined };
   const prompts = { inputs: [] as (string | undefined)[], selects: [] as (string | undefined)[] };
@@ -61,7 +63,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     configPaths: (cwd) => [join(cwd, ".pi/foreman.json")],
     runRole: async (request) => { roleCalls.push(request); return state.runRole!(request); },
     runCommand: bashRunner,
-    makeLeaseClient: (config) => { leaseModes.push(config.mode); return client; },
+    makeLeaseClient: (config) => { leaseModes.push(config.mode); leaseConfigs.push({ label: config.label, project: config.project, mode: config.mode }); return client; },
     readMode: async () => { modeReads.push(state.mode); return state.mode; },
     openUrl: async (target) => { if (openFails) throw new Error("no browser"); opened.push(target); },
     preview: {
@@ -99,7 +101,7 @@ async function setup(options: { architect?: boolean; writeTasks?: string } = {})
     };
   };
   const fileFor = (request: RoleRequest) => (request.task.includes("Task t01") ? "a.txt" : "b.txt");
-  return { repo, foreman, host, modeReads, catalog, prompts, opened, previewLog, setPortFree: (value: boolean) => { previewPortFree = value; }, setOpenFails: (value: boolean) => { openFails = value; }, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
+  return { repo, foreman, host, modeReads, catalog, prompts, opened, previewLog, setPortFree: (value: boolean) => { previewPortFree = value; }, setOpenFails: (value: boolean) => { openFails = value; }, setAcquireFails: (value: boolean) => { acquireFails = value; }, leaseConfigs, leaseModes, messages, statuses, widgets, titles, bell: () => bells, lease, roleCalls, kickoffs, state, last, writer, fileFor };
 }
 
 describe("foreman commands (smoke)", () => {
@@ -201,13 +203,14 @@ describe("foreman commands (smoke)", () => {
     assert.match(t.last().message, /models: unavailable — The host is in maintenance mode/);
   });
 
-  it("hands the planning lease to the run instead of releasing and re-acquiring", async () => {
+  it("planning takes no lease by itself, and a run takes its own, labelled and released at the end", async () => {
     const t = await setup({ architect: true });
     await t.foreman.handle("plan a tiny cli", t.host);
-    assert.deepEqual(t.lease, ["acquire"], "a managed Architect model holds the card while planning");
+    assert.deepEqual(t.lease, [], "an idle planning session must not lock the GPU");
     t.state.runRole = t.writer(t.fileFor);
     await t.foreman.handle("run", t.host);
     assert.deepEqual(t.lease, ["acquire", "release"]);
+    assert.deepEqual(t.leaseConfigs.map((c) => [c.label, c.project]), [["run", t.repo.split("/").pop()]]);
   });
 
   it("refuses to run without a valid plan, and explains", async () => {
@@ -520,5 +523,72 @@ describe("models command and early availability check", () => {
     t.state.mode = "qwen-flash";
     await t.foreman.handle("plan idea here", t.host);
     assert.equal(t.kickoffs.length, 1);
+  });
+});
+
+
+describe("the lease during a planning conversation", () => {
+  const abort = () => { aborted += 1; };
+  let aborted = 0;
+  const planning = async (options: { architect?: boolean } = {}) => {
+    aborted = 0;
+    const t = await setup({ architect: options.architect ?? true });
+    await t.foreman.handle("plan idea here", t.host);
+    t.lease.length = 0;
+    return t;
+  };
+
+  it("is held only while the Architect is answering, then released", async () => {
+    const t = await planning();
+    await t.foreman.beforeTurn(t.host, "local/big", abort);
+    assert.deepEqual(t.lease, ["acquire"]);
+    assert.deepEqual(t.leaseConfigs.map((c) => [c.label, c.mode]), [["plan", "team"]]);
+    await t.foreman.afterTurn();
+    assert.deepEqual(t.lease, ["acquire", "release"], "idle between turns means no lease");
+    await t.foreman.beforeTurn(t.host, "local/big", abort);
+    assert.deepEqual(t.lease, ["acquire", "release", "acquire"], "the next turn takes it again");
+    await t.foreman.afterTurn();
+    assert.equal(aborted, 0);
+  });
+
+  it("does nothing for a cloud model, for a model the owner switched to, or outside a planning conversation", async () => {
+    const t = await planning();
+    await t.foreman.beforeTurn(t.host, "openai-codex/gpt-sol", abort);
+    assert.deepEqual(t.lease, [], "a cloud model needs no GPU");
+    const fresh = await setup();
+    await fresh.foreman.beforeTurn(fresh.host, "local/m1", abort);
+    assert.deepEqual(fresh.lease, [], "no /foreman plan was started, so ordinary pi use is none of our business");
+  });
+
+  it("a running /foreman run manages its own lease, so planning turns leave it alone", async () => {
+    const t = await planning();
+    t.state.runRole = (request) => new Promise((resolve) => { void t.foreman.beforeTurn(t.host, "local/big", abort).then(() => resolve(ok("", { error: "role aborted", toolCount: 0 }))); void request; });
+    await t.foreman.handle("run", t.host);
+    assert.deepEqual(t.lease, ["acquire", "release"], "only the run's own lease");
+  });
+
+  it("refuses the turn, and says why, when the host is in the wrong mode", async () => {
+    const t = await planning();
+    t.state.mode = "studio";
+    await t.foreman.beforeTurn(t.host, "local/big", abort);
+    assert.equal(aborted, 1);
+    assert.deepEqual(t.lease, []);
+    assert.match(t.last().message, /local.*needs host mode team.*studio/s);
+    assert.equal(t.last().level, "error");
+  });
+
+  it("refuses the turn, and says who holds the GPU, when the lease cannot be taken", async () => {
+    const t = await planning();
+    t.setAcquireFails(true);
+    await t.foreman.beforeTurn(t.host, "local/big", abort);
+    assert.equal(aborted, 1);
+    assert.match(t.last().message, /could not take the GPU lease.*held by someone else/is);
+  });
+
+  it("shutdown releases a lease that is still held", async () => {
+    const t = await planning();
+    await t.foreman.beforeTurn(t.host, "local/big", abort);
+    await t.foreman.shutdown();
+    assert.deepEqual(t.lease, ["acquire", "release"]);
   });
 });

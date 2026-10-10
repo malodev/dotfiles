@@ -86,7 +86,10 @@ interface ActiveRun {
 export class Foreman {
   private active: ActiveRun | undefined;
   private preview: Preview | undefined;
-  private planGpu: Gpu | undefined;
+  /** True from /foreman plan until a run starts or the session ends: the owner is talking to the Architect. */
+  private planning = false;
+  /** The lease held for one Architect answer; never held while the conversation is idle. */
+  private turnGpu: Gpu | undefined;
   private readonly services: Services;
 
   constructor(services: Services) {
@@ -121,8 +124,48 @@ export class Foreman {
     this.active?.controller.abort();
     await this.preview?.stop().catch(() => undefined);
     this.preview = undefined;
-    await this.planGpu?.close().catch(() => undefined);
-    this.planGpu = undefined;
+    await this.afterTurn();
+    this.planning = false;
+  }
+
+  /**
+   * The Architect is about to answer. If its model lives on the local GPU, take the lease for the length of
+   * the answer only, so an idle pi window never locks the card. Refuses the turn, saying why, when the host
+   * is in the wrong mode or the lease is taken.
+   */
+  async beforeTurn(host: Host, currentModel: string | undefined, abort: () => void): Promise<void> {
+    if (!this.planning || this.active || !currentModel) return;
+    let config: ForemanConfig;
+    let required: string | undefined;
+    const provider = currentModel.slice(0, Math.max(0, currentModel.indexOf("/")));
+    try {
+      config = await loadConfig(this.services.configPaths(host.cwd));
+      required = config.gpu.providerModes[provider];
+      if (!required) return; // a cloud model needs no GPU
+      const mode = await this.services.readMode(config.gpu.command);
+      if (mode !== required) throw new Error(`${provider} needs host mode ${required}, but the host is in ${mode} mode. Switch the mode in the panel, then continue.`);
+    } catch (error) {
+      host.notify(`The Architect's turn was stopped: ${error instanceof Error ? error.message : String(error)}`, "error");
+      abort();
+      return;
+    }
+    try {
+      await this.turnGpu?.close().catch(() => undefined);
+      const turnConfig: ForemanConfig = { ...config, gpu: { ...config.gpu, mode: required, managedProviders: [...new Set([...config.gpu.managedProviders, provider])] } };
+      this.turnGpu = this.newGpu(turnConfig, host, "plan");
+      await this.turnGpu.withModel(currentModel, async () => {});
+    } catch (error) {
+      this.turnGpu = undefined;
+      host.notify(`Foreman could not take the GPU lease for the Architect: ${error instanceof Error ? error.message : String(error)}`, "error");
+      abort();
+    }
+  }
+
+  /** The Architect has finished answering: give the card back. */
+  async afterTurn(): Promise<void> {
+    const gpu = this.turnGpu;
+    this.turnGpu = undefined;
+    await gpu?.close().catch(() => undefined);
   }
 
   private show(host: Host, board: Board): void {
@@ -183,8 +226,10 @@ export class Foreman {
     if (errors.length) throw new Error(`${errors.join("\n")}\nChange them with /foreman models.`);
   }
 
-  private newGpu(config: ForemanConfig, host: Host): Gpu {
+  private newGpu(config: ForemanConfig, host: Host, label: "plan" | "run"): Gpu {
     const client = this.services.makeLeaseClient({
+      label,
+      project: host.cwd.split("/").filter(Boolean).pop(),
       command: config.gpu.command,
       mode: config.gpu.mode,
       ttlSeconds: config.gpu.leaseTtlSeconds,
@@ -212,14 +257,9 @@ export class Foreman {
     const architect = config.roles.architect;
     const role = await loadAgent(join(this.services.extensionDir, "agents/architect.md")).then((agent) => agent.body).catch(() => "");
     const kickoff = architectKickoff(input, check, role, config.notes, join(this.services.extensionDir, "agents/architect-web.md"));
-    // A local Architect model needs the card too. Keep the lease through planning; `run` takes it over.
-    if (architect && config.gpu.managedProviders.includes(architect.provider)) {
-      this.planGpu ??= this.newGpu(config, host);
-      const gpu = this.planGpu;
-      await gpu.withModel(modelId(architect), () => this.services.startArchitect(host, kickoff, architect));
-    } else {
-      await this.services.startArchitect(host, kickoff, architect);
-    }
+    // No lease here: it is taken for each answer the Architect gives (see beforeTurn) and released after.
+    this.planning = true;
+    await this.services.startArchitect(host, kickoff, architect);
   }
 
   private async run(host: Host): Promise<void> {
@@ -246,8 +286,10 @@ export class Foreman {
     host.setWidget?.(undefined);
     const controller = new AbortController();
     this.active = { controller, store };
-    const gpu = this.planGpu ?? this.newGpu(config, host);
-    this.planGpu = undefined;
+    // The run takes over from the planning conversation, with a lease of its own.
+    this.planning = false;
+    await this.afterTurn();
+    const gpu = this.newGpu(config, host, "run");
     const total = tasks.length;
     const planTitle = (await readFile(paths.plan, "utf8").catch(() => "")).match(/^#\s+(.+)$/m)?.[1]?.trim();
     const runStartedAt = Date.now();
