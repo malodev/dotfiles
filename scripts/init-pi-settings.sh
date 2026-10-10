@@ -8,14 +8,18 @@
 #
 # The templates hold shared defaults. The live files are per host and pi writes
 # fields of its own into them (lastChangelogVersion in settings.json,
-# deleteToLineStart in keybindings.json), which is why neither is tracked: the
-# templates are the versioned part, the live files are runtime state.
+# deleteToLineStart in keybindings.json), which is why none of them is tracked:
+# the templates are the versioned part, the live files are runtime state.
+#
+# models.json and mcp-adapter.json also hold host endpoints and paths, so
+# --force leaves them alone unless --force-host says otherwise.
 #
 # Usage:
-#   ./scripts/init-pi-settings.sh              # Copy each missing file
-#   ./scripts/init-pi-settings.sh --force       # Overwrite both from templates
-#   ./scripts/init-pi-settings.sh --dry-run     # Show what would happen
-#   ./scripts/init-pi-settings.sh --diff        # Show template vs current
+#   ./scripts/init-pi-settings.sh                # Copy each missing file
+#   ./scripts/init-pi-settings.sh --force         # Overwrite from templates
+#   ./scripts/init-pi-settings.sh --force-host    # --force, host files included
+#   ./scripts/init-pi-settings.sh --dry-run       # Show what would happen
+#   ./scripts/init-pi-settings.sh --diff          # Show template vs current
 #=============================================================================
 set -eo pipefail
 
@@ -24,22 +28,37 @@ TEMPLATES="$SCRIPT_DIR/pi/.pi/agent"
 LIVE="$HOME/.pi/agent"
 
 # Each has <name>.json.template in the repo and a live <name>.json here.
-NAMES=(settings keybindings)
+NAMES=(settings keybindings models mcp-adapter)
+
+# These carry host endpoints and paths, so resetting them from the template
+# silently repoints this machine. --force skips them unless --force-host.
+HOST_NAMES=(models mcp-adapter)
+
+is_host_name() {
+  local name="$1" entry
+  for entry in "${HOST_NAMES[@]}"; do
+    [[ "$entry" == "$name" ]] && return 0
+  done
+  return 1
+}
 
 MODE="normal"
+FORCE_HOST=0
 
 for arg in "$@"; do
   case "$arg" in
     --force)   MODE="force" ;;
+    --force-host) MODE="force"; FORCE_HOST=1 ;;
     --dry-run) MODE="dry-run" ;;
     --diff)    MODE="diff" ;;
     --help|-h)
-      echo "Usage: $0 [--force|--dry-run|--diff]"
+      echo "Usage: $0 [--force|--force-host|--dry-run|--diff]"
       echo ""
-      echo "  (no flag)  Copy each missing template into $LIVE"
-      echo "  --force    Overwrite existing files with their templates"
-      echo "  --dry-run  Preview without writing"
-      echo "  --diff     Show differences between each template and current"
+      echo "  (no flag)    Copy each missing template into $LIVE"
+      echo "  --force      Overwrite existing files with their templates"
+      echo "  --force-host --force for models.json and mcp-adapter.json as well"
+      echo "  --dry-run    Preview without writing"
+      echo "  --diff       Show differences between each template and current"
       exit 0 ;;
   esac
 done
@@ -62,6 +81,17 @@ hint_for() {
       info "Add machine-specific bindings here. pi records its own fields in"
       info "this file too, which is fine — it is not tracked, so nothing to commit."
       ;;
+    models)
+      info "Point the providers at this host and keep the key commands here:"
+      info "  baseUrl  http://127.0.0.1:8000/v1                 — local mlx server"
+      info "  apiKey   !cat ~/.config/tokenator/litellm-api-key"
+      info "pi records the last used model in this file as well."
+      ;;
+    mcp-adapter)
+      info "Point the local servers at this host's build:"
+      info "  args      ~/.local/src/mcp-gam/dist/index.js"
+      info "  GAM_PATH  \${HOME}/bin/gam7/gam"
+      ;;
   esac
 }
 
@@ -74,6 +104,11 @@ for name in "${NAMES[@]}"; do
   if [[ ! -f "$template" ]]; then
     warn "Template not found: $template"
     failed=1
+    continue
+  fi
+
+  if [[ "$MODE" == "force" ]] && is_host_name "$name" && [[ "$FORCE_HOST" != "1" ]]; then
+    warn "$name.json holds host endpoints — left alone (--force-host to reset it)"
     continue
   fi
 
