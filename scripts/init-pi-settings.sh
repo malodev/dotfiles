@@ -11,8 +11,8 @@
 # deleteToLineStart in keybindings.json), which is why none of them is tracked:
 # the templates are the versioned part, the live files are runtime state.
 #
-# models.json and mcp-adapter.json also hold host endpoints and paths, so
-# --force leaves them alone unless --force-host says otherwise.
+# models.json and mcp.json also hold host endpoints and paths, so --force
+# leaves them alone unless --force-host says otherwise.
 #
 # Usage:
 #   ./scripts/init-pi-settings.sh                # Copy each missing file
@@ -28,11 +28,11 @@ TEMPLATES="$SCRIPT_DIR/pi/.pi/agent"
 LIVE="$HOME/.pi/agent"
 
 # Each has <name>.json.template in the repo and a live <name>.json here.
-NAMES=(settings keybindings models mcp-adapter)
+NAMES=(settings keybindings models mcp)
 
 # These carry host endpoints and paths, so resetting them from the template
 # silently repoints this machine. --force skips them unless --force-host.
-HOST_NAMES=(models mcp-adapter)
+HOST_NAMES=(models mcp)
 
 is_host_name() {
   local name="$1" entry
@@ -87,8 +87,8 @@ hint_for() {
       info "  apiKey   !cat ~/.config/tokenator/litellm-api-key"
       info "pi records the last used model in this file as well."
       ;;
-    mcp-adapter)
-      info "Point the local servers at this host's build:"
+    mcp)
+      info "Native pi MCP servers. Point the local ones at this host's build:"
       info "  args      ~/.local/src/mcp-gam/dist/index.js"
       info "  GAM_PATH  \${HOME}/bin/gam7/gam"
       ;;
