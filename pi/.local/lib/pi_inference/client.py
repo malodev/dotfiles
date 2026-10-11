@@ -352,6 +352,7 @@ def _run_with_progress(client: "ControlClient", label: str, action: Callable[[],
 # one of these; the lists exist so --help and shell completion describe the truth, and so a
 # mode added host-side without updating the client fails as argparse's own "invalid
 # choice" instead of something subtler further down.
+# "studio" is a retired mode the manager still accepts as an alias of "stop".
 SETTABLE_MODES = ("team", "studio", "ds4", "qwen-flash", "stop")
 LEASABLE_MODES = ("team", "ds4", "qwen-flash")
 RESTORE_MODES = SETTABLE_MODES
