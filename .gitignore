@@ -53,6 +53,10 @@ package-lock.json
 /pi/.pi/agent/extensions/mlxmon.ts
 /pi/.pi/agent/extensions/vllm-mlx.ts
 
+# Runs the web tools through Node instead of Ollama, with paths into one host's
+# pi install. Host-local for the same reason as mlxmon.ts and vllm-mlx.ts.
+/pi/.pi/agent/extensions/web-tools-no-ollama.ts
+
 # pi-web-access writes its cache next to web-search.json, so every search
 # dirties the working tree with files that are one machine's runtime state.
 /pi/.config/pi/web-search-cache/
