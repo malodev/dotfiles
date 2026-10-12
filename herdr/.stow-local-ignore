@@ -1,0 +1,25 @@
+# IMPORTANT: stow REPLACES its built-in ignore list when a package contains a
+# .stow-local-ignore file — it does not merge. The repo-root .stow-local-ignore
+# is never read (stow only consults the package-local file and
+# ~/.stow-global-ignore), so the built-in defaults are repeated here.
+RCS
+.+,v
+CVS
+\.\#.+
+\.cvsignore
+\.svn
+_darcs
+\.hg
+\.git
+\.gitignore
+\.gitmodules
+.+~
+\#.*\#
+^/README.*
+^/LICENSE.*
+^/COPYING
+
+# Per-host config: seeded from config.toml.template by
+# scripts/init-herdr-config.sh and edited in place on each machine, so it is
+# never linked out of the repo.
+config.toml
