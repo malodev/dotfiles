@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "stitch": {
+      "url": "https://stitch.googleapis.com/mcp",
+      "headers": {
+        "X-Goog-Api-Key": "${STITCH_API_KEY}"
+      },
+      "exposure": "direct"
+    },
+    "gam-workspace": {
+      "command": "node",
+      "args": [
+        "~/.local/src/mcp-gam/dist/index.js"
+      ],
+      "env": {
+        "GAM_PATH": "${HOME}/bin/gam7/gam"
+      },
+      "exposure": "direct"
+    }
+  }
+}
