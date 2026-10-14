@@ -178,6 +178,15 @@ cannot clobber what Omarchy wrote.
   flagged grey), so `scripts/omarchy-tint-wallpaper.sh` uses a dithered `-remap` instead.
 - Omarchy refuses code-bearing files from git-cloned themes (terminal configs, `*.lua`,
   `vscode.json`) and regenerates them from `colors.toml`, printing what it ignored.
+- A Variety *package* upgrade can clobber `set_wallpaper`: on its first start after the
+  upgrade, Variety's version migration re-copies the stock script over the user copy —
+  in 0.9.2 unconditionally, even though the script's own header promises customisations
+  are preserved. Because the live file is a symlink into this repo, the repo copy gets
+  clobbered too, and every wallpaper change then shows "Variety could not detect a program
+  to change the background" (no hyprpaper/swaybg exists here by design). Recovery:
+  `git -C <this repo> checkout -- hyprland/.config/variety/scripts/set_wallpaper` — no
+  Variety restart needed, it takes effect on the next change. Variety keeps the clobbered
+  original as `~/.config/variety/scripts/set_wallpaper_before_<version>`.
 
 ## Verifying
 
