@@ -187,6 +187,11 @@ cannot clobber what Omarchy wrote.
   `git -C <this repo> checkout -- hyprland/.config/variety/scripts/set_wallpaper` — no
   Variety restart needed, it takes effect on the next change. Variety keeps the clobbered
   original as `~/.config/variety/scripts/set_wallpaper_before_<version>`.
+- The same "could not detect a program" error can come from a *second* Variety instance:
+  any `variety --profile <somewhere-else>` run registers its own autostart entry
+  (`~/.config/autostart/variety-<...>.desktop`) plus a fresh stock script, so it rotates
+  wallpapers in parallel without the Omarchy block. Check `pgrep -a variety` and the
+  autostart folder; kill the stray and remove its entry.
 
 ## Verifying
 
