@@ -57,6 +57,21 @@ class ClientSetupTest(unittest.TestCase):
         setup.stow_client(dotfiles, home, apply=False)
         self.assertEqual(list(home.iterdir()), [])
 
+    def test_stow_never_folds_the_pi_tree(self):
+        dotfiles = self.root / "dotfiles"
+        client = dotfiles / "pi" / ".local" / "bin" / "pi-inference"
+        client.parent.mkdir(parents=True)
+        client.write_text("#!/bin/sh\n")
+        home = self.root / "home"
+        home.mkdir()
+        with patch.object(setup, "run") as invoked:
+            setup.stow_client(dotfiles, home, apply=True)
+        preview, deploy = invoked.call_args_list
+        self.assertIn("--no-folding", preview.args[0])
+        self.assertIn("--simulate", preview.args[0])
+        self.assertIn("--no-folding", deploy.args[0])
+        self.assertNotIn("--simulate", deploy.args[0])
+
     def test_installs_credential_from_private_source_without_argument_leak(self):
         client = self.root / "pi-inference"
         client.write_text("#!/bin/sh\n")
@@ -150,6 +165,49 @@ class ClientSetupTest(unittest.TestCase):
                 setup.verify(args, client, home)
         self.assertTrue(any(url.endswith("/v1/leases") for url, _kwargs in http_calls))
         self.assertTrue(any(kwargs.get("method") == "DELETE" for _url, kwargs in http_calls))
+
+    def test_verification_restores_the_mode_it_found(self):
+        home = self.root / "home"
+        credential_dir = home / ".pi-inference" / "credentials"
+        self.private_file(credential_dir / "control-api-token", "control\n")
+        self.private_file(credential_dir / "model-api-key", "model\n")
+        client = home / ".local" / "bin" / "pi-inference"
+        client.parent.mkdir(parents=True)
+        client.write_text("#!/bin/sh\n")
+        calls = []
+        current = {"mode": "qwen-flash"}
+
+        def fake_run(argv, **_kwargs):
+            calls.append(list(argv))
+            if "status" in argv:
+                return SimpleNamespace(
+                    stdout=json.dumps({"mode": current["mode"], "services": {}, "lease": None})
+                )
+            current["mode"] = argv[1]
+            return SimpleNamespace(stdout="")
+
+        responses = [
+            (401, b"{}"),
+            (201, b"{}"),
+            (200, json.dumps({"choices": [{"message": {"content": "REMOTE_MODEL_OK"}}]}).encode("utf-8")),
+            (200, b"{}"),
+        ]
+
+        def fake_http(_url, **_kwargs):
+            return responses.pop(0)
+
+        args = SimpleNamespace(
+            model="model",
+            ds4_model="deepseek",
+            with_pi=False,
+            modes=[("team", "https://llm.test/v1/chat/completions", "model")],
+        )
+        with patch.object(setup, "run", side_effect=fake_run), patch.object(
+            setup, "http_json", side_effect=fake_http
+        ):
+            setup.verify(args, client, home)
+        switches = [call for call in calls if call != [str(client), "--json", "status"]]
+        self.assertEqual(switches, [[str(client), "team"], [str(client), "qwen-flash"]])
 
     def test_verification_rejects_reused_control_and_model_credential(self):
         home = self.root / "home"
