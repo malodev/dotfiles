@@ -44,17 +44,22 @@ is_host_name() {
 
 MODE="normal"
 FORCE_HOST=0
+SETTINGS_PROFILE="essential"
 
 for arg in "$@"; do
   case "$arg" in
-    --force)   MODE="force" ;;
+    --force)      MODE="force" ;;
     --force-host) MODE="force"; FORCE_HOST=1 ;;
-    --dry-run) MODE="dry-run" ;;
-    --diff)    MODE="diff" ;;
+    --full)       SETTINGS_PROFILE="full" ;;
+    --essential)  SETTINGS_PROFILE="essential" ;;
+    --dry-run)    MODE="dry-run" ;;
+    --diff)       MODE="diff" ;;
     --help|-h)
-      echo "Usage: $0 [--force|--force-host|--dry-run|--diff]"
+      echo "Usage: $0 [--force|--force-host|--full|--essential|--dry-run|--diff]"
       echo ""
-      echo "  (no flag)    Copy each missing template into $LIVE"
+      echo "  (no flag)    Copy each missing template into $LIVE (uses essential settings)"
+      echo "  --full       Use settings-full.json.template (all optional Pi packages)"
+      echo "  --essential  Use settings.json.template (essential bootstrap Pi packages)"
       echo "  --force      Overwrite existing files with their templates"
       echo "  --force-host --force for models.json and mcp-adapter.json as well"
       echo "  --dry-run    Preview without writing"
@@ -99,6 +104,9 @@ failed=0
 
 for name in "${NAMES[@]}"; do
   template="$TEMPLATES/$name.json.template"
+  if [[ "$name" == "settings" && "$SETTINGS_PROFILE" == "full" && -f "$TEMPLATES/settings-full.json.template" ]]; then
+    template="$TEMPLATES/settings-full.json.template"
+  fi
   output="$LIVE/$name.json"
 
   if [[ ! -f "$template" ]]; then

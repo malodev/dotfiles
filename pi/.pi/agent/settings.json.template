@@ -1,15 +1,8 @@
 {
   "packages": [
-    "npm:pi-markdown-preview",
-    "npm:pi-connect",
-    "npm:pi-goal-x",
+    "npm:pi-powerline-footer",
     "npm:pi-web-access",
-    "npm:@tmustier/pi-usage-extension",
-    "npm:@marckrenn/pi-sub-bar",
-    "npm:@ogulcancelik/pi-herdr",
-    "npm:@ifi/oh-pi-themes",
-    "npm:@ifi/pi-web-remote",
-    "npm:pi-powerline-footer"
+    "npm:@ifi/oh-pi-themes"
   ],
   "powerlineShortcuts": {
     "jumpPreviousUserMessage": "ctrl+shift+9",

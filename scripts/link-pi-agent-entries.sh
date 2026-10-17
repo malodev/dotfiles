@@ -80,10 +80,24 @@ PI_ONLY_SKILLS=(
     "team-from-plan"
 )
 
+#--------------------------------------------------------------------------
+# Optional Pi extensions skipped during minimal bootstrap unless --full is
+# passed. Essential extensions (like auto-router) are linked by default.
+#--------------------------------------------------------------------------
+OPTIONAL_EXTENSIONS=(
+    "extensions/foreman"
+    "extensions/herdr-agent-state.ts"
+    "extensions/herdr-subagent-state.ts"
+    "extensions/omarchy-system-theme.ts"
+    "extensions/task-forge"
+    "extensions/three-agent-team"
+)
+
 DRY_RUN=0
 DO_LIST=0
 DO_UNFOLD=0
 DO_PRUNE=0
+INCLUDE_OPTIONAL=0
 
 info() { echo "  $1"; }
 warn() { echo "  ! $1" >&2; }
@@ -138,6 +152,14 @@ is_pi_only_skill() {
     local name="$1" entry
     for entry in "${PI_ONLY_SKILLS[@]}"; do
         [[ "$entry" == "$name" ]] && return 0
+    done
+    return 1
+}
+
+is_optional_extension() {
+    local rel="$1" entry
+    for entry in "${OPTIONAL_EXTENSIONS[@]}"; do
+        [[ "$entry" == "$rel" ]] && return 0
     done
     return 1
 }
@@ -322,10 +344,23 @@ link_entries() {
     for src in "$src_dir"/* "$src_dir"/.[!.]*; do
         [[ -e "$src" || -L "$src" ]] || continue
         name="$(basename "$src")"
+        [[ "$name" == ".DS_Store" ]] && continue
         rel="$dir/$name"
 
         if is_local_only "$rel"; then
             info "skip     $rel (local-only, owned elsewhere)"
+            kept=$((kept + 1))
+            continue
+        fi
+
+        if [[ "$INCLUDE_OPTIONAL" == "0" ]] && is_optional_extension "$rel"; then
+            dst="$dst_dir/$name"
+            if [[ -L "$dst" ]] && is_ours "$dst"; then
+                run rm "$dst"
+                info "unlinked $rel (optional extension; pass --full to include)"
+            else
+                info "skip     $rel (optional extension; pass --full to include)"
+            fi
             kept=$((kept + 1))
             continue
         fi
@@ -546,6 +581,7 @@ main() {
             --list)    DO_LIST=1 ;;
             --unfold)  DO_UNFOLD=1 ;;
             --prune)   DO_PRUNE=1 ;;
+            --full)    INCLUDE_OPTIONAL=1 ;;
             --help|-h) usage; exit 0 ;;
             extensions|skills) dirs+=("$arg") ;;
             *) die "unknown argument: $arg (try --help)" ;;
