@@ -211,6 +211,10 @@ end)
 -- Clock date
 local date = sbar.add("item", "date", {
   position = "right",
+  -- The routine event is only sent to an item that has an update_freq, so the
+  -- subscription below never fired and the label kept the day sketchybar was
+  -- loaded on until a wake or a reload. Same cadence as the clock.
+  update_freq = 30,
   padding_right = -20,
   icon = { drawing = false },
   label = {
