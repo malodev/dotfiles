@@ -11,8 +11,14 @@
 #   ./install.sh shell editor     # Install specific groups
 #=============================================================================
 
-# Check bash version for associative array support
+# Check bash version for associative array support (auto-reexec with Homebrew bash on macOS)
 if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    for _modern_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$_modern_bash" ]]; then
+            export PATH="$(dirname "$_modern_bash"):$PATH"
+            exec "$_modern_bash" "$0" "$@"
+        fi
+    done
     echo "Error: This script requires Bash 4.0 or later for associative arrays."
     echo ""
     echo "Your bash version: $BASH_VERSION"

@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    for _modern_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$_modern_bash" ]]; then
+            export PATH="$(dirname "$_modern_bash"):$PATH"
+            exec "$_modern_bash" "$0" "$@"
+        fi
+    done
+fi
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

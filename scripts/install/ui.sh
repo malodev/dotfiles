@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 show_header() {
-    clear
+    if [[ -t 1 && -n "${TERM:-}" && "${TERM:-}" != "dumb" ]]; then
+        clear 2>/dev/null || true
+    fi
     echo "=========================================="
     echo "  Dotfiles Installation"
     echo "=========================================="
