@@ -21,7 +21,8 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [switch]$LaunchAgent
+    [switch]$LaunchAgent,
+    [switch]$Full
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +33,17 @@ function Write-Ok($msg)   { Write-Host "  ✓ $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  ⚠ $msg" -ForegroundColor Yellow }
 
 Write-Host "━━━ Stage 0: Agent-Managed Dotfiles Seed (Native Windows) ━━━" -ForegroundColor Cyan
+
+# If invoked from a UNC network share (e.g. \\host.lan\Data\dotfiles on the VM Desktop),
+# mirror to local $HOME\dotfiles first so NTFS Directory Junctions and Hardlinks work natively.
+if ($RepoRoot.StartsWith("\\")) {
+    $LocalRepo = Join-Path $HOME "dotfiles"
+    Write-Info "Network share detected ($RepoRoot) — syncing to local NTFS path $LocalRepo..."
+    if (-not $DryRun) {
+        & robocopy $RepoRoot $LocalRepo /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+        $RepoRoot = $LocalRepo
+    }
+}
 Write-Info "Repository: $RepoRoot"
 
 # 1. Force XDG_CONFIG_HOME = $HOME\.config for cross-OS parity
@@ -119,6 +131,10 @@ if (Get-Command pi -ErrorAction SilentlyContinue) {
         Write-Host "  [dry-run] npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui" -ForegroundColor Magenta
     } elseif (Get-Command npm -ErrorAction SilentlyContinue) {
         npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui
+        $PiNpmDir = Join-Path $HOME ".pi\agent\npm"
+        New-Item -ItemType Directory -Force -Path $PiNpmDir | Out-Null
+        npm install --prefix $PiNpmDir @earendil-works/pi-tui
+        if (Get-Command mise -ErrorAction SilentlyContinue) { mise reshim }
     } else {
         Write-Warn "npm not found on PATH yet; reopen Windows Terminal after bootstrap and run: npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui"
     }
@@ -127,11 +143,10 @@ if (Get-Command pi -ErrorAction SilentlyContinue) {
 # 5. Link configs & agent skills via zero-Admin Junctions
 $LinkScript = Join-Path $RepoRoot "scripts\windows\link-windows.ps1"
 if (Test-Path $LinkScript) {
-    if ($DryRun) {
-        & $LinkScript -DryRun
-    } else {
-        & $LinkScript
-    }
+    $LinkArgs = @{}
+    if ($DryRun) { $LinkArgs["DryRun"] = $true }
+    if ($Full)   { $LinkArgs["Full"]   = $true }
+    & $LinkScript @LinkArgs
 }
 
 Write-Host ""

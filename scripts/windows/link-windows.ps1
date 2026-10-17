@@ -18,7 +18,8 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Full
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +38,15 @@ $PiOnlySkills = @(
     "pi-skill-creator",
     "team-amend-contracts",
     "team-from-plan"
+)
+
+$OptionalExtensions = @(
+    "foreman",
+    "herdr-agent-state.ts",
+    "herdr-subagent-state.ts",
+    "omarchy-system-theme.ts",
+    "task-forge",
+    "three-agent-team"
 )
 
 function Write-Info($msg) { Write-Host "  • $msg" -ForegroundColor Cyan }
@@ -156,13 +166,37 @@ if ($DocsDir) {
 }
 
 # 3. Seed Pi Agent JSON templates (settings, keybindings, models, mcp)
-foreach ($tpl in @("settings", "keybindings", "models", "mcp")) {
+$SettingsTemplate = if ($Full) { "settings-full.json.template" } else { "settings.json.template" }
+Set-FileLinkOrCopy -Source (Join-Path $RepoRoot "pi\.pi\agent\$SettingsTemplate") -Target (Join-Path $HOME ".pi\agent\settings.json") -SeedOnly
+foreach ($tpl in @("keybindings", "models", "mcp")) {
     $src = Join-Path $RepoRoot "pi\.pi\agent\$tpl.json.template"
     $dst = Join-Path $HOME ".pi\agent\$tpl.json"
     Set-FileLinkOrCopy -Source $src -Target $dst -SeedOnly
 }
 
-# 4. Link Agent Skills across ~/.agents/skills, ~/.claude/skills, and ~/.pi/agent/skills
+# 4. Link Pi Extensions (essential by default; optional with -Full)
+$ExtSrcDir = Join-Path $RepoRoot "pi\.pi\agent\extensions"
+$ExtDstDir = Join-Path $HOME ".pi\agent\extensions"
+if (Test-Path $ExtSrcDir) {
+    Get-ChildItem -Path $ExtSrcDir | ForEach-Object {
+        $extName = $_.Name
+        if ($extName -eq ".DS_Store") { return }
+        $rel = "extensions/$extName"
+        if ($LocalOnlyEntries -contains $rel) { return }
+        if ((-not $Full) -and ($OptionalExtensions -contains $extName)) {
+            Write-Info "skip     $rel (optional extension; pass -Full to include)"
+            return
+        }
+        $dst = Join-Path $ExtDstDir $extName
+        if ($_.PSIsContainer) {
+            Set-DirectoryJunction -Source $_.FullName -Target $dst
+        } else {
+            Set-FileLinkOrCopy -Source $_.FullName -Target $dst
+        }
+    }
+}
+
+# 5. Link Agent Skills across ~/.agents/skills, ~/.claude/skills, and ~/.pi/agent/skills
 $SkillsSrcDir  = Join-Path $RepoRoot "pi\.pi\agent\skills"
 $SharedSkills  = Join-Path $HOME ".agents\skills"
 $ClaudeSkills  = Join-Path $HOME ".claude\skills"
@@ -185,7 +219,19 @@ if (Test-Path $SkillsSrcDir) {
     }
 }
 
-# 5. Seed Windows Terminal settings.json if Windows Terminal is installed and user requests or doesn't have one
+# 6. Link Matt Pocock skills if submodule is present
+$MattSkillsDir = Join-Path $RepoRoot "pi\mattpocock-skills"
+if (Test-Path $MattSkillsDir) {
+    Get-ChildItem -Path $MattSkillsDir -Directory | Where-Object {
+        $_.Name -notin @(".git", ".github", "scripts") -and (Test-Path (Join-Path $_.FullName "SKILL.md"))
+    } | ForEach-Object {
+        $skillName = $_.Name
+        Set-DirectoryJunction -Source $_.FullName -Target (Join-Path $SharedSkills $skillName)
+        Set-DirectoryJunction -Source $_.FullName -Target (Join-Path $ClaudeSkills $skillName)
+    }
+}
+
+# 7. Seed Windows Terminal settings.json if Windows Terminal is installed and user requests or doesn't have one
 $WtTemplate = Join-Path $RepoRoot "windows\windows-terminal\settings.json.template"
 if ($env:LOCALAPPDATA -and (Test-Path $WtTemplate)) {
     $WtPkgs = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Packages") -Filter "Microsoft.WindowsTerminal*" -Directory -ErrorAction SilentlyContinue
