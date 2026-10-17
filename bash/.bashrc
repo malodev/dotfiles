@@ -140,25 +140,33 @@ if [ "$TERM" != "dumb" ]; then
 fi
 
 #=============================================================================
-# PROMPT - Starship
+# PROMPT - Configurable: "starship" (default) or "parrot" (10.0.3.13 style)
+#=============================================================================
+# To switch persistently:
+#   dot prompt parrot     (writes "parrot" to ~/.config/dotfiles-bash-prompt)
+#   dot prompt starship   (writes "starship" to ~/.config/dotfiles-bash-prompt)
+# Or per-session:
+#   export DOTFILES_BASH_PROMPT=parrot
 #=============================================================================
 
-# Initialize starship if available, otherwise use simple prompt
-_dotfiles_bashrc_debug "prompt: checking starship"
-if command -v starship >/dev/null 2>&1; then
-    _dotfiles_bashrc_debug "prompt: starship found $(command -v starship)"
+_dotfiles_resolve_bash_prompt_style() {
+    if [[ -n "${DOTFILES_BASH_PROMPT:-}" ]]; then
+        echo "$DOTFILES_BASH_PROMPT"
+    elif [[ -f "$HOME/.config/dotfiles-bash-prompt" ]]; then
+        head -n 1 "$HOME/.config/dotfiles-bash-prompt" | tr -d '[:space:]'
+    else
+        echo "starship"
+    fi
+}
+
+_dotfiles_init_starship_prompt() {
     # Auto-detect constrained machines and use a lightweight prompt config.
-    # Only runs once (when STARSHIP_CONFIG is not already set by user).
     if [[ ! -f "${STARSHIP_CONFIG:-}" ]]; then
         _use_minimal=0
-        # Explicit lightweight marker (created by ./install.sh --lightweight)
         [[ -f "$HOME/.config/dotfiles-lightweight.enabled" ]] && _use_minimal=1
-        # Aruba / shared hosting — web directory structure exists
         [[ -d /web/htdocs ]] && _use_minimal=1
-        # Low memory (<2GB)
         _mem_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
         [[ "$_mem_kb" -gt 0 && "$_mem_kb" -lt 2000000 ]] && _use_minimal=1
-        # Few CPUs (<=2)
         _cpu_count=$(nproc 2>/dev/null || echo 0)
         [[ "$_cpu_count" -gt 0 && "$_cpu_count" -le 2 ]] && _use_minimal=1
 
@@ -170,32 +178,67 @@ if command -v starship >/dev/null 2>&1; then
         fi
         unset _use_minimal _mem_kb _cpu_count _minimal_config
     fi
-    _dotfiles_bashrc_debug "prompt: before starship init"
     eval "$(starship init bash)"
+}
+
+_dotfiles_init_parrot_prompt() {
+    local parrot_file="$HOME/.bashrc.d/parrot-prompt.sh"
+    if [[ ! -f "$parrot_file" && -f "$HOME/dotfiles/bash/.bashrc.d/parrot-prompt.sh" ]]; then
+        parrot_file="$HOME/dotfiles/bash/.bashrc.d/parrot-prompt.sh"
+    elif [[ ! -f "$parrot_file" && -f "$HOME/.dotfiles/bash/.bashrc.d/parrot-prompt.sh" ]]; then
+        parrot_file="$HOME/.dotfiles/bash/.bashrc.d/parrot-prompt.sh"
+    fi
+    if [[ -f "$parrot_file" ]]; then
+        # Remove starship from PROMPT_COMMAND if switching live in the same shell
+        PROMPT_COMMAND="${PROMPT_COMMAND//starship_precmd;/}"
+        PROMPT_COMMAND="${PROMPT_COMMAND//starship_precmd/}"
+        # shellcheck disable=SC1090
+        source "$parrot_file"
+        parrot_prompt yes
+        return 0
+    fi
+    return 1
+}
+
+bash_prompt_parrot() {
+    mkdir -p "$HOME/.config"
+    echo "parrot" > "$HOME/.config/dotfiles-bash-prompt"
+    export DOTFILES_BASH_PROMPT="parrot"
+    _dotfiles_init_parrot_prompt
+}
+
+bash_prompt_starship() {
+    mkdir -p "$HOME/.config"
+    echo "starship" > "$HOME/.config/dotfiles-bash-prompt"
+    export DOTFILES_BASH_PROMPT="starship"
+    _dotfiles_init_starship_prompt
+}
+
+_dotfiles_prompt_style="$(_dotfiles_resolve_bash_prompt_style)"
+_dotfiles_bashrc_debug "prompt: style=$_dotfiles_prompt_style"
+
+if [[ "$_dotfiles_prompt_style" == "parrot" ]] && _dotfiles_init_parrot_prompt; then
+    _dotfiles_bashrc_debug "prompt: parrot prompt initialized"
+elif command -v starship >/dev/null 2>&1; then
+    _dotfiles_bashrc_debug "prompt: starship found $(command -v starship)"
+    _dotfiles_bashrc_debug "prompt: before starship init"
+    _dotfiles_init_starship_prompt
     _dotfiles_bashrc_debug "prompt: after starship init"
 elif [[ -x "$HOME/.local/bin/starship" ]]; then
     export PATH="$HOME/.local/bin:$PATH"
     _dotfiles_bashrc_debug "prompt: before local starship init"
-    eval "$(starship init bash)"
+    _dotfiles_init_starship_prompt
     _dotfiles_bashrc_debug "prompt: after local starship init"
+elif _dotfiles_init_parrot_prompt; then
+    _dotfiles_bashrc_debug "prompt: starship absent, fell back to parrot prompt"
 else
-    _dotfiles_bashrc_debug "prompt: using fallback prompt"
-    # Fallback prompt (simple but functional)
-    # Set debian_chroot if in a chroot
-    if [ -z "$debian_chroot" ] && [ -r /etc/debian_chroot ]; then
+    _dotfiles_bashrc_debug "prompt: using simple fallback prompt"
+    if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
         debian_chroot=$(cat /etc/debian_chroot)
     fi
-
-    # Simple colored prompt
     PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-
-    # Set terminal title for xterm/rxvt
-    case "$TERM" in
-        xterm*|rxvt*)
-            PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD/$HOME/~}\007"'
-            ;;
-    esac
 fi
+unset _dotfiles_prompt_style
 _dotfiles_bashrc_debug "prompt: configured"
 
 #=============================================================================
