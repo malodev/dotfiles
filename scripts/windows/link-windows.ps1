@@ -49,9 +49,9 @@ $OptionalExtensions = @(
     "three-agent-team"
 )
 
-function Write-Info($msg) { Write-Host "  • $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)   { Write-Host "  ✓ $msg" -ForegroundColor Green }
-function Write-Warn($msg) { Write-Host "  ⚠ $msg" -ForegroundColor Yellow }
+function Write-Info($msg) { Write-Host "  * $msg" -ForegroundColor Cyan }
+function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
+function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
 
 function Set-DirectoryJunction {
     param([string]$Source, [string]$Target)
@@ -131,7 +131,7 @@ function Set-FileLinkOrCopy {
     }
 }
 
-Write-Host "━━━ Windows Dotfiles & Agent Skill Linker ━━━" -ForegroundColor Cyan
+Write-Host "=== Windows Dotfiles & Agent Skill Linker ===" -ForegroundColor Cyan
 
 # 1. Core Editor & Shell Directory Junctions
 $NvimMaloSrc = Join-Path $RepoRoot "nvim-malo\.config\nvim-malo"

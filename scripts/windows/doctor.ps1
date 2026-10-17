@@ -11,7 +11,7 @@ param([switch]$Json)
 $RepoRoot = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-$CoreTools = @("git", "mise", "nvim", "starship", "rg", "fd", "fzf", "jq", "lazygit", "nu", "pwsh", "zig")
+$CoreTools = @("git", "mise", "nvim", "starship", "zoxide", "rg", "fd", "fzf", "jq", "lazygit", "nu", "pwsh", "zig")
 $AgentTools = @("pi", "claude", "agy", "llm")
 
 $ToolState = [ordered]@{}
@@ -61,18 +61,18 @@ if ($Json) {
     exit 0
 }
 
-Write-Host "━━━ Dotfiles Doctor (Windows) ━━━" -ForegroundColor Cyan
+Write-Host "=== Dotfiles Doctor (Windows) ===" -ForegroundColor Cyan
 Write-Host "  Repository:      $RepoRoot"
 Write-Host "  XDG_CONFIG_HOME: $($env:XDG_CONFIG_HOME)"
 Write-Host "  Admin Rights:    $IsAdmin"
 Write-Host ""
-Write-Host "━━━ Toolchain ━━━" -ForegroundColor Cyan
+Write-Host "=== Toolchain ===" -ForegroundColor Cyan
 foreach ($k in $ToolState.Keys) {
-    $mark = if ($ToolState[$k]) { "✓" } else { "⚠" }
-    Write-Host ("  {0} {1,-12} {2}" -f $mark, $k, $ToolState[$k])
+    $mark = if ($ToolState[$k]) { "[OK]" } else { "[!]" }
+    Write-Host ("  {0,-4} {1,-12} {2}" -f $mark, $k, $ToolState[$k])
 }
 Write-Host ""
-Write-Host "━━━ Links ━━━" -ForegroundColor Cyan
+Write-Host "=== Links ===" -ForegroundColor Cyan
 foreach ($k in $Report.links.Keys) {
     Write-Host ("  {0,-16} {1}" -f $k, $Report.links[$k])
 }

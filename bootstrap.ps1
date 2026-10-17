@@ -8,15 +8,17 @@
       1. Sets User-level $env:XDG_CONFIG_HOME = "$HOME\.config" so Neovim, Starship, Lazygit,
          Bat, and Yazi use the exact same ~/.config paths as macOS and Linux.
       2. Installs `mise` for Windows in userspace (or via winget/scoop).
-      3. Installs the portable CLI suite via mise: node@lts, neovim, starship, ripgrep, fd,
-         fzf, jq, lazygit, zig (for nvim-treesitter parser compilation without Visual Studio).
-      4. Installs `@mariozechner/pi-coding-agent` (`pi`) via npm.
+      3. Installs the portable CLI suite via mise: node@lts, neovim, starship, zoxide, ripgrep,
+         fd, fzf, jq, lazygit, zig (for nvim-treesitter parser compilation without Visual Studio).
+      4. Installs `@earendil-works/pi-coding-agent` (`pi`) via npm.
       5. Invokes `scripts/windows/link-windows.ps1` to link configs and agent skills using
          zero-Admin Directory Junctions (`mklink /J`).
 .PARAMETER DryRun
     Preview actions without modifying the filesystem or installing packages.
 .PARAMETER LaunchAgent
     Immediately launch `pi` inside the dotfiles repo after bootstrap completes.
+.PARAMETER Full
+    Include all optional Pi extensions and packages in addition to the essential set.
 #>
 [CmdletBinding()]
 param(
@@ -28,17 +30,30 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-function Write-Info($msg) { Write-Host "  • $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)   { Write-Host "  ✓ $msg" -ForegroundColor Green }
-function Write-Warn($msg) { Write-Host "  ⚠ $msg" -ForegroundColor Yellow }
+function Write-Info($msg) { Write-Host "  * $msg" -ForegroundColor Cyan }
+function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
+function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
 
-Write-Host "━━━ Stage 0: Agent-Managed Dotfiles Seed (Native Windows) ━━━" -ForegroundColor Cyan
+$XdgConfig   = Join-Path $HOME ".config"
+$LocalBin    = Join-Path $HOME ".local\bin"
+$MiseShims   = Join-Path $env:LOCALAPPDATA "mise\shims"
+$WinGetLinks = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links"
+$MiseProgBin = Join-Path $env:LOCALAPPDATA "Programs\mise\bin"
+
+function Update-SessionPath {
+    $MachinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $UserPath    = [Environment]::GetEnvironmentVariable("Path", "User")
+    $Combined    = "$LocalBin;$MiseShims;$WinGetLinks;$MiseProgBin;$UserPath;$MachinePath"
+    $env:Path    = ($Combined -split ";" | Where-Object { $_ -ne "" } | Select-Object -Unique) -join ";"
+}
+
+Write-Host "=== Stage 0: Agent-Managed Dotfiles Seed (Native Windows) ===" -ForegroundColor Cyan
 
 # If invoked from a UNC network share (e.g. \\host.lan\Data\dotfiles on the VM Desktop),
 # mirror to local $HOME\dotfiles first so NTFS Directory Junctions and Hardlinks work natively.
 if ($RepoRoot.StartsWith("\\")) {
     $LocalRepo = Join-Path $HOME "dotfiles"
-    Write-Info "Network share detected ($RepoRoot) — syncing to local NTFS path $LocalRepo..."
+    Write-Info "Network share detected ($RepoRoot) -- syncing to local NTFS path $LocalRepo..."
     if (-not $DryRun) {
         & robocopy $RepoRoot $LocalRepo /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
         $RepoRoot = $LocalRepo
@@ -47,10 +62,6 @@ if ($RepoRoot.StartsWith("\\")) {
 Write-Info "Repository: $RepoRoot"
 
 # 1. Force XDG_CONFIG_HOME = $HOME\.config for cross-OS parity
-$XdgConfig = Join-Path $HOME ".config"
-$LocalBin  = Join-Path $HOME ".local\bin"
-$MiseShims = Join-Path $env:LOCALAPPDATA "mise\shims"
-
 if ($DryRun) {
     Write-Host "  [dry-run] Set User Environment XDG_CONFIG_HOME=$XdgConfig" -ForegroundColor Magenta
 } else {
@@ -59,19 +70,20 @@ if ($DryRun) {
     [Environment]::SetEnvironmentVariable("XDG_CONFIG_HOME", $XdgConfig, "User")
     $env:XDG_CONFIG_HOME = $XdgConfig
 
-    # Ensure ~/.local/bin and mise shims are on User PATH
+    # Ensure ~/.local/bin, mise shims, and WinGet links are on User PATH
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    foreach ($dir in @($LocalBin, $MiseShims)) {
+    foreach ($dir in @($LocalBin, $MiseShims, $WinGetLinks, $MiseProgBin)) {
         if ($UserPath -notlike "*$dir*") {
             $UserPath = "$dir;$UserPath"
         }
     }
     [Environment]::SetEnvironmentVariable("Path", $UserPath, "User")
-    $env:Path = "$LocalBin;$MiseShims;$env:Path"
+    Update-SessionPath
     Write-Ok "Configured XDG_CONFIG_HOME=$XdgConfig and updated User PATH"
 }
 
 # 2. Ensure `mise` is installed
+Update-SessionPath
 if (Get-Command mise -ErrorAction SilentlyContinue) {
     Write-Ok "mise already installed: $((Get-Command mise).Source)"
 } else {
@@ -86,7 +98,7 @@ if (Get-Command mise -ErrorAction SilentlyContinue) {
         } else {
             Invoke-RestMethod https://mise.run/pwsh | Invoke-Expression
         }
-        $env:Path = "$LocalBin;$MiseShims;$env:Path"
+        Update-SessionPath
     }
 }
 
@@ -116,25 +128,37 @@ if ((Get-Command mise -ErrorAction SilentlyContinue) -or $DryRun) {
     if (-not $DryRun) {
         Write-Info "Installing mise tools..."
         mise install
+        mise reshim
+        Update-SessionPath
         if (Get-Command zoxide -ErrorAction SilentlyContinue) {
             zoxide add $RepoRoot 2>$null
         }
     }
+} else {
+    Write-Warn "mise was not found on PATH after installation."
 }
 
 # 4. Install Pi Coding Agent (`pi`) via npm (@earendil-works/pi-coding-agent)
+Update-SessionPath
 if (Get-Command pi -ErrorAction SilentlyContinue) {
     Write-Ok "pi coding agent already installed: $((Get-Command pi).Source)"
 } else {
     Write-Info "Installing @earendil-works/pi-coding-agent and @earendil-works/pi-tui via npm..."
+    $PiNpmDir = Join-Path $HOME ".pi\agent\npm"
     if ($DryRun) {
         Write-Host "  [dry-run] npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui" -ForegroundColor Magenta
     } elseif (Get-Command npm -ErrorAction SilentlyContinue) {
         npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui
-        $PiNpmDir = Join-Path $HOME ".pi\agent\npm"
         New-Item -ItemType Directory -Force -Path $PiNpmDir | Out-Null
         npm install --prefix $PiNpmDir @earendil-works/pi-tui
         if (Get-Command mise -ErrorAction SilentlyContinue) { mise reshim }
+        Update-SessionPath
+    } elseif (Get-Command mise -ErrorAction SilentlyContinue) {
+        mise exec node@lts -- npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui
+        New-Item -ItemType Directory -Force -Path $PiNpmDir | Out-Null
+        mise exec node@lts -- npm install --prefix $PiNpmDir @earendil-works/pi-tui
+        mise reshim
+        Update-SessionPath
     } else {
         Write-Warn "npm not found on PATH yet; reopen Windows Terminal after bootstrap and run: npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui"
     }
@@ -151,7 +175,7 @@ if (Test-Path $LinkScript) {
 
 Write-Host ""
 Write-Ok "Stage 0 Windows bootstrap complete!"
-Write-Info "Run 'dot doctor' in PowerShell or Nushell to inspect your environment."
+Write-Info "Open a new Windows Terminal tab and run 'dot doctor' to inspect your environment."
 
 if ($LaunchAgent -and (-not $DryRun) -and (Get-Command pi -ErrorAction SilentlyContinue)) {
     Set-Location $RepoRoot

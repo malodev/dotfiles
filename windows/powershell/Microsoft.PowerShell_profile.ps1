@@ -7,10 +7,12 @@
 #=============================================================================
 
 $env:XDG_CONFIG_HOME = Join-Path $HOME ".config"
-$LocalBin  = Join-Path $HOME ".local\bin"
-$MiseShims = Join-Path $env:LOCALAPPDATA "mise\shims"
+$LocalBin    = Join-Path $HOME ".local\bin"
+$MiseShims   = Join-Path $env:LOCALAPPDATA "mise\shims"
+$WinGetLinks = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links"
+$MiseProgBin = Join-Path $env:LOCALAPPDATA "Programs\mise\bin"
 
-foreach ($p in @($LocalBin, $MiseShims)) {
+foreach ($p in @($LocalBin, $MiseShims, $WinGetLinks, $MiseProgBin)) {
     if ((Test-Path $p) -and ($env:Path -notlike "*$p*")) {
         $env:Path = "$p;$env:Path"
     }
