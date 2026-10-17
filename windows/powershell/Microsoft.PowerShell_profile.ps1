@@ -81,6 +81,29 @@ function dot {
         { $_ -in @("link", "sync") } {
             & (Join-Path $DotRepo "scripts\windows\link-windows.ps1") @rest
         }
+        "nvim" {
+            $mode = if ($rest.Count -gt 0) { $rest[0] } else { "status" }
+            $liteSrc = Join-Path $DotRepo "nvim-lite\.config\nvim-lite"
+            $maloSrc = Join-Path $DotRepo "nvim-malo\.config\nvim-malo"
+            $xdgNvim = Join-Path $HOME ".config\nvim"
+            $appNvim = Join-Path $env:LOCALAPPDATA "nvim"
+            if ($mode -in @("lite", "minimal")) {
+                foreach ($t in @($xdgNvim, $appNvim)) {
+                    if (Test-Path $t) { cmd /c rmdir "$t" 2>$null }
+                    New-Item -ItemType Junction -Path $t -Target $liteSrc | Out-Null
+                }
+                Write-Host "  [OK] Default Neovim config set to nvim-lite" -ForegroundColor Green
+            } elseif ($mode -in @("malo", "full")) {
+                foreach ($t in @($xdgNvim, $appNvim)) {
+                    if (Test-Path $t) { cmd /c rmdir "$t" 2>$null }
+                    New-Item -ItemType Junction -Path $t -Target $maloSrc | Out-Null
+                }
+                Write-Host "  [OK] Default Neovim config set to nvim-malo" -ForegroundColor Green
+            } else {
+                $item = Get-Item $xdgNvim -Force -ErrorAction SilentlyContinue
+                Write-Host "  Current ~/.config/nvim -> $($item.Target) (use 'dot nvim lite' or 'dot nvim malo')" -ForegroundColor Cyan
+            }
+        }
         "status" {
             git -C $DotRepo status @rest
         }

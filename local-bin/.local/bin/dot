@@ -48,8 +48,9 @@ dot — Agent-Managed Dotfiles CLI ($REPO)
 
 Usage:
   dot doctor [--json]           Inspect OS capabilities, toolchain, symlinks, and drift
-  dot bootstrap [--full]        Run Stage 0 seed (essential pi setup by default; --full for all extensions)
+  dot bootstrap [--full]        Run Stage 0 seed (essential pi + nvim-lite by default; --full for all)
   dot link [--full] [args...]   Sync agent skills & seed pi templates (--full includes optional extensions)
+  dot nvim [lite|malo|status]   Show or switch the default Neovim configuration (lite vs malo)
   dot prompt [starship|parrot]  Show or switch the Bash prompt theme (default: starship)
   dot overrides [args...]       Inspect or extract machine-local overrides (--apply, --dry-run)
   dot install [args...]         Run the modular installer (./install.sh)
@@ -74,6 +75,30 @@ case "$cmd" in
   link|sync)
     "$REPO/scripts/init-pi-settings.sh" "$@"
     "$REPO/scripts/link-pi-agent-entries.sh" "$@"
+    ;;
+  nvim)
+    sub="${1:-status}"
+    mkdir -p "$HOME/.config"
+    ln -sfn "$REPO/nvim-lite/.config/nvim-lite" "$HOME/.config/nvim-lite"
+    ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$HOME/.config/nvim-malo"
+    case "$sub" in
+      lite|minimal|bootstrap)
+        ln -sfn "$REPO/nvim-lite/.config/nvim-lite" "$HOME/.config/nvim"
+        echo "✓ Default Neovim config set to 'nvim-lite' (~/.config/nvim -> nvim-lite)."
+        ;;
+      malo|full|daily)
+        ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$HOME/.config/nvim"
+        echo "✓ Default Neovim config set to 'nvim-malo' (~/.config/nvim -> nvim-malo)."
+        ;;
+      status|"")
+        target="$(readlink "$HOME/.config/nvim" 2>/dev/null || echo "unlinked")"
+        echo "Current ~/.config/nvim -> $target (options: 'dot nvim lite' or 'dot nvim malo')"
+        ;;
+      *)
+        echo "Usage: dot nvim [lite|malo|status]" >&2
+        exit 1
+        ;;
+    esac
     ;;
   prompt)
     sub="${1:-status}"

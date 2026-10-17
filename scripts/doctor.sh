@@ -93,7 +93,7 @@ fi
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
 cmd_path() { command -v "$1" 2>/dev/null || echo ""; }
 
-CORE_TOOLS=(git curl stow mise nvim starship rg fd fzf jq lazygit tmux zsh bash nu zig)
+CORE_TOOLS=(git curl stow mise nvim starship zoxide rg fd fzf jq lazygit tmux zsh bash nu)
 AGENT_TOOLS=(pi claude agy llm)
 
 #-----------------------------------------------------------------------------
@@ -121,7 +121,16 @@ check_link_state() {
 }
 
 NVIM_DEFAULT_STATE="$(check_link_state "$HOME/.config/nvim")"
+NVIM_LITE_STATE="$(check_link_state "$HOME/.config/nvim-lite")"
 NVIM_MALO_STATE="$(check_link_state "$HOME/.config/nvim-malo")"
+NVIM_ACTIVE_PROFILE="none"
+if [[ -L "$HOME/.config/nvim" ]]; then
+  case "$(readlink "$HOME/.config/nvim" 2>/dev/null || true)" in
+    *nvim-lite*) NVIM_ACTIVE_PROFILE="nvim-lite" ;;
+    *nvim-malo*) NVIM_ACTIVE_PROFILE="nvim-malo" ;;
+    *)           NVIM_ACTIVE_PROFILE="custom" ;;
+  esac
+fi
 STARSHIP_STATE="$(check_link_state "$HOME/.config/starship.toml")"
 TMUX_STATE="$(check_link_state "$HOME/.tmux.conf")"
 ZSHRC_STATE="$(check_link_state "$HOME/.zshrc")"
@@ -229,6 +238,8 @@ if [[ "$JSON_MODE" == "1" ]]; then
 
   printf '  "links": {\n'
   printf '    "nvim_default": "%s",\n' "$NVIM_DEFAULT_STATE"
+  printf '    "nvim_active_profile": "%s",\n' "$NVIM_ACTIVE_PROFILE"
+  printf '    "nvim_lite": "%s",\n' "$NVIM_LITE_STATE"
   printf '    "nvim_malo": "%s",\n' "$NVIM_MALO_STATE"
   printf '    "starship": "%s",\n' "$STARSHIP_STATE"
   printf '    "tmux": "%s",\n' "$TMUX_STATE"
@@ -285,7 +296,8 @@ echo -e "  \033[1;34m•\033[0m Skills linked: ~/.agents/skills ($SHARED_SKILLS_
 echo ""
 
 echo -e "\033[1;36m━━━ Config & Link Health ━━━\033[0m"
-printf "  %-22s %s\n" "~/.config/nvim:" "$NVIM_DEFAULT_STATE"
+printf "  %-22s %s (%s)\n" "~/.config/nvim:" "$NVIM_DEFAULT_STATE" "$NVIM_ACTIVE_PROFILE"
+printf "  %-22s %s\n" "~/.config/nvim-lite:" "$NVIM_LITE_STATE"
 printf "  %-22s %s\n" "~/.config/nvim-malo:" "$NVIM_MALO_STATE"
 printf "  %-22s %s\n" "~/.config/starship:" "$STARSHIP_STATE"
 printf "  %-22s %s\n" "~/.tmux.conf:" "$TMUX_STATE"

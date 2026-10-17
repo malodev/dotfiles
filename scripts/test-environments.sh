@@ -163,8 +163,9 @@ fi
 # 2d. Simulate Stage 0 core symlinks + GNU Stow in isolated HOME
 ln -sfn "$REPO/local-bin/.local/bin/dot" "$SANDBOX_HOME/.local/bin/dot"
 ln -sfn "$REPO/starship/.config/starship.toml" "$SANDBOX_HOME/.config/starship.toml"
+ln -sfn "$REPO/nvim-lite/.config/nvim-lite" "$SANDBOX_HOME/.config/nvim-lite"
 ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$SANDBOX_HOME/.config/nvim-malo"
-ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$SANDBOX_HOME/.config/nvim"
+ln -sfn "$REPO/nvim-lite/.config/nvim-lite" "$SANDBOX_HOME/.config/nvim"
 
 if command -v stow >/dev/null 2>&1; then
   if stow -d "$REPO" -t "$SANDBOX_HOME" zsh bash git tmux >/dev/null 2>&1; then
@@ -177,8 +178,8 @@ fi
 # 2e. Test `dot doctor --json` inside isolated HOME
 DOCTOR_OUT="$(HOME="$SANDBOX_HOME" DOTFILES_REPO="$REPO" "$SANDBOX_HOME/.local/bin/dot" doctor --json)"
 if command -v jq >/dev/null 2>&1; then
-  if echo "$DOCTOR_OUT" | jq -e '.links.nvim_default == "linked" and .links.starship == "linked" and .links.dot_cli == "linked" and (.agents.shared_skills_count > 0)' >/dev/null 2>&1; then
-    pass "dot doctor --json reports valid JSON & accurate link states in sandbox"
+  if echo "$DOCTOR_OUT" | jq -e '.links.nvim_default == "linked" and .links.nvim_active_profile == "nvim-lite" and .links.starship == "linked" and .links.dot_cli == "linked" and (.agents.shared_skills_count > 0)' >/dev/null 2>&1; then
+    pass "dot doctor --json reports valid JSON & accurate link states (nvim-lite active) in sandbox"
   else
     fail "dot doctor --json output did not match expected link states: $DOCTOR_OUT"
   fi
@@ -214,8 +215,17 @@ fi
 #-----------------------------------------------------------------------------
 section "3. Headless Core Config Verification (Neovim, Starship, Zsh, Tmux)"
 
-# 3a. Neovim (`nvim-malo`) headless startup & cross-OS `options.lua` verification
+# 3a. Neovim (`nvim-lite` & `nvim-malo`) headless startup verification
 if command -v nvim >/dev/null 2>&1; then
+  NVIM_LITE_CHECK="$(HOME="$SANDBOX_HOME" XDG_CONFIG_HOME="$SANDBOX_HOME/.config" \
+    nvim --headless -u "$REPO/nvim-lite/.config/nvim-lite/init.lua" \
+    +"lua assert(type(_G.OS) == 'string', 'OS global missing'); assert(vim.g.mapleader == ' ', 'leader missing'); print('NVIM_LITE_OK:' .. _G.OS)" +qa 2>&1 || true)"
+  if echo "$NVIM_LITE_CHECK" | grep -q "NVIM_LITE_OK:"; then
+    pass "nvim-lite init.lua loads cleanly in headless mode with zero external deps ($NVIM_LITE_CHECK)"
+  else
+    fail "nvim-lite init.lua headless check failed: $NVIM_LITE_CHECK"
+  fi
+
   NVIM_CHECK="$(HOME="$SANDBOX_HOME" XDG_CONFIG_HOME="$SANDBOX_HOME/.config" NVIM_APPNAME=nvim-malo \
     nvim --headless -u "$REPO/nvim-malo/.config/nvim-malo/lua/options.lua" \
     +"lua assert(type(_G.OS) == 'string', 'OS global missing'); assert(type(_G.IS_WINDOWS) == 'boolean', 'IS_WINDOWS missing'); print('NVIM_OPTIONS_OK:' .. _G.OS)" +qa 2>&1 || true)"

@@ -55,7 +55,7 @@ if ($RepoRoot.StartsWith("\\")) {
     $LocalRepo = Join-Path $HOME "dotfiles"
     Write-Info "Network share detected ($RepoRoot) -- syncing to local NTFS path $LocalRepo..."
     if (-not $DryRun) {
-        & robocopy $RepoRoot $LocalRepo /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+        & robocopy $RepoRoot $LocalRepo /MIR /XD conversations /R:0 /W:0 /NFL /NDL /NJH /NJS /NP | Out-Null
         $RepoRoot = $LocalRepo
     }
 }
@@ -102,7 +102,7 @@ if (Get-Command mise -ErrorAction SilentlyContinue) {
     }
 }
 
-# 3. Install portable tools via mise (including zig for nvim-treesitter on Windows!)
+# 3. Install portable tools via mise (zig is only needed with -Full for nvim-malo treesitter compilation)
 $PortableTools = @(
     "node@lts",
     "neovim@latest",
@@ -112,9 +112,11 @@ $PortableTools = @(
     "fd@latest",
     "fzf@latest",
     "jq@latest",
-    "lazygit@latest",
-    "zig@latest"
+    "lazygit@latest"
 )
+if ($Full) {
+    $PortableTools += "zig@latest"
+}
 
 if ((Get-Command mise -ErrorAction SilentlyContinue) -or $DryRun) {
     Write-Info "Declaring portable baseline tools in mise..."

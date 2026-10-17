@@ -84,6 +84,7 @@ else
 fi
 
 # 4. Install portable cross-OS baseline via mise
+#    (zig is only needed when --full / nvim-malo compiles treesitter parsers without a system C compiler)
 PORTABLE_TOOLS=(
   "node@lts"
   "neovim@latest"
@@ -94,8 +95,10 @@ PORTABLE_TOOLS=(
   "fzf@latest"
   "jq@latest"
   "lazygit@latest"
-  "zig@latest"
 )
+if [[ "$FULL_PI" == "1" ]]; then
+  PORTABLE_TOOLS+=("zig@latest")
+fi
 
 if command -v mise >/dev/null 2>&1 || [[ "$DRY_RUN" == "1" ]]; then
   info "Declaring portable baseline tools in mise..."
@@ -131,12 +134,19 @@ else
 fi
 
 # 6. Link minimal core configs (works even without GNU Stow!)
-info "Linking core configs (dot CLI, bash, starship, nvim-malo, pi configs & agent skills)..."
+#    Default Neovim profile in bootstrap is `nvim-lite` (instant startup, zero C compile);
+#    pass `--full` or run `dot nvim malo` for the full daily-driver `nvim-malo` IDE config.
+info "Linking core configs (dot CLI, bash, starship, nvim-lite, pi configs & agent skills)..."
 run ln -sfn "$REPO/local-bin/.local/bin/dot" "$HOME/.local/bin/dot"
 run ln -sfn "$REPO/starship/.config/starship.toml" "$HOME/.config/starship.toml"
+run ln -sfn "$REPO/nvim-lite/.config/nvim-lite" "$HOME/.config/nvim-lite"
 run ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$HOME/.config/nvim-malo"
 if [[ ! -e "$HOME/.config/nvim" || -L "$HOME/.config/nvim" ]]; then
-  run ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$HOME/.config/nvim"
+  if [[ "$FULL_PI" == "1" ]]; then
+    run ln -sfn "$REPO/nvim-malo/.config/nvim-malo" "$HOME/.config/nvim"
+  else
+    run ln -sfn "$REPO/nvim-lite/.config/nvim-lite" "$HOME/.config/nvim"
+  fi
 fi
 
 # Link bash startup files (backing up default OS /etc/skel files if present) so PATH, zoxide (`z`), starship/parrot prompt, and fzf work on first login

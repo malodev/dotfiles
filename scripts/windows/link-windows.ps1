@@ -134,11 +134,16 @@ function Set-FileLinkOrCopy {
 Write-Host "=== Windows Dotfiles & Agent Skill Linker ===" -ForegroundColor Cyan
 
 # 1. Core Editor & Shell Directory Junctions
-$NvimMaloSrc = Join-Path $RepoRoot "nvim-malo\.config\nvim-malo"
-Set-DirectoryJunction -Source $NvimMaloSrc -Target (Join-Path $HOME ".config\nvim-malo")
-Set-DirectoryJunction -Source $NvimMaloSrc -Target (Join-Path $HOME ".config\nvim")
+#    Default to lightweight `nvim-lite` for fast zero-compile startup; use `nvim-malo` when -Full is passed.
+$NvimLiteSrc    = Join-Path $RepoRoot "nvim-lite\.config\nvim-lite"
+$NvimMaloSrc    = Join-Path $RepoRoot "nvim-malo\.config\nvim-malo"
+$DefaultNvimSrc = if ($Full) { $NvimMaloSrc } else { $NvimLiteSrc }
+
+Set-DirectoryJunction -Source $NvimLiteSrc    -Target (Join-Path $HOME ".config\nvim-lite")
+Set-DirectoryJunction -Source $NvimMaloSrc    -Target (Join-Path $HOME ".config\nvim-malo")
+Set-DirectoryJunction -Source $DefaultNvimSrc -Target (Join-Path $HOME ".config\nvim")
 if ($env:LOCALAPPDATA) {
-    Set-DirectoryJunction -Source $NvimMaloSrc -Target (Join-Path $env:LOCALAPPDATA "nvim")
+    Set-DirectoryJunction -Source $DefaultNvimSrc -Target (Join-Path $env:LOCALAPPDATA "nvim")
 }
 
 $NushellSrc = Join-Path $RepoRoot "nushell\.config\nushell"
