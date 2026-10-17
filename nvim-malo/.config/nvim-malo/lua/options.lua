@@ -8,21 +8,23 @@ vim.cmd("set mousemodel=extend")
 
 vim.opt.signcolumn = "yes"
 
-_G.IS_WSL = nil
-if pcall(require, "uname") then
-  local distro = uname()
-  -- print("-------------- TABLE --------------")
-  -- print('Sysname', distro.sysname)
-  -- print('Nodename', distro.nodename)
-  -- print('Release', distro.release)
-  -- print('Version', distro.version)
-  -- print('Machine', distro.machine)
-  _G.OS = distro.sysname
-  _G.IS_MAC = OS == "Darwin"
-  _G.IS_LINUX = OS == "Linux"
-  _G.IS_WINDOWS = OS:find("Windows") and true or false
-  _G.IS_WSL = IS_LINUX and distro.release:lower():find("microsoft") and true or false
+_G.IS_WSL = false
+local sysname = ""
+local release = ""
+if pcall(require, "uname") and type(_G.uname) == "function" then
+  local distro = _G.uname()
+  sysname = distro.sysname or ""
+  release = distro.release or ""
+elseif (vim.uv or vim.loop) and (vim.uv or vim.loop).os_uname then
+  local u = (vim.uv or vim.loop).os_uname()
+  sysname = u.sysname or ""
+  release = u.release or ""
 end
+_G.OS = sysname
+_G.IS_MAC = sysname == "Darwin"
+_G.IS_LINUX = sysname == "Linux"
+_G.IS_WINDOWS = (vim.fn.has("win32") == 1) or (sysname:find("Windows") ~= nil)
+_G.IS_WSL = (_G.IS_LINUX and release:lower():find("microsoft") ~= nil) or (vim.fn.has("wsl") == 1)
 
 vim.opt.clipboard = "unnamedplus" -- use system clipboard
 if IS_WSL then
@@ -82,8 +84,9 @@ if not vim.g.vscode then
   local autocmd = vim.api.nvim_create_autocmd
   local augroup = vim.api.nvim_create_augroup
 
-  -- Read the HOME environment variable
-  local home = os.getenv("HOME")
+  -- Read the home directory portably across Unix and Windows
+  local home = os.getenv("HOME") or os.getenv("USERPROFILE") or ((vim.uv or vim.loop) and (vim.uv or vim.loop).os_homedir()) or ""
+  home = home:gsub("\\", "/")
 
   -- the following lines are for relative number to be disabled in insert mode
   local number_toggle = augroup("numbertoggle", { clear = true })
