@@ -4,35 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a multi-machine dotfiles repository managed with [GNU Stow](https://www.gnu.org/software/stow/), designed to work across:
-- **macOS** (primary)
-- **Arch Linux** (Omarcchy)
-- **Ubuntu/Debian Linux**
+This is an **Agent-Managed Cross-OS Dotfiles** repository (see [`AGENTS.md`](AGENTS.md) and [`pi/.pi/agent/skills/dotfiles-maintainer/SKILL.md`](pi/.pi/agent/skills/dotfiles-maintainer/SKILL.md)), designed to work across:
+- **macOS** (primary — Brewfile + `mise` + GNU Stow + AeroSpace + SketchyBar)
+- **Arch Linux / Omarchy** (`pacman` + `mise` + GNU Stow + Hyprland)
+- **Ubuntu/Debian & Headless SSH** (`apt` / rootless `mise` userspace + GNU Stow)
+- **Native Windows** (Windows Terminal + PowerShell 7 / Nushell + `mise` + Zero-Admin Directory Junctions + `XDG_CONFIG_HOME=$HOME\.config`)
 
 Each tool/application has its own directory containing configuration files, typically following XDG Base Directory specification with nested `.config/` subdirectories.
 
-## Installation Commands
+## Quick Commands (`dot` CLI, Bootstrap, & Verification)
 
 ```bash
-# Clone the repository
-git clone https://github.com/malodev/dotfiles ~/.dotfiles
+# Stage 0 minimal userspace seed (installs mise + portable CLI + pi + links)
+./bootstrap.sh              # macOS / Linux / WSL
+# .\bootstrap.ps1           # Native Windows (PowerShell)
 
-# Install all configurations
-cd ~/.dotfiles
-stow *
+# Inspect OS capabilities, toolchain, symlinks, and config drift
+./scripts/doctor.sh
+./scripts/doctor.sh --json  # Structured JSON output for LLM agents
 
-# Install specific package only
-stow <package_name>  # e.g., stow nvim-malo
-
-# Full installation (includes Homebrew dependencies)
+# Full modular installation (macOS / Linux)
 ./install.sh
-```
 
-The `install.sh` script:
-- Installs Homebrew if not present
-- Runs `brew bundle` to install dependencies from Brewfile
-- Uses Stow to symlink configurations
-- Detects OS (macOS/Linux) and installs platform-specific configs
+# Validate installer, manifest, and isolated sandbox/Docker test environments
+./scripts/validate-install.sh
+./scripts/test-environments.sh          # Isolated $HOME sandbox + headless config tests
+./scripts/test-environments.sh --docker # Also test inside clean Ubuntu/Alpine/Arch containers
+```
 
 ## Architecture
 

@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+#=============================================================================
+# dot — Universal Agent-Managed Dotfiles CLI
+#
+# Entrypoint for inspecting, bootstrapping, linking, validating, and invoking
+# an LLM coding agent on your dotfiles repository across macOS, Linux, and WSL.
+# (Native Windows uses scripts/windows/dot.ps1 via PowerShell profile).
+#=============================================================================
+set -eo pipefail
+
+resolve_repo() {
+  if [[ -n "${DOTFILES_REPO:-}" && -d "${DOTFILES_REPO}" ]]; then
+    echo "$DOTFILES_REPO"
+    return
+  fi
+  local src="${BASH_SOURCE[0]}"
+  while [[ -L "$src" ]]; do
+    local dir
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  local bin_dir
+  bin_dir="$(cd -P "$(dirname "$src")" && pwd)"
+  # bin_dir is <repo>/local-bin/.local/bin
+  if [[ -f "$bin_dir/../../../install.sh" ]]; then
+    cd -P "$bin_dir/../../.." && pwd
+    return
+  fi
+  if [[ -d "$HOME/dotfiles" ]]; then
+    echo "$HOME/dotfiles"
+    return
+  fi
+  if [[ -d "$HOME/.dotfiles" ]]; then
+    echo "$HOME/.dotfiles"
+    return
+  fi
+  echo "error: could not locate dotfiles repository" >&2
+  exit 1
+}
+
+REPO="$(resolve_repo)"
+export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+usage() {
+  cat <<EOF
+dot — Agent-Managed Dotfiles CLI ($REPO)
+
+Usage:
+  dot doctor [--json]           Inspect OS capabilities, toolchain, symlinks, and drift
+  dot bootstrap [--full]        Run Stage 0 seed (essential pi setup by default; --full for all extensions)
+  dot link [--full] [args...]   Sync agent skills & seed pi templates (--full includes optional extensions)
+  dot prompt [starship|parrot]  Show or switch the Bash prompt theme (default: starship)
+  dot overrides [args...]       Inspect or extract machine-local overrides (--apply, --dry-run)
+  dot install [args...]         Run the modular installer (./install.sh)
+  dot validate                  Run installer and manifest validation suite
+  dot status                    Run git status in the dotfiles repository
+  dot cd                        Print repository path
+  dot agent [prompt...]         Launch an AI coding agent (pi/claude/agy) in the repo with doctor context
+  dot <prompt...>               Shorthand for 'dot agent <prompt...>'
+EOF
+}
+
+cmd="${1:-doctor}"
+shift || true
+
+case "$cmd" in
+  doctor)
+    exec "$REPO/scripts/doctor.sh" "$@"
+    ;;
+  bootstrap)
+    exec "$REPO/bootstrap.sh" "$@"
+    ;;
+  link|sync)
+    "$REPO/scripts/init-pi-settings.sh" "$@"
+    "$REPO/scripts/link-pi-agent-entries.sh" "$@"
+    ;;
+  prompt)
+    sub="${1:-status}"
+    mkdir -p "$HOME/.config"
+    case "$sub" in
+      parrot)
+        echo "parrot" > "$HOME/.config/dotfiles-bash-prompt"
+        echo "✓ Bash prompt set to 'parrot' (~/.config/dotfiles-bash-prompt). Run 'source ~/.bashrc' in bash."
+        ;;
+      starship|default)
+        echo "starship" > "$HOME/.config/dotfiles-bash-prompt"
+        echo "✓ Bash prompt set to 'starship' (~/.config/dotfiles-bash-prompt). Run 'source ~/.bashrc' in bash."
+        ;;
+      status|"")
+        current="starship"
+        [[ -f "$HOME/.config/dotfiles-bash-prompt" ]] && current="$(tr -d '[:space:]' < "$HOME/.config/dotfiles-bash-prompt")"
+        [[ -n "${DOTFILES_BASH_PROMPT:-}" ]] && current="$DOTFILES_BASH_PROMPT (via env)"
+        echo "Current Bash prompt: $current (options: starship, parrot)"
+        ;;
+      *)
+        echo "Usage: dot prompt [starship|parrot|status]" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  overrides)
+    exec "$REPO/scripts/extract-local-overrides.sh" "$@"
+    ;;
+  install)
+    exec "$REPO/install.sh" "$@"
+    ;;
+  validate|test)
+    exec "$REPO/scripts/validate-install.sh" "$@"
+    ;;
+  status|st)
+    if [[ -d "$REPO/.git" || -f "$REPO/.git" ]]; then
+      exec git -C "$REPO" status "$@"
+    else
+      echo "⚠ $REPO was synced without .git metadata (tarball/sandbox mode)."
+      exec "$REPO/scripts/doctor.sh"
+    fi
+    ;;
+  cd|path)
+    echo "$REPO"
+    ;;
+  --help|-h|help)
+    usage
+    ;;
+  agent)
+    cd "$REPO"
+    DOCTOR_JSON="$("$REPO/scripts/doctor.sh" --json 2>/dev/null || true)"
+    USER_PROMPT="$*"
+    if command -v pi >/dev/null 2>&1; then
+      if [[ -n "$USER_PROMPT" ]]; then
+        exec pi "Current machine state from 'dot doctor --json': $DOCTOR_JSON. Task: $USER_PROMPT"
+      else
+        exec pi
+      fi
+    elif command -v claude >/dev/null 2>&1; then
+      if [[ -n "$USER_PROMPT" ]]; then
+        exec claude "Current machine state from 'dot doctor --json': $DOCTOR_JSON. Task: $USER_PROMPT"
+      else
+        exec claude
+      fi
+    elif command -v agy >/dev/null 2>&1; then
+      exec agy "$REPO"
+    else
+      echo "No agent CLI (pi, claude, agy) found on PATH. Run 'dot bootstrap' first." >&2
+      exit 1
+    fi
+    ;;
+  *)
+    # Treat unknown subcommands as natural-language prompts for the agent
+    cd "$REPO"
+    exec "$0" agent "$cmd" "$@"
+    ;;
+esac
