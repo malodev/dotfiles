@@ -1,0 +1,77 @@
+{
+  "$help": "https://aka.ms/terminal-documentation",
+  "$schema": "https://aka.ms/terminal-profiles-schema",
+  "copyFormatting": "none",
+  "copyOnSelect": false,
+  "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+  "launchMode": "maximized",
+  " profiles": {
+    "defaults": {
+      "colorScheme": "Catppuccin Mocha",
+      "cursorShape": "bar",
+      "font": {
+        "face": "JetBrainsMono Nerd Font",
+        "size": 11.0
+      },
+      "opacity": 95,
+      "padding": "8, 8, 8, 8",
+      "scrollbarState": "hidden",
+      "useAcrylic": false
+    },
+    "list": [
+      {
+        "commandline": "pwsh.exe -NoLogo",
+        "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+        "hidden": false,
+        "name": "PowerShell 7"
+      },
+      {
+        "commandline": "nu.exe",
+        "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}",
+        "hidden": false,
+        "name": "Nushell"
+      },
+      {
+        "commandline": "powershell.exe -NoLogo",
+        "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+        "hidden": false,
+        "name": "Windows PowerShell"
+      }
+    ]
+  },
+  "schemes": [
+    {
+      "name": "Catppuccin Mocha",
+      "background": "#1E1E2E",
+      "black": "#45475A",
+      "blue": "#89B4FA",
+      "brightBlack": "#585B70",
+      "brightBlue": "#89B4FA",
+      "brightCyan": "#94E2D5",
+      "brightGreen": "#A6E3A1",
+      "brightPurple": "#F5C2E7",
+      "brightRed": "#F38BA8",
+      "brightWhite": "#A6ADC8",
+      "brightYellow": "#F9E2AF",
+      "cursorColor": "#F5E0DC",
+      "cyan": "#94E2D5",
+      "foreground": "#CDD6F4",
+      "green": "#A6E3A1",
+      "purple": "#F5C2E7",
+      "red": "#F38BA8",
+      "selectionBackground": "#585B70",
+      "white": "#BAC2DE",
+      "yellow": "#F9E2AF"
+    }
+  ],
+  "actions": [
+    { "command": "paste", "keys": "ctrl+shift+v" },
+    { "command": { "action": "copy", "singleLine": false }, "keys": "ctrl+shift+c" },
+    { "command": { "action": "splitPane", "split": "auto", "splitMode": "duplicate" }, "keys": "alt+shift+d" },
+    { "command": "closePane", "keys": "ctrl+shift+w" },
+    { "command": { "action": "moveFocus", "direction": "left" }, "keys": "alt+h" },
+    { "command": { "action": "moveFocus", "direction": "down" }, "keys": "alt+j" },
+    { "command": { "action": "moveFocus", "direction": "up" }, "keys": "alt+k" },
+    { "command": { "action": "moveFocus", "direction": "right" }, "keys": "alt+l" }
+  ]
+}
