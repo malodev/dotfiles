@@ -264,9 +264,14 @@ if ($PublicKeyPath -and -not $PublicKey) {
     if (-not (Test-Path $PublicKeyPath)) {
         Write-Warn "Public key not found: $PublicKeyPath"
     } else {
-        $PublicKey = (Get-Content -Raw $PublicKeyPath).Trim()
+        # First usable line only: a .pub file can hold several keys or comments.
+        $PublicKey = (Get-Content $PublicKeyPath | Where-Object { $_ -match '^\s*(ssh-|ecdsa-|sk-)' } | Select-Object -First 1)
     }
 }
+
+# A key pasted from a wrapped line arrives with newlines inside it, and sshd then sees a
+# line that is only the key type and rejects the login. Collapse all whitespace.
+if ($PublicKey) { $PublicKey = ($PublicKey -replace '\s+', ' ').Trim() }
 
 if ($PublicKey) {
     $isAdminUser = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)

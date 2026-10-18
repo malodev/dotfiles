@@ -113,8 +113,15 @@ if ($env:OS -ne "Windows_NT") {
     return
 }
 
-$blocking = @("Restricted", "AllSigned")
-$current  = Get-ExecutionPolicy
+$blocking = @("Restricted", "AllSigned", "Undefined")
+
+# Only the persistent scopes matter: this script is normally started with
+# -ExecutionPolicy Bypass, which sets the Process scope and hides the real state, so
+# looking at Get-ExecutionPolicy alone reported "already allows local scripts" and left
+# every new shell Restricted. Undefined means Restricted as well, it is just not written
+# down anywhere.
+$current = Get-ExecutionPolicy -Scope CurrentUser
+if ($current -eq "Undefined") { $current = Get-ExecutionPolicy -Scope LocalMachine }
 
 if ($current -notin $blocking) {
     Write-Ok "Execution policy already allows local scripts ($current)"

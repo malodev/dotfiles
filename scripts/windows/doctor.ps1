@@ -34,7 +34,14 @@ function Get-LinkStatus([string]$Path) {
 
 $IsWindowsHost = ($env:OS -eq "Windows_NT")
 $EffectivePolicy = if ($IsWindowsHost) { Get-ExecutionPolicy } else { "n/a" }
-$ProfileCanLoad = if (-not $IsWindowsHost) { $true } else { $EffectivePolicy -notin @("Restricted", "AllSigned") }
+# Whether the profile can load depends on the persistent scopes, not on the effective
+# policy of this process: a shell started with -ExecutionPolicy Bypass reports Bypass
+# while every new shell is still Restricted.
+$PersistentPolicy = if (-not $IsWindowsHost) { "n/a" } else {
+    $p = Get-ExecutionPolicy -Scope CurrentUser
+    if ($p -eq "Undefined") { Get-ExecutionPolicy -Scope LocalMachine } else { $p }
+}
+$ProfileCanLoad = if (-not $IsWindowsHost) { $true } else { $PersistentPolicy -notin @("Restricted", "AllSigned", "Undefined") }
 $PolicyScopes = [ordered]@{}
 if ($IsWindowsHost) {
     foreach ($scope in @("MachinePolicy", "UserPolicy", "Machine", "User", "Process")) {
@@ -66,6 +73,7 @@ $Report = [ordered]@{
     }
     execution_policy = [ordered]@{
         effective = $EffectivePolicy
+        persistent = $PersistentPolicy
         profile_can_load = $ProfileCanLoad
         scopes = $PolicyScopes
     }
@@ -93,7 +101,8 @@ foreach ($k in $Report.links.Keys) {
 }
 Write-Host ""
 Write-Host "=== Execution Policy ===" -ForegroundColor Cyan
-Write-Host ("  Effective:       {0}" -f $EffectivePolicy)
+Write-Host ("  Effective:       {0} (this process)" -f $EffectivePolicy)
+Write-Host ("  For new shells:  {0}" -f $PersistentPolicy)
 Write-Host ("  Profile loads:   {0}" -f $ProfileCanLoad)
 if (-not $ProfileCanLoad) {
     Write-Host "  [!] The PowerShell profile cannot load. Run" -ForegroundColor Yellow
