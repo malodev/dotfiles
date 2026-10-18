@@ -113,20 +113,52 @@ $PolicyScript = Join-Path $RepoRoot "scripts\windows\ensure-execution-policy.ps1
 if ($DryRun) { Invoke-DotfileScript $PolicyScript "-DryRun" } else { Invoke-DotfileScript $PolicyScript }
 
 # 2. Ensure `mise` is installed
+#    winget is per-user and often missing on a locked-down or standard account, and there is
+#    no official mise.run one-liner for Windows (https://mise.run/pwsh is a 404), so the last
+#    fallback is the release zip from GitHub unpacked into %LOCALAPPDATA%\mise.
 Update-SessionPath
 if (Get-Command mise -ErrorAction SilentlyContinue) {
     Write-Ok "mise already installed: $((Get-Command mise).Source)"
 } else {
     Write-Info "Installing mise for Windows..."
     if ($DryRun) {
-        Write-Host "  [dry-run] Install mise via winget or https://mise.run/pwsh" -ForegroundColor Magenta
+        Write-Host "  [dry-run] Install mise via winget, scoop or the GitHub release zip" -ForegroundColor Magenta
     } else {
         if (Get-Command winget -ErrorAction SilentlyContinue) {
             winget install jdx.mise --accept-source-agreements --accept-package-agreements
         } elseif (Get-Command scoop -ErrorAction SilentlyContinue) {
             scoop install mise
         } else {
-            Invoke-RestMethod https://mise.run/pwsh | Invoke-Expression
+            $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "windows-arm64" } else { "windows-x64" }
+            $asset = $null
+            try {
+                $release = Invoke-RestMethod -Uri "https://api.github.com/repos/jdx/mise/releases/latest" -UseBasicParsing
+                $asset = $release.assets | Where-Object { $_.name -like "*$arch.zip" } | Select-Object -First 1
+            } catch {
+                Write-Warn "Could not ask GitHub for the latest mise release: $($_.Exception.Message)"
+            }
+
+            if (-not $asset) {
+                Write-Warn "Install mise by hand: download the $arch.zip from"
+                Write-Warn "  https://github.com/jdx/mise/releases, put mise\bin on your PATH,"
+                Write-Warn "  or use 'winget install jdx.mise' / 'scoop install mise', then re-run this script."
+            } else {
+                $zip     = Join-Path $env:TEMP "mise-$arch.zip"
+                $extract = Join-Path $env:TEMP ("mise-" + (Get-Random))
+                $dest    = Join-Path $env:LOCALAPPDATA "mise"
+                Write-Info "Downloading mise from $($asset.browser_download_url)"
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+                Expand-Archive -Path $zip -DestinationPath $extract -Force
+                New-Item -ItemType Directory -Force -Path $dest | Out-Null
+                Copy-Item (Join-Path $extract "mise\*") $dest -Recurse -Force
+                $miseBin = Join-Path $dest "bin"
+                $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+                if ($userPath -notlike "*$miseBin*") {
+                    [Environment]::SetEnvironmentVariable("Path", "$miseBin;$userPath", "User")
+                }
+                Write-Ok "mise installed in $miseBin (added to the user PATH)"
+            }
         }
         Update-SessionPath
     }
