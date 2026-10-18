@@ -1,18 +1,26 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Enable the built-in OpenSSH server on Windows so the machine can be driven over SSH.
+    Enable an SSH server on Windows so the machine can be driven over SSH.
 .DESCRIPTION
-    Installs the OpenSSH Server optional feature if it is missing, sets the sshd service
-    to start automatically, opens the firewall for the chosen port, points the SSH
-    default shell at PowerShell so the managed profile applies to SSH sessions too, and
-    optionally authorises a public key.
+    Installs the server, sets the sshd service to start automatically, opens the
+    firewall for the chosen port, points the SSH default shell at PowerShell so the
+    managed profile applies to SSH sessions too, and optionally authorises a public key.
 
-    Everything here needs Administrator rights once: installing the capability, the
-    service and the firewall rule. Without elevation the script re-runs itself through
-    UAC; on a machine where the account has no admin rights at all (a locked-down school
-    laptop) it says so and lists what to ask IT for, plus the alternatives that need no
-    admin.
+    Two install paths, because the first one can hang:
+      1. The OpenSSH Server optional feature, which downloads from Windows Update. It
+         is started as a background job with a timeout (-CapabilityTimeoutSeconds,
+         default 180): on a machine where Windows Update is slow, blocked or pointed at
+         a WSUS server it can otherwise sit there forever.
+      2. If that does not produce an installed feature, the Win32-OpenSSH release zip
+         from GitHub is installed into Program Files\OpenSSH with install-sshd.ps1 and
+         generated host keys. No Windows Update involved.
+    -SkipCapability goes straight to path 2.
+
+    Everything here needs Administrator rights once: installing the server, the service
+    and the firewall rule. Without elevation the script re-runs itself through UAC; on a
+    machine where the account has no admin rights at all (a locked-down school laptop)
+    it says so and lists what to ask IT for, plus the alternatives that need no admin.
 
     Parameters survive the elevated re-run through environment variables, so
     `-PublicKey`/`-Port` do not have to be repeated.
@@ -38,8 +46,16 @@
     as Tailscale, which brings its own rules).
 .PARAMETER KeepDefaultShell
     Do not touch HKLM:\SOFTWARE\OpenSSH DefaultShell.
+.PARAMETER SkipCapability
+    Skip the Windows Update feature and install from the Win32-OpenSSH zip.
+.PARAMETER CapabilityTimeoutSeconds
+    How long to let the Windows Update feature install run before falling back.
+.PARAMETER OpenSshZipUrl
+    Release zip used by the fallback path.
 .EXAMPLE
     .\enable-ssh-server.ps1 -PublicKeyPath "$HOME\.ssh\id_ed25519.pub"
+.EXAMPLE
+    .\enable-ssh-server.ps1 -SkipCapability -PublicKey "ssh-ed25519 AAAA... me@host"
 .EXAMPLE
     .\enable-ssh-server.ps1 -DryRun
 #>
@@ -51,7 +67,10 @@ param(
     [string]$PublicKeyPath,
     [int]$Port = 22,
     [switch]$SkipFirewall,
-    [switch]$KeepDefaultShell
+    [switch]$KeepDefaultShell,
+    [switch]$SkipCapability,
+    [int]$CapabilityTimeoutSeconds = 180,
+    [string]$OpenSshZipUrl = "https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64.zip"
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,13 +88,14 @@ if ($env:OS -ne "Windows_NT") {
 if ($env:DOTFILES_SSH_PORT) { $Port = [int]$env:DOTFILES_SSH_PORT }
 if ($env:DOTFILES_SSH_PUBKEY) { $PublicKey = $env:DOTFILES_SSH_PUBKEY }
 if ($env:DOTFILES_SSH_DRYRUN -eq "1") { $DryRun = $true }
+if ($env:DOTFILES_SSH_SKIPCAP -eq "1") { $SkipCapability = $true }
 
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $IsAdmin) {
     if ($DryRun -or $NoElevate) {
-        Write-Warn "Administrator rights are needed to install the OpenSSH Server feature,"
-        Write-Warn "start the sshd service and open the firewall. Not elevating."
+        Write-Warn "Administrator rights are needed to install the SSH server, start the"
+        Write-Warn "sshd service and open the firewall. Not elevating."
         Write-Info "Alternatives without admin rights:"
         Write-Info "  1. Ask IT to install the 'OpenSSH Server' optional feature and start sshd"
         Write-Info "  2. Tailscale SSH: 'tailscale up --ssh' reaches this machine over the tailnet"
@@ -85,6 +105,7 @@ if (-not $IsAdmin) {
     Write-Info "Asking for Administrator rights (UAC)..."
     $env:DOTFILES_SSH_PORT = "$Port"
     if ($PublicKey) { $env:DOTFILES_SSH_PUBKEY = $PublicKey }
+    if ($SkipCapability) { $env:DOTFILES_SSH_SKIPCAP = "1" }
 
     # Re-run this same file elevated. The command is passed base64-encoded so the
     # quoting survives, and the file is read and evaluated rather than run as a script:
@@ -104,26 +125,80 @@ if (-not $IsAdmin) {
 
 Write-Ok "Running with Administrator rights"
 
-# 1. OpenSSH Server feature
-$capability = Get-WindowsCapability -Online -Name "OpenSSH.Server*" | Select-Object -First 1
-if (-not $capability) {
-    Write-Warn "This Windows build does not offer the OpenSSH.Server capability"
-    return
+# The Win32-OpenSSH release ships .ps1 helpers, and a Group Policy execution policy
+# would refuse to run them as files: read and evaluate them instead.
+function Invoke-LocalScript {
+    param([string]$Path, [string]$Arguments = "")
+    if ((Get-ExecutionPolicy) -notin @("Restricted", "AllSigned")) {
+        if ($Arguments) { Invoke-Expression ("& '" + $Path + "' " + $Arguments) } else { & $Path }
+        return
+    }
+    $body = (Get-Content -Raw $Path) -replace '(?m)^#Requires.*$', ''
+    Invoke-Expression ("& { " + $body + " } " + $Arguments)
 }
 
-if ($capability.State -eq "Installed") {
-    Write-Ok "OpenSSH Server feature already installed"
-} elseif ($DryRun) {
-    Write-Info "[dry-run] Add-WindowsCapability -Online -Name $($capability.Name) (state: $($capability.State))"
+# 1. Install the server: Windows Update feature first, Win32-OpenSSH release as fallback.
+$installed = $false
+
+if ($SkipCapability) {
+    Write-Info "Skipping the Windows Update feature (-SkipCapability)"
 } else {
-    Write-Info "Installing the OpenSSH Server feature (needs Windows Update)..."
+    $capability = Get-WindowsCapability -Online -Name "OpenSSH.Server*" | Select-Object -First 1
+    if (-not $capability) {
+        Write-Warn "This Windows build does not offer the OpenSSH.Server capability"
+    } elseif ($capability.State -eq "Installed") {
+        Write-Ok "OpenSSH Server feature already installed"
+        $installed = $true
+    } elseif ($DryRun) {
+        Write-Info "[dry-run] Add-WindowsCapability -Online -Name $($capability.Name) (state: $($capability.State))"
+        $installed = $true
+    } else {
+        Write-Info "Installing the OpenSSH Server feature (Windows Update, up to $CapabilityTimeoutSeconds s)..."
+        $capabilityName = $capability.Name
+        $job = Start-Job -ScriptBlock { param($n) Add-WindowsCapability -Online -Name $n } -ArgumentList $capabilityName
+        if (Wait-Job $job -Timeout $CapabilityTimeoutSeconds) {
+            Receive-Job $job -ErrorAction SilentlyContinue | Out-Null
+            $state = (Get-WindowsCapability -Online -Name $capabilityName).State
+            if ($state -eq "Installed") {
+                Write-Ok "OpenSSH Server feature installed"
+                $installed = $true
+            } else {
+                Write-Warn "The feature is still '$state' after the install returned"
+            }
+        } else {
+            Write-Warn "Windows Update did not finish within $CapabilityTimeoutSeconds s - stopping it"
+            Stop-Job $job -ErrorAction SilentlyContinue
+        }
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if (-not $installed -and $DryRun) {
+    Write-Info "[dry-run] download $OpenSshZipUrl and install it into $env:ProgramFiles\OpenSSH"
+    $installed = $true
+}
+
+if (-not $installed) {
+    Write-Info "Falling back to the Win32-OpenSSH release (no Windows Update needed)..."
     try {
-        Add-WindowsCapability -Online -Name $capability.Name | Out-Null
-        Write-Ok "OpenSSH Server feature installed"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $zip     = Join-Path $env:TEMP "OpenSSH-Win64.zip"
+        $extract = Join-Path $env:TEMP ("openssh-" + (Get-Random))
+        $target  = Join-Path $env:ProgramFiles "OpenSSH"
+        Invoke-WebRequest -Uri $OpenSshZipUrl -OutFile $zip -UseBasicParsing
+        Expand-Archive -Path $zip -DestinationPath $extract -Force
+        New-Item -ItemType Directory -Force -Path $target | Out-Null
+        Copy-Item (Join-Path $extract "OpenSSH-Win64\*") $target -Recurse -Force
+        & (Join-Path $target "ssh-keygen.exe") -A | Out-Null
+        Invoke-LocalScript (Join-Path $target "install-sshd.ps1")
+        $fixPerms = Join-Path $target "FixHostFilePermissions.ps1"
+        if (Test-Path $fixPerms) { Invoke-LocalScript $fixPerms "-Confirm:`$false" }
+        Write-Ok "Win32-OpenSSH installed in $target (host keys generated)"
+        $installed = $true
     } catch {
-        Write-Warn "Could not install the feature: $($_.Exception.Message)"
-        Write-Warn "Windows Update may be blocked here. Ask IT to install 'OpenSSH Server',"
-        Write-Warn "or use Tailscale SSH ('tailscale up --ssh') which needs no feature."
+        Write-Warn "Could not install from $OpenSshZipUrl : $($_.Exception.Message)"
+        Write-Warn "Ask IT to install the 'OpenSSH Server' optional feature, or use"
+        Write-Warn "Tailscale SSH ('tailscale up --ssh'), which needs no feature at all."
         return
     }
 }
@@ -132,10 +207,16 @@ if ($capability.State -eq "Installed") {
 if ($DryRun) {
     Write-Info "[dry-run] Set-Service sshd -StartupType Automatic; Start-Service sshd"
 } else {
-    Set-Service -Name sshd -StartupType Automatic
-    if ((Get-Service sshd).Status -ne "Running") { Start-Service sshd }
-    $svc = Get-Service sshd
-    Write-Ok "sshd service is $($svc.Status) and starts automatically"
+    try {
+        Set-Service -Name sshd -StartupType Automatic -ErrorAction Stop
+        if ((Get-Service sshd).Status -ne "Running") { Start-Service sshd }
+        $svc = Get-Service sshd
+        Write-Ok "sshd service is $($svc.Status) and starts automatically"
+    } catch {
+        Write-Warn "Could not start the sshd service: $($_.Exception.Message)"
+        Write-Warn "Run '$env:ProgramFiles\OpenSSH\install-sshd.ps1' by hand and check the service."
+        return
+    }
 }
 
 # 3. Firewall
