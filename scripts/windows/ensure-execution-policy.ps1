@@ -44,9 +44,12 @@ param([switch]$DryRun, [switch]$SkipWindowsTerminal)
 $ErrorActionPreference = "Stop"
 
 # Same DOTFILES_REPO fallback as bootstrap.ps1: under a Group Policy this file is read
-# and evaluated instead of executed, which leaves $MyInvocation.MyCommand.Path empty.
+# and evaluated instead of executed, which leaves $MyInvocation.MyCommand.Path empty, and
+# then the launchers cannot be found in the repository. $HOME\dotfiles is where the
+# bootstrap puts it.
 $RepoRoot = if ($env:DOTFILES_REPO) { $env:DOTFILES_REPO }
             elseif ($MyInvocation.MyCommand.Path) { (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path }
+            elseif (Test-Path (Join-Path $HOME "dotfiles")) { Join-Path $HOME "dotfiles" }
             else { (Get-Location).Path }
 
 function Write-Info($msg) { Write-Host "  * $msg" -ForegroundColor Cyan }
