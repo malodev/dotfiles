@@ -160,6 +160,14 @@ Set-FileLinkOrCopy -Source (Join-Path $RepoRoot "pi\.config\pi-three-agent-team\
 Set-FileLinkOrCopy -Source (Join-Path $RepoRoot "pi\.config\pi-inference\client.json") -Target (Join-Path $HOME ".config\pi-inference\client.json")
 Set-FileLinkOrCopy -Source (Join-Path $RepoRoot "pi\.config\pi\web-search.json") -Target (Join-Path $HOME ".config\pi\web-search.json")
 
+# The profile is dot-sourced at every shell start, so the execution policy has to
+# allow local unsigned scripts or Windows PowerShell reports "running scripts is
+# disabled on this system" before any of this config is read.
+$PolicyScript = Join-Path $RepoRoot "scripts\windows\ensure-execution-policy.ps1"
+if (Test-Path $PolicyScript) {
+    if ($DryRun) { & $PolicyScript -DryRun } else { & $PolicyScript }
+}
+
 $PwshProfileSrc = Join-Path $RepoRoot "windows\powershell\Microsoft.PowerShell_profile.ps1"
 if ($PROFILE) {
     Set-FileLinkOrCopy -Source $PwshProfileSrc -Target $PROFILE

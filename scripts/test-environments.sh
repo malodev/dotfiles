@@ -114,6 +114,17 @@ else
   fail "non-ASCII bytes in PowerShell scripts:$ps1_nonascii"
 fi
 
+# The profile is dot-sourced at every shell start and cannot load while the execution
+# policy is Restricted, so both entry points have to run the helper that fixes it.
+policy_refs=0
+grep -q "ensure-execution-policy" "$REPO/bootstrap.ps1" && policy_refs=$((policy_refs + 1))
+grep -q "ensure-execution-policy" "$REPO/scripts/windows/link-windows.ps1" && policy_refs=$((policy_refs + 1))
+if [[ -f "$REPO/scripts/windows/ensure-execution-policy.ps1" && $policy_refs -eq 2 ]]; then
+  pass "execution-policy helper exists and both bootstrap.ps1 and link-windows.ps1 run it"
+else
+  fail "execution-policy helper missing or not wired into both entry points (refs=$policy_refs)"
+fi
+
 #-----------------------------------------------------------------------------
 # 2. Isolated Clean-$HOME Sandbox Simulation (Zero Host Mutation)
 #-----------------------------------------------------------------------------
@@ -390,6 +401,14 @@ if command -v pwsh >/dev/null 2>&1; then
     pass "PowerShell AST parse clean for every .ps1"
   else
     fail "PowerShell parse errors in:$ps1_parse_fail"
+  fi
+
+  # bootstrap.ps1 and link-windows.ps1 call it on every platform, so it has to exit
+  # cleanly when it is not running on Windows.
+  if pwsh -NoProfile -File "$REPO/scripts/windows/ensure-execution-policy.ps1" >/dev/null 2>&1; then
+    pass "ensure-execution-policy.ps1 is a clean no-op on a non-Windows host"
+  else
+    fail "ensure-execution-policy.ps1 failed on a non-Windows host"
   fi
 else
   printf "  \033[1;33m•\033[0m pwsh not on PATH: skipped the PowerShell AST parse (section 1 still checks ASCII purity)\n"

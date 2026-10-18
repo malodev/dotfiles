@@ -82,6 +82,14 @@ if ($DryRun) {
     Write-Ok "Configured XDG_CONFIG_HOME=$XdgConfig and updated User PATH"
 }
 
+# 1b. Allow local scripts so the profile can be dot-sourced at every shell start.
+#     Windows clients default to Restricted, which blocks the profile and prints
+#     "running scripts is disabled on this system" at every prompt.
+$PolicyScript = Join-Path $RepoRoot "scripts\windows\ensure-execution-policy.ps1"
+if (Test-Path $PolicyScript) {
+    if ($DryRun) { & $PolicyScript -DryRun } else { & $PolicyScript }
+}
+
 # 2. Ensure `mise` is installed
 Update-SessionPath
 if (Get-Command mise -ErrorAction SilentlyContinue) {

@@ -32,6 +32,16 @@ function Get-LinkStatus([string]$Path) {
     return "real-file-or-dir"
 }
 
+$IsWindowsHost = ($env:OS -eq "Windows_NT")
+$EffectivePolicy = if ($IsWindowsHost) { Get-ExecutionPolicy } else { "n/a" }
+$ProfileCanLoad = if (-not $IsWindowsHost) { $true } else { $EffectivePolicy -notin @("Restricted", "AllSigned") }
+$PolicyScopes = [ordered]@{}
+if ($IsWindowsHost) {
+    foreach ($scope in @("MachinePolicy", "UserPolicy", "Machine", "User", "Process")) {
+        $PolicyScopes[$scope.ToLower()] = Get-ExecutionPolicy -Scope $scope
+    }
+}
+
 $Report = [ordered]@{
     repo = $RepoRoot
     platform = [ordered]@{
@@ -54,6 +64,11 @@ $Report = [ordered]@{
         nushell = Get-LinkStatus (Join-Path $HOME ".config\nushell")
         pwsh_profile = if ($PROFILE) { Get-LinkStatus $PROFILE } else { "absent" }
     }
+    execution_policy = [ordered]@{
+        effective = $EffectivePolicy
+        profile_can_load = $ProfileCanLoad
+        scopes = $PolicyScopes
+    }
 }
 
 if ($Json) {
@@ -75,4 +90,12 @@ Write-Host ""
 Write-Host "=== Links ===" -ForegroundColor Cyan
 foreach ($k in $Report.links.Keys) {
     Write-Host ("  {0,-16} {1}" -f $k, $Report.links[$k])
+}
+Write-Host ""
+Write-Host "=== Execution Policy ===" -ForegroundColor Cyan
+Write-Host ("  Effective:       {0}" -f $EffectivePolicy)
+Write-Host ("  Profile loads:   {0}" -f $ProfileCanLoad)
+if (-not $ProfileCanLoad) {
+    Write-Host "  [!] The PowerShell profile cannot load. Run" -ForegroundColor Yellow
+    Write-Host "      scripts\windows\ensure-execution-policy.ps1, or: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned" -ForegroundColor Yellow
 }
