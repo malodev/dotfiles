@@ -140,6 +140,38 @@ describe("shellLeaseClient", () => {
   });
 });
 
+describe("lease owner", () => {
+  const ownerOf = async (config: Parameters<typeof shellLeaseClient>[0]) => {
+    let owner = "";
+    const client = shellLeaseClient(config, async (_command, _args, env) => { owner = String(env.PI_INFERENCE_OWNER); });
+    await client.acquire();
+    return owner;
+  };
+  const base = { command: "pi-inference", mode: "team", ttlSeconds: 300, acquireTimeoutSeconds: 210 };
+
+  it("names the host, pid, phase and project, so a holder can be found from any machine", async () => {
+    const owner = await ownerOf({ ...base, label: "plan", project: "foreman-test" });
+    assert.match(owner, new RegExp(`^[A-Za-z0-9._-]+:${process.pid}:foreman:plan:foreman-test:[0-9a-f]{8}$`));
+  });
+
+  it("is stable for one client, different between clients, and defaults to a run", async () => {
+    const calls: string[] = [];
+    const client = shellLeaseClient({ ...base, project: "p" }, async (_c, _a, env) => { calls.push(String(env.PI_INFERENCE_OWNER)); });
+    await client.acquire();
+    await client.renew();
+    assert.equal(calls[0], calls[1]);
+    assert.match(calls[0], /:foreman:run:p:/);
+    assert.notEqual(await ownerOf({ ...base, project: "p" }), calls[0]);
+  });
+
+  it("only uses characters the manager accepts, and stays under its length limit", async () => {
+    const owner = await ownerOf({ ...base, label: "plan", project: "My Project (copy) é/ü #1 ".repeat(20) });
+    assert.match(owner, /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,239}$/);
+    assert.ok(owner.length <= 240);
+    assert.match(owner, /:foreman:plan:/);
+  });
+});
+
 describe("readHostMode", () => {
   it("returns the mode the manager reports", async () => {
     const seen: string[][] = [];

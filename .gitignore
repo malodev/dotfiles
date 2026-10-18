@@ -42,11 +42,20 @@ package-lock.json
 # deleteToLineStart) and that kept dirtying the tree. Shared defaults live in
 # keybindings.json.template and are seeded by scripts/init-pi-settings.sh.
 /pi/.pi/agent/keybindings.json
+
+# herdr's theme is a per-machine preference (this box pins tokyo-night while
+# Omarchy is on Ayaka), and config.toml is edited in place. Shared defaults
+# live in config.toml.template and are seeded by scripts/init-herdr-config.sh.
+/herdr/.config/herdr/config.toml
 /pi/.pi/agent/skills/omarchy-app
 /pi/.pi/agent/skills/omarchy
 /pi/.pi/agent/skills/diagnose-crash
 /pi/.pi/agent/extensions/mlxmon.ts
 /pi/.pi/agent/extensions/vllm-mlx.ts
+
+# Runs the web tools through Node instead of Ollama, with paths into one host's
+# pi install. Host-local for the same reason as mlxmon.ts and vllm-mlx.ts.
+/pi/.pi/agent/extensions/web-tools-no-ollama.ts
 
 # pi-web-access writes its cache next to web-search.json, so every search
 # dirties the working tree with files that are one machine's runtime state.

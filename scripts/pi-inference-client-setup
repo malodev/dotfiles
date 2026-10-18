@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Install and verify the bearer-only Pi inference client on a remote machine."""
+"""Install and verify the bearer-only Pi inference client on a remote machine.
+
+Verification switches the shared inference host between modes to smoke-test each
+managed model, then puts back the mode it found.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +23,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+
+# Stowed without tree folding, exactly as the installer does for pi, hyprland
+# and kitty (scripts/install/helpers.sh, stow_package_flags). Folding replaces
+# ~/.pi with a single symlink into the checkout, so every file the machine
+# writes there -- runtime state, extension node_modules -- lands in the repo.
+STOW_FLAGS = ["--no-folding"]
 
 CONTROL_STATUS_URL = "https://inference.malo.tn.it/v1/status"
 MODEL_URL = "https://llm.malo.tn.it/v1/chat/completions"
@@ -82,9 +92,12 @@ def stow_client(dotfiles: Path, home: Path, apply: bool) -> None:
     if not client_source.is_file():
         raise SetupError(f"The pi Stow package is missing from {dotfiles}")
     print("Previewing shared Pi client deployment:")
-    run(["stow", "--simulate", "--verbose=2", "--target", str(home), "pi"], cwd=dotfiles)
+    run(
+        ["stow", *STOW_FLAGS, "--simulate", "--verbose=2", "--target", str(home), "pi"],
+        cwd=dotfiles,
+    )
     if apply:
-        run(["stow", "--target", str(home), "pi"], cwd=dotfiles)
+        run(["stow", *STOW_FLAGS, "--target", str(home), "pi"], cwd=dotfiles)
 
 
 def install_credential(client: Path, name: str, destination: Path, source: Optional[Path]) -> None:
@@ -152,6 +165,33 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
         raise SetupError(f"Unauthenticated control request returned HTTP {unauthenticated}, expected 401")
     print(f"Control authentication: without bearer={unauthenticated}, with bearer=200")
 
+    # The inference host is shared, so hand back the mode it was found in --
+    # when the checks pass and when they fail.
+    started_in = host_mode(client)
+    print(f"Host mode at start: {started_in}")
+    try:
+        check_modes(args, client, home, control_token, model_key)
+    finally:
+        restore_mode(client, started_in)
+
+    print("REMOTE_INFERENCE_CLIENT_VERIFIED")
+
+
+def host_mode(client: Path) -> str:
+    status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
+    return status.get("mode", "unknown")
+
+
+def restore_mode(client: Path, mode: str) -> None:
+    try:
+        run([str(client), mode])
+        status = json.loads(run([str(client), "--json", "status"], capture=True).stdout)
+        print(f"\nRestored mode={status.get('mode', 'unknown')} (started in {mode}), services={status.get('services')}")
+    except Exception as exc:  # never mask a verification failure
+        print(f"  Warning: restoring mode {mode} failed: {exc}", file=sys.stderr)
+
+
+def check_modes(args: argparse.Namespace, client: Path, home: Path, control_token: str, model_key: str) -> None:
     owner = f"{socket.gethostname()}:client-setup:{uuid.uuid4().hex[:12]}"
 
     for mode, model_url, model_id in args.modes:
@@ -257,19 +297,13 @@ def verify(args: argparse.Namespace, client: Path, home: Path) -> None:
     if final_status.get("lease") is not None:
         raise SetupError("Verification left an inference lease active")
 
-    # Always restore team mode as the default
-    run([str(client), "team"])
-    final_mode = json.loads(run([str(client), "--json", "status"], capture=True).stdout).get("mode", "unknown")
-    print(f"\nRestored mode={final_mode}, services={final_status.get('services')}")
-    print("REMOTE_INFERENCE_CLIENT_VERIFIED")
-
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description="Stow, credential, and verify a remote bearer-only Pi inference client"
     )
     result.add_argument("--apply", action="store_true", help="Stow files and install missing credentials")
-    result.add_argument("--verify", action="store_true", help="run control, lease, and model smoke tests")
+    result.add_argument("--verify", action="store_true", help="run control, lease, and model smoke tests, then restore the mode the host was found in")
     result.add_argument("--with-pi", action="store_true", help="also run a complete Pi managed-model turn")
     result.add_argument("--control-token-file", type=Path, help="private mode-0600 source file")
     result.add_argument("--model-key-file", type=Path, help="private mode-0600 source file")
