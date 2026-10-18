@@ -50,6 +50,8 @@ Usage:
   dot doctor [--json]           Inspect OS capabilities, toolchain, symlinks, and drift
   dot bootstrap [--full]        Run Stage 0 seed (essential pi + nvim-lite by default; --full for all)
   dot link [--full] [args...]   Sync agent skills & seed pi templates (--full includes optional extensions)
+  dot deploy [--to HOST]        Push the repository to a target over SSH, seed it, verify it
+                                (--profile <name> reads hosts/<name>.env; --dry-run, --verify-only)
   dot nvim [lite|malo|status]   Show or switch the default Neovim configuration (lite vs malo)
   dot prompt [starship|parrot]  Show or switch the Bash prompt theme (default: starship)
   dot overrides [args...]       Inspect or extract machine-local overrides (--apply, --dry-run)
@@ -60,6 +62,197 @@ Usage:
   dot agent [prompt...]         Launch an AI coding agent (pi/claude/agy) in the repo with doctor context
   dot <prompt...>               Shorthand for 'dot agent <prompt...>'
 EOF
+}
+
+deploy_usage() {
+  cat <<EOF
+dot deploy — push these dotfiles to a machine you can reach over SSH
+
+Usage:
+  dot deploy --to <host> [options]
+  dot deploy --profile <name> [options]
+
+Options:
+  --to HOST          ssh destination, e.g. 192.168.6.30 or mauro@host
+  --profile NAME     defaults from hosts/NAME.env (HOST, USER, SSH_PORT, TRANSPORT,
+                     FULL, INSTALL_GROUPS, DIR)
+  --ssh-port N       ssh port (default 22)
+  --transport MODE   tar (default, nothing needed on the target) | clone (GitHub on the target)
+  --full             include the optional pi extension set / nvim-malo
+  --groups "a b c"   system installer groups to run after Stage 0 (needs sudo on the target)
+  --dir PATH         repository path on the target (default ~/dotfiles)
+  --dry-run          print the commands instead of running them (the verification probe
+                     still runs: it is read-only and shows the state before the change)
+  --verify-only      skip transport and bootstrap, just inspect the target
+  --json             print the target's doctor JSON verbatim
+EOF
+}
+
+# Stage 0 on a Windows target: the bootstrap is evaluated, not executed, so a Group Policy
+# that blocks script files cannot stop it. $env:DOTFILES_REPO covers the fact that
+# $MyInvocation.MyCommand.Path is empty when a script is read instead of run.
+deploy_windows_bootstrap() {
+  local dir="$1" flags="$2"
+  local ps="\$env:DOTFILES_REPO='$dir'; iex ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','')"
+  [[ "$flags" == *full* ]] && ps="\$env:DOTFILES_REPO='$dir'; iex ('& { ' + ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','') + ' } -Full')"
+  run_remote "powershell -NoLogo -NoProfile -Command \"$ps\""
+}
+
+deploy() {
+  local host="" user="" ssh_port="22" transport="tar" full="0" install_groups=""
+  local target_dir="" dry_run="0" verify_only="0" json="0" profile=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --to)          host="$2"; shift 2 ;;
+      --profile)     profile="$2"; shift 2 ;;
+      --ssh-port)    ssh_port="$2"; shift 2 ;;
+      --transport)   transport="$2"; shift 2 ;;
+      --full)        full="1"; shift ;;
+      --groups)      install_groups="$2"; shift 2 ;;
+      --dir)         target_dir="$2"; shift 2 ;;
+      --dry-run)     dry_run="1"; shift ;;
+      --verify-only) verify_only="1"; shift ;;
+      --json)        json="1"; shift ;;
+      -h|--help)     deploy_usage; return 0 ;;
+      *) echo "dot deploy: unknown option: $1" >&2; deploy_usage >&2; return 1 ;;
+    esac
+  done
+
+  if [[ -n "$profile" ]]; then
+    local pf="$REPO/hosts/$profile.env"
+    [[ -f "$pf" ]] || pf="$REPO/hosts/$profile.local.env"
+    [[ -f "$pf" ]] || { echo "dot deploy: no such profile: hosts/$profile.env" >&2; return 1; }
+    # The profile is a shell fragment. Declaring the names first keeps it from touching
+    # anything else in the environment.
+    # GROUPS is a bash special variable and cannot be assigned, hence INSTALL_GROUPS.
+    local HOST="" USER="" SSH_PORT="" TRANSPORT="" FULL="" INSTALL_GROUPS="" DIR=""
+    # shellcheck disable=SC1090
+    source "$pf"
+    host="${host:-${USER:+$USER@}${HOST}}"
+    ssh_port="${SSH_PORT:-$ssh_port}"
+    transport="${TRANSPORT:-$transport}"
+    [[ "${FULL:-0}" == "1" ]] && full="1"
+    install_groups="${install_groups:-${INSTALL_GROUPS:-}}"
+    target_dir="${target_dir:-${DIR:-}}"
+  fi
+
+  if [[ -n "$profile" && -z "$host" ]]; then
+    echo "dot deploy: profile hosts/$profile.env has no HOST; set it there or pass --to" >&2
+    return 1
+  fi
+  [[ -n "$host" ]] || { echo "dot deploy: --to <host> or --profile <name> is required" >&2; deploy_usage >&2; return 1; }
+  target_dir="${target_dir:-~/dotfiles}"
+
+  local -a ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15)
+  [[ "$ssh_port" != "22" ]] && ssh_cmd+=(-p "$ssh_port")
+
+  local deploy_failed=0
+
+  run_remote() {
+    if [[ "$dry_run" == "1" ]]; then
+      printf '  [dry-run] ssh %s: %s\n' "$host" "$1"
+    elif ! "${ssh_cmd[@]}" "$host" "$1"; then
+      # Keep going: the verification step below is what tells the caller where it ended up.
+      echo "  [!] remote command failed (exit $?)" >&2
+      deploy_failed=1
+    fi
+  }
+
+  echo "── dot deploy → $host ──"
+
+  # 1. What is on the other side? uname answers on Unix, PowerShell on Windows.
+  local platform="unix" os
+  # `uname` answers on Unix, fails on Windows (where the default shell is PowerShell), and a
+  # failing probe must not abort the deploy: set -e plus pipefail would end the script here.
+  os="$("${ssh_cmd[@]}" "$host" 'uname -s 2>/dev/null' 2>/dev/null | tr -d '\r' || true)"
+  case "$os" in
+    Linux|Darwin|FreeBSD|OpenBSD|NetBSD) platform="unix"; echo "  target:   $os" ;;
+    *) if "${ssh_cmd[@]}" "$host" 'powershell -NoLogo -NoProfile -Command exit 0' >/dev/null 2>&1; then
+         platform="windows"; echo "  target:   Windows"
+       else
+         echo "  [!] uname said '$os' and PowerShell is not there either; assuming unix" >&2
+       fi ;;
+  esac
+  echo "  platform: $platform"
+  [[ -n "$install_groups" ]] && echo "  groups:   $install_groups (system layer)"
+
+  # 2. Transport
+  if [[ "$verify_only" != "1" ]]; then
+    case "$transport" in
+      tar)
+        if [[ "$platform" == "windows" ]]; then
+          echo "  [!] tar transport is not implemented for Windows: use --transport clone" >&2
+        else
+          echo "  transport: tar (no git needed on the target)"
+          if [[ "$dry_run" == "1" ]]; then
+            printf '  [dry-run] COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . | ssh %s "mkdir -p %s && tar -xzf - -C %s"\n' "$host" "$target_dir" "$target_dir"
+          else
+            # COPYFILE_DISABLE keeps macOS tar from shipping AppleDouble ._* files, which
+            # otherwise land in the target as a thousand junk files.
+            COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . \
+              | "${ssh_cmd[@]}" "$host" "mkdir -p $target_dir && tar -xzf - -C $target_dir"
+          fi
+        fi
+        ;;
+      clone)
+        echo "  transport: clone (needs GitHub on the target)"
+        run_remote "if [ -d $target_dir/.git ]; then git -C $target_dir pull --ff-only; else git clone https://github.com/malodev/dotfiles.git $target_dir; fi"
+        ;;
+      *) echo "dot deploy: unknown transport '$transport' (tar|clone)" >&2; return 1 ;;
+    esac
+
+    # 3. Stage 0
+    echo "  bootstrap:"
+    local flags=""
+    [[ "$full" == "1" ]] && flags="--full"
+    if [[ "$platform" == "windows" ]]; then
+      deploy_windows_bootstrap '$env:USERPROFILE\dotfiles' "$flags"
+    else
+      run_remote "cd $target_dir && bash ./bootstrap.sh $flags"
+    fi
+
+    # 4. Optional system layer, only when the caller asked for groups
+    if [[ -n "$install_groups" ]]; then
+      echo "  system layer:"
+      run_remote "cd $target_dir && sudo ./install.sh $install_groups"
+    fi
+  fi
+
+  # 5. Verify: the target's own doctor, summarised (or verbatim with --json)
+  echo "  verify:"
+  local doctor_json=""
+  if [[ "$platform" == "windows" ]]; then
+    doctor_json="$("${ssh_cmd[@]}" "$host" 'dot doctor -Json' 2>/dev/null || true)"
+  else
+    doctor_json="$("${ssh_cmd[@]}" "$host" "cd $target_dir && ./local-bin/.local/bin/dot doctor --json" 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$doctor_json" ]]; then
+    echo "  [!] the target did not answer with doctor JSON" >&2
+    return 1
+  fi
+  # A PowerShell host can print a profile warning before the JSON (mise does, for one);
+  # everything up to the opening brace is noise.
+  doctor_json="$(printf '%s\n' "$doctor_json" | sed -n '/^{/,$p')"
+  if [[ "$json" == "1" ]]; then
+    printf '%s\n' "$doctor_json"
+  elif command -v jq >/dev/null 2>&1; then
+    printf '%s\n' "$doctor_json" | jq -r '
+      "  os:        " + (.platform.os // "?") + " / " + (.platform.distro // "?") + " (" + (.platform.recommended_profile // "?") + ")",
+      "  tools:     missing: " + (([.tools | to_entries[] | select(.value == false) | .key] | join(", ")) // "none"),
+      "  agents:    pi: " + ((.agents.pi // "absent") | tostring),
+      "  providers: ready: " + (if .providers.ready == null then "?" else (.providers.ready | tostring) end),
+      "  profile:   can_load: " + (if .execution_policy.profile_can_load == null then "?" else (.execution_policy.profile_can_load | tostring) end),
+      "  drift:     " + ((.drift.git_branch // "?") | tostring) + " dirty: " + ((.drift.git_dirty_files // 0) | tostring)'
+  else
+    printf '%s\n' "$doctor_json"
+  fi
+
+  if [[ "$deploy_failed" == "1" ]]; then
+    echo "  [!] something on $host failed: see the messages above" >&2
+    return 1
+  fi
 }
 
 cmd="${1:-doctor}"
@@ -174,6 +367,9 @@ case "$cmd" in
       echo "No agent CLI (pi, claude, agy) found on PATH. Run 'dot bootstrap' first." >&2
       exit 1
     fi
+    ;;
+  deploy)
+    deploy "$@"
     ;;
   *)
     # Treat unknown subcommands as natural-language prompts for the agent

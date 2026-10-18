@@ -44,7 +44,7 @@ SSH and needs no terminal session there.
 ```bash
 # 1. get the repository onto the target, pick one:
 ssh target 'git clone https://github.com/malodev/dotfiles.git ~/dotfiles'          # needs GitHub
-tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . \
+COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . \
   | ssh target 'mkdir -p ~/dotfiles && tar -xzf - -C ~/dotfiles'                    # no internet needed
 git bundle create /tmp/dotfiles.bundle --all && scp /tmp/dotfiles.bundle target:/tmp/ \
   && ssh target 'git clone /tmp/dotfiles.bundle ~/dotfiles'                         # offline, keeps history
