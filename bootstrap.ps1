@@ -19,12 +19,19 @@
     Immediately launch `pi` inside the dotfiles repo after bootstrap completes.
 .PARAMETER Full
     Include all optional Pi extensions and packages in addition to the essential set.
+.PARAMETER EnableSsh
+    Also enable the built-in OpenSSH server (scripts\windows\enable-ssh-server.ps1) so
+    the machine can be driven over SSH. Needs Administrator rights once, through UAC.
+.PARAMETER SshPublicKeyPath
+    Public key to authorise for SSH logins (used with -EnableSsh).
 #>
 [CmdletBinding()]
 param(
     [switch]$DryRun,
     [switch]$LaunchAgent,
-    [switch]$Full
+    [switch]$Full,
+    [switch]$EnableSsh,
+    [string]$SshPublicKeyPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -196,6 +203,16 @@ if (Test-Path $LinkScript) {
     if ($DryRun) { $LinkArgs += " -DryRun" }
     if ($Full)   { $LinkArgs += " -Full" }
     Invoke-DotfileScript $LinkScript $LinkArgs.Trim()
+}
+
+# 6. Optional: make this machine reachable over SSH (Administrator rights once).
+#    Off by default: opening a remote shell is a decision, not a side effect.
+if ($EnableSsh) {
+    $SshScript = Join-Path $RepoRoot "scripts\windows\enable-ssh-server.ps1"
+    $SshArgs = ""
+    if ($SshPublicKeyPath) { $SshArgs += " -PublicKeyPath '$SshPublicKeyPath'" }
+    if ($DryRun)           { $SshArgs += " -DryRun" }
+    Invoke-DotfileScript $SshScript $SshArgs.Trim()
 }
 
 Write-Host ""

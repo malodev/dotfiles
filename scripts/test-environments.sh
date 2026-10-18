@@ -147,6 +147,26 @@ else
   pass "the profile imports the local override without dot-sourcing a script file"
 fi
 
+# The scripts the bootstrap evaluates inline must not use `exit`: inside an evaluated
+# block it terminates the caller too, so the rest of the bootstrap would never run.
+inline_exit=""
+for script in ensure-execution-policy enable-ssh-server; do
+  if grep -qE '^[[:space:]]*exit[[:space:]]+[0-9]+' "$REPO/scripts/windows/$script.ps1"; then
+    inline_exit+=" $script.ps1"
+  fi
+done
+if [[ -z "$inline_exit" ]]; then
+  pass "inline-evaluated PowerShell helpers return instead of exiting"
+else
+  fail "inline-evaluated helpers use exit:$inline_exit (it would abort the caller)"
+fi
+
+if [[ -f "$REPO/scripts/windows/enable-ssh-server.ps1" ]] && grep -q 'enable-ssh-server' "$REPO/bootstrap.ps1" && grep -q 'EnableSsh' "$REPO/bootstrap.ps1"; then
+  pass "bootstrap.ps1 -EnableSsh wires in the OpenSSH server script"
+else
+  fail "OpenSSH server script missing or not wired into bootstrap.ps1 -EnableSsh"
+fi
+
 #-----------------------------------------------------------------------------
 # 2. Isolated Clean-$HOME Sandbox Simulation (Zero Host Mutation)
 #-----------------------------------------------------------------------------
@@ -431,6 +451,12 @@ if command -v pwsh >/dev/null 2>&1; then
     pass "ensure-execution-policy.ps1 is a clean no-op on a non-Windows host"
   else
     fail "ensure-execution-policy.ps1 failed on a non-Windows host"
+  fi
+
+  if pwsh -NoProfile -File "$REPO/scripts/windows/enable-ssh-server.ps1" >/dev/null 2>&1; then
+    pass "enable-ssh-server.ps1 is a clean no-op on a non-Windows host"
+  else
+    fail "enable-ssh-server.ps1 failed on a non-Windows host"
   fi
 else
   printf "  \033[1;33m•\033[0m pwsh not on PATH: skipped the PowerShell AST parse (section 1 still checks ASCII purity)\n"

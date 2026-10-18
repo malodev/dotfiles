@@ -29,6 +29,10 @@
 
     Called by bootstrap.ps1 and link-windows.ps1, and safe to run on its own. On a
     non-Windows host it does nothing.
+
+    It returns instead of exiting everywhere: when a Group Policy forbids script files
+    the callers evaluate this file inline, and an `exit` inside an evaluated block
+    terminates the caller as well (verified: the rest of the bootstrap never ran).
 .PARAMETER DryRun
     Report what would change without touching the policy, the launchers or Windows Terminal.
 .PARAMETER SkipWindowsTerminal
@@ -106,7 +110,7 @@ function Show-ManualSteps {
 
 if ($env:OS -ne "Windows_NT") {
     Write-Info "Not a Windows host: execution policy left untouched"
-    exit 0
+    return
 }
 
 $blocking = @("Restricted", "AllSigned")
@@ -114,7 +118,7 @@ $current  = Get-ExecutionPolicy
 
 if ($current -notin $blocking) {
     Write-Ok "Execution policy already allows local scripts ($current)"
-    exit 0
+    return
 }
 
 $managed = @()
@@ -126,12 +130,12 @@ foreach ($scope in @("MachinePolicy", "UserPolicy")) {
 if ($managed.Count -eq 0) {
     if ($DryRun) {
         Write-Info "[dry-run] Set-ExecutionPolicy -Scope CurrentUser RemoteSigned (currently $current)"
-        exit 0
+        return
     }
     try {
         Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
         Write-Ok "Execution policy set to RemoteSigned for this user (was $current), so the profile loads"
-        exit 0
+        return
     } catch {
         Write-Warn "Could not set the execution policy: $($_.Exception.Message)"
     }
@@ -145,4 +149,4 @@ Install-Launchers
 if (-not $SkipWindowsTerminal) { Set-WindowsTerminalLoader }
 Show-ManualSteps
 
-exit 0
+return
