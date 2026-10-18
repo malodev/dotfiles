@@ -222,6 +222,14 @@ info "  1. Ensure ~/.local/bin and ~/.local/share/mise/shims are on your PATH"
 info "  2. Run 'dot doctor' to inspect machine health"
 info "  3. Run 'dot agent \"complete the setup for this machine\"' to let the agent finish!"
 
+# A fresh host has the template's providers but none of their keys, and pi's first
+# prompt then fails auth — the step 3 above cannot work until that is fixed.
+if [[ -f "$HOME/.pi/agent/models.json" ]] && ! "$REPO/scripts/doctor.sh" --json 2>/dev/null | grep -q '"ready": true'; then
+  echo ""
+  warn "No pi provider key resolves yet, so pi's first prompt will fail auth."
+  info "  Add the key file a provider in ~/.pi/agent/models.json expects, or run 'pi auth'."
+fi
+
 if [[ "$LAUNCH_AGENT" == "1" && "$DRY_RUN" == "0" ]]; then
   exec "$HOME/.local/bin/dot" agent "Inspect this machine using dot doctor --json and guide me through completing the dotfiles setup."
 fi

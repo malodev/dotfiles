@@ -194,6 +194,38 @@ elif [[ "$OS" == "windows" ]]; then
 fi
 
 #-----------------------------------------------------------------------------
+# 4b. Pi Provider Credential Readiness
+#-----------------------------------------------------------------------------
+# A virgin host gets the template's LAN providers in ~/.pi/agent/models.json but
+# none of their key files, and pi's first prompt then dies with an auth error, so
+# the handoff step the bootstrap prints ('dot agent ...') cannot work. The check is
+# deliberately passive: '!cat <path>' only tests that the file is readable, every
+# other '!command' is reported as unverified instead of being run.
+MODELS_FILE="$HOME/.pi/agent/models.json"
+PROVIDER_READY=false
+PROVIDERS_JSON=""
+PROVIDERS_HUMAN="(no models.json)"
+if [[ -f "$MODELS_FILE" ]] && has_cmd jq; then
+  PROVIDERS_HUMAN=""
+  while IFS=$'\t' read -r pname pkey; do
+    case "$pkey" in
+      "!cat "*)
+        kpath="${pkey#!cat }"
+        kpath="${kpath/#\~/$HOME}"
+        if [[ -r "$kpath" ]]; then state="ok"; PROVIDER_READY=true; else state="missing-file"; fi ;;
+      "!"*)    state="unverified-command" ;;
+      ""|null) state="no-key" ;;
+      *)       state="inline"; PROVIDER_READY=true ;;
+    esac
+    [[ -n "$PROVIDERS_JSON" ]] && PROVIDERS_JSON+=", "
+    PROVIDERS_JSON+="\"$pname\": \"$state\""
+    [[ -n "$PROVIDERS_HUMAN" ]] && PROVIDERS_HUMAN+=", "
+    PROVIDERS_HUMAN+="$pname=$state"
+  done < <(jq -r '.providers // {} | to_entries[] | [.key, (.value.apiKey // "")] | @tsv' "$MODELS_FILE" 2>/dev/null)
+  [[ -z "$PROVIDERS_HUMAN" ]] && PROVIDERS_HUMAN="(no providers)"
+fi
+
+#-----------------------------------------------------------------------------
 # 5. Output Generation
 #-----------------------------------------------------------------------------
 if [[ "$JSON_MODE" == "1" ]]; then
@@ -234,6 +266,12 @@ if [[ "$JSON_MODE" == "1" ]]; then
   printf '    "shared_skills_count": %s,\n' "$SHARED_SKILLS_COUNT"
   printf '    "claude_skills_count": %s,\n' "$CLAUDE_SKILLS_COUNT"
   printf '    "pi_skills_count": %s\n' "$PI_SKILLS_COUNT"
+  printf '  },\n'
+
+  printf '  "providers": {\n'
+  printf '    "models_file": "%s",\n' "$MODELS_FILE"
+  printf '    "ready": %s,\n' "$PROVIDER_READY"
+  printf '    "keys": {%s}\n' "$PROVIDERS_JSON"
   printf '  },\n'
 
   printf '  "links": {\n'
@@ -293,6 +331,16 @@ for t in "${AGENT_TOOLS[@]}"; do
   fi
 done
 echo -e "  \033[1;34m•\033[0m Skills linked: ~/.agents/skills ($SHARED_SKILLS_COUNT), ~/.claude/skills ($CLAUDE_SKILLS_COUNT), ~/.pi/agent/skills ($PI_SKILLS_COUNT)"
+echo ""
+
+echo -e "\033[1;36m━━━ Pi Provider Credentials ━━━\033[0m"
+if [[ "$PROVIDER_READY" == "true" ]]; then
+  echo -e "  \033[1;32m✓\033[0m At least one provider key resolves: $PROVIDERS_HUMAN"
+else
+  echo -e "  \033[1;33m⚠\033[0m No provider key resolves yet: $PROVIDERS_HUMAN"
+  echo -e "    pi's first prompt will fail auth: add the key file for a provider in"
+  echo -e "    ~/.pi/agent/models.json, or run 'pi auth' for a subscription provider."
+fi
 echo ""
 
 echo -e "\033[1;36m━━━ Config & Link Health ━━━\033[0m"

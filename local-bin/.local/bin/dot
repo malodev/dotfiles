@@ -151,6 +151,11 @@ case "$cmd" in
     cd "$REPO"
     DOCTOR_JSON="$("$REPO/scripts/doctor.sh" --json 2>/dev/null || true)"
     USER_PROMPT="$*"
+    if printf '%s' "$DOCTOR_JSON" | grep -q '"ready": false'; then
+      echo "note: no pi provider key resolves on this host (see 'dot doctor'), so the" >&2
+      echo "      first prompt will fail auth. Add the key file a provider expects in" >&2
+      echo "      ~/.pi/agent/models.json, or run 'pi auth' for a subscription provider." >&2
+    fi
     if command -v pi >/dev/null 2>&1; then
       if [[ -n "$USER_PROMPT" ]]; then
         exec pi "Current machine state from 'dot doctor --json': $DOCTOR_JSON. Task: $USER_PROMPT"
