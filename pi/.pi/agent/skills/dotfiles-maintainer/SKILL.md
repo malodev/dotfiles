@@ -65,7 +65,9 @@ over SSH, and it needs nothing installed there beyond the repository.
      share.
 2. **Which OS and privilege?**
    - Linux / macOS / WSL, userspace or sudo -> `bootstrap.sh`, then `install.sh --minimal`,
-     `--standard`, `--full`, or `-g <group>`
+     `--standard`, `--full`, or `-g <group>`. Add `--yes` (or set `DOTFILES_ASSUME_YES=1`) when
+     nobody can answer a prompt: over SSH, in cloud-init, in a container. The installer then
+     exits non-zero if a step failed, which is the signal to act on.
    - Windows with Administrator -> `bootstrap.ps1 [-Full] [-EnableSsh]`
    - Windows without Administrator, or a Group Policy that blocks scripts ->
      `windows\bootstrap-dotfiles.cmd` (evaluates the bootstrap instead of executing it) and

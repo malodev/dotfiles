@@ -33,7 +33,10 @@ dot agent "<request>" # launch pi/claude here with `dot doctor --json` injected
 ./bootstrap.sh          # essentials: nvim-lite, essential pi packages
 ./bootstrap.sh --full   # + nvim-malo, zig, the optional pi extension set
 
-# 3. Validate installer, manifest, and isolated sandbox/container environments
+# 3. System layer, unattended (never prompts; exits non-zero if a step failed)
+./install.sh --yes --minimal
+
+# 4. Validate installer, manifest, and isolated sandbox/container environments
 ./scripts/validate-install.sh
 ./scripts/test-environments.sh
 

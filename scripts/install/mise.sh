@@ -52,9 +52,9 @@ ensure_mise() {
     if ! command_exists mise; then
         log_info "Installing mise user-locally (curl https://mise.run | sh)..."
         if command_exists curl; then
-            curl https://mise.run | sh || log_warn "mise install script failed"
+            curl https://mise.run | sh || log_fail "mise install script failed"
         else
-            log_warn "curl not available — cannot bootstrap mise; install it manually"
+            log_fail "curl not available — cannot bootstrap mise; install it manually"
             return 1
         fi
         # mise.run installs into ~/.local/bin; refresh PATH for this run.
@@ -85,7 +85,7 @@ mise_sync_tools() {
     fi
 
     if ! command_exists mise; then
-        log_warn "mise not available — skipping mise tool install"
+        log_fail "mise not available — skipping mise tool install"
         return 0
     fi
 
@@ -108,12 +108,12 @@ mise_sync_tools() {
             lazygit@latest \
             lazydocker@latest \
             hub@latest; do
-            mise use -g "$tool" 2>/dev/null || log_warn "mise use -g $tool failed"
+            mise use -g "$tool" 2>/dev/null || log_fail "mise use -g $tool failed"
         done
     fi
 
     log_info "Installing mise-managed tools..."
-    mise install || log_warn "mise install reported errors (some tools may need attention)"
+    mise install || log_fail "mise install reported errors (some tools may need attention)"
 
     # Dev tool that rides on mise-managed uv.
     if [[ "$want_dev" == "1" ]] && ! command_exists llm; then

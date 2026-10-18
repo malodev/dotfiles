@@ -94,6 +94,11 @@ apply_default_selection_mode() {
         INTERACTIVE=0
         log_info "Dry-run mode: Using default group selection"
         log_info "Run without --dry-run for interactive menu"
+    elif [[ "$ASSUME_YES" == "1" ]]; then
+        # --yes with no selection: the documented default, and say so, rather than a menu
+        # nobody can answer.
+        INTERACTIVE=0
+        log_info "Unattended mode: using the default group selection"
     else
         INTERACTIVE=1
     fi

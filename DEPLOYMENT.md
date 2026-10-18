@@ -132,11 +132,28 @@ installed, Tailscale SSH again.
 # cloud-init user-data / CI step
 curl -fsSL https://raw.githubusercontent.com/malodev/dotfiles/main/bootstrap.sh | bash
 ~/dotfiles/local-bin/.local/bin/dot doctor --json
+
+# the system layer, unattended
+~/dotfiles/install.sh --yes --minimal
 ```
 
-The Stage 0 seed is already non-interactive; `install.sh` is not (it opens a group selector
-unless given groups or a preset). **Missing:** an explicit `--yes`, and an exit code that
-distinguishes "seeded" from "needs a human" so CI can stop cleanly and hand over to an agent.
+`--yes` (or `DOTFILES_ASSUME_YES=1`, which is what cloud-init wants) makes the installer never
+ask: it takes the documented default selection when none is given, and every prompt goes
+through one helper that returns the default when stdin is not a terminal, so nothing can block
+on a `read` that would only ever see EOF. Without a terminal and without `--yes`, the group
+menu is replaced by the default selection and a warning saying so, instead of hanging.
+
+Exit codes are the contract an agent or a CI job branches on:
+
+| Code | Meaning |
+|---|---|
+| `0` | everything asked for is in place |
+| `1` | something failed; the summary lists it (failures are collected, not fatal, so one broken package does not stop the rest) |
+| `2` | the installer could not start (bad arguments, unsupported platform) |
+
+The repository's own suites run in CI on every push and pull request
+(`.github/workflows/validate.yml`): `validate-install.sh`, `validate-manifest.sh`,
+`test-environments.sh --no-docker`, plus a check that the installer stays silent with `--yes`.
 
 ### S6 — WSL hybrid
 

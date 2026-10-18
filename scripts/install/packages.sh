@@ -14,7 +14,7 @@ install_homebrew_packages() {
         log_dry_run "  brew bundle --file=$SCRIPT_DIR/Brewfile"
         if [[ "$DRY_RUN" == "0" ]]; then
             log_info "Installing packages from Brewfile..."
-            brew bundle --file="$SCRIPT_DIR/Brewfile" || log_warn "Brew bundle installation had issues"
+            brew bundle --file="$SCRIPT_DIR/Brewfile" || log_fail "Brew bundle installation had issues"
         fi
     fi
 }
@@ -39,11 +39,11 @@ _aur_install_or_warn() {
     fi
 
     if command_exists yay; then
-        yay -S --noconfirm "$package_name" || log_warn "$description installation failed"
+        yay -S --noconfirm "$package_name" || log_fail "$description installation failed"
     elif command_exists paru; then
-        paru -S --noconfirm "$package_name" || log_warn "$description installation failed"
+        paru -S --noconfirm "$package_name" || log_fail "$description installation failed"
     else
-        log_warn "$description requires an AUR helper (yay/paru) or manual installation"
+        log_fail "$description requires an AUR helper (yay/paru) or manual installation"
     fi
 }
 
@@ -96,7 +96,7 @@ _linux_pkg_install() {
         return 0
     fi
 
-    pm_install "${to_install[@]}" || log_warn "Some packages from '$description' failed to install"
+    pm_install "${to_install[@]}" || log_fail "Some packages from '$description' failed to install"
 }
 
 install_cli_tools() {
@@ -139,7 +139,7 @@ install_cli_tools() {
             _linux_pkg_install "CLI tools (apt)" fzf ripgrep bat fd-find jq curl wget imagemagick p7zip-full poppler-utils ffmpeg unzip
             for tool in lsd yazi bottom gdu procs viu ffmpegthumbnailer; do
                 if ! command_exists "$tool"; then
-                    log_warn "$tool is not in default Debian/Ubuntu repos — install manually or use --with-brew"
+                    log_fail "$tool is not in default Debian/Ubuntu repos — install manually or use --with-brew"
                 fi
             done
             ;;
@@ -147,7 +147,7 @@ install_cli_tools() {
             _linux_pkg_install "CLI tools" fzf ripgrep bat fd-find lsd jq curl wget ImageMagick p7zip poppler-utils ffmpeg ffmpegthumbnailer unzip
             for tool in yazi bottom gdu procs viu; do
                 if ! command_exists "$tool"; then
-                    log_warn "$tool may not be in Fedora repos — install manually or use --with-brew"
+                    log_fail "$tool may not be in Fedora repos — install manually or use --with-brew"
                 fi
             done
             ;;
@@ -288,7 +288,7 @@ install_editor_tools() {
                             log_warn "Installed Neovim $nvim_version may be too old. Consider installing from https://github.com/neovim/neovim/releases"
                         fi
                     else
-                        log_warn "apt install failed. Install Neovim manually from https://github.com/neovim/neovim/releases"
+                        log_fail "apt install failed. Install Neovim manually from https://github.com/neovim/neovim/releases"
                     fi
                 fi
             fi

@@ -64,8 +64,8 @@ select_nvim_config() {
     echo ""
 
     local choice
-    read -p "Enter choice [1-${#opts[@]}] [default: 1]: " choice
-    choice=${choice:-1}
+    choice="$(ask "Enter choice [1-${#opts[@]}] [default: 1]: " 1)"
+    choice="${choice:-1}"
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#opts[@]} ]]; then
         local selected_key="${opts[$((choice-1))]%%|*}"

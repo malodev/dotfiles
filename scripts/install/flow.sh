@@ -17,6 +17,15 @@ run_interactive_group_selection() {
         return 0
     fi
 
+    # A menu nobody can answer: an agent over SSH, cloud-init, a Docker build. Take the
+    # documented default and say so, instead of blocking on a read that only sees EOF.
+    if ! is_tty; then
+        log_warn "No terminal to show the group menu: using the default selection"
+        log_warn "  pass a preset (--minimal, --standard, --full) or -g <group> to choose"
+        apply_default_selection_mode
+        return 0
+    fi
+
     local menu_options=()
     local selections
     local group
@@ -143,8 +152,8 @@ run_stow_preflight_for_selection() {
     done < <(selected_stow_packages)
 
     if [[ $failed -ne 0 ]]; then
-        log_error "Stow preflight found conflicts. Programs are already installed."
-        log_error "Dotfiles will not be stowed. Resolve conflicts and re-run to stow."
+        log_fail "Stow preflight found conflicts. Programs are already installed."
+        log_fail "Dotfiles will not be stowed. Resolve conflicts and re-run to stow."
         exit 1
     fi
 
@@ -314,5 +323,18 @@ show_final_summary() {
             echo "    Review them to make sure everything still works:"
             echo "       cat ~/.bashrc_local ~/.zshrc_local"
         fi
+    fi
+
+    # A run that did not install what it was asked to install must not look successful to CI,
+    # to cloud-init or to an agent over SSH. install.sh exits non-zero when this is not empty.
+    if [[ ${#FAILED_STEPS[@]} -gt 0 ]]; then
+        echo ""
+        echo "  ✗ ${#FAILED_STEPS[@]} step(s) failed:"
+        local step
+        for step in "${FAILED_STEPS[@]}"; do
+            echo "      - $step"
+        done
+        echo ""
+        echo "  Fix the cause and re-run; the log is at: $LOG_FILE"
     fi
 }

@@ -1,0 +1,40 @@
+# Runs the repository's own suites on every push and pull request.
+#
+# The same three commands AGENTS.md asks a human (or an agent) to run before committing, so a
+# change cannot land without them having passed somewhere reproducible. The suites skip what
+# the runner does not have (a remote Omarchy host, Docker, pwsh) and say so instead of failing.
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools the suites use
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq shellcheck stow
+
+      - name: Installer and manifest
+        run: |
+          ./scripts/validate-install.sh
+          ./scripts/validate-manifest.sh
+
+      - name: Environment checks
+        run: ./scripts/test-environments.sh --no-docker
+
+      - name: The installer must not ask anything when it is told not to
+        run: |
+          set -e
+          mkdir -p /tmp/ci-home
+          HOME=/tmp/ci-home ./install.sh --yes --dry-run --minimal </dev/null | tee /tmp/ci-out.txt
+          ! grep -q "Your choice" /tmp/ci-out.txt

@@ -268,7 +268,7 @@ stow_package_preflight() {
         printf '%s\n' "$output" | tee -a "$LOG_FILE"
     fi
 
-    log_error "Stow conflict detected for $pkg. Resolve existing files or run stow manually after backing them up."
+    log_fail "Stow conflict detected for $pkg. Resolve existing files or run stow manually after backing them up."
     return 1
 }
 
@@ -455,7 +455,7 @@ install_github_release_tool() {
     local version_tag version_short url
     version_tag=$(curl -s "https://api.github.com/repos/$repo/releases/latest" | grep -Po '"tag_name": "\K[^"]*' 2>/dev/null || true)
     if [[ -z "$version_tag" ]]; then
-        log_warn "Could not determine latest $binary version, skipping"
+        log_fail "Could not determine latest $binary version, skipping"
         return 1
     fi
     version_short="${version_tag#v}"
@@ -475,7 +475,7 @@ install_github_release_tool() {
     fi
 
     if [[ -z "$url" ]]; then
-        log_warn "Could not find download asset for $binary ($asset_pattern), skipping"
+        log_fail "Could not find download asset for $binary ($asset_pattern), skipping"
         return 1
     fi
 
@@ -489,7 +489,7 @@ install_github_release_tool() {
         && log_success "$binary installed to $target_dir/$binary" \
         || {
             rm -rf "/tmp/gh-install-$binary"
-            log_warn "$binary installation failed"
+            log_fail "$binary installation failed"
             return 1
         }
 
@@ -516,7 +516,7 @@ install_fzf_user_local() {
         rm -f /tmp/fzf.tar.gz
         log_success "fzf installed/upgraded to $target_dir/fzf"
     else
-        log_warn "fzf installation failed, install manually from https://github.com/junegunn/fzf"
+        log_fail "fzf installation failed, install manually from https://github.com/junegunn/fzf"
         rm -f /tmp/fzf.tar.gz
         return 1
     fi
@@ -558,7 +558,7 @@ install_ripgrep_user_local() {
         && install_to_user_local_bin /tmp/rg rg \
         && rm -f /tmp/rg /tmp/rg.tar.gz \
         && log_success "ripgrep installed" \
-        || log_warn "ripgrep installation failed"
+        || log_fail "ripgrep installation failed"
 
     warn_if_user_local_bin_not_in_path
 }
@@ -588,7 +588,7 @@ install_fd_user_local() {
         && install_to_user_local_bin /tmp/fd fd \
         && rm -rf /tmp/fd /tmp/fd.tar.gz \
         && log_success "fd installed" \
-        || log_warn "fd installation failed"
+        || log_fail "fd installation failed"
 
     warn_if_user_local_bin_not_in_path
 }
@@ -617,7 +617,7 @@ install_lsd_user_local() {
         && install_to_user_local_bin /tmp/lsd lsd \
         && rm -rf /tmp/lsd /tmp/lsd.tar.gz \
         && log_success "lsd installed" \
-        || log_warn "lsd installation failed"
+        || log_fail "lsd installation failed"
 
     warn_if_user_local_bin_not_in_path
 }
@@ -647,7 +647,7 @@ install_bat_user_local() {
         && install_to_user_local_bin /tmp/bat bat \
         && rm -rf /tmp/bat /tmp/bat.tar.gz \
         && log_success "bat installed" \
-        || log_warn "bat installation failed"
+        || log_fail "bat installation failed"
 
     warn_if_user_local_bin_not_in_path
 }

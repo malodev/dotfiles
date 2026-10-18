@@ -172,6 +172,25 @@ else
 fi
 
 #=============================================================================
+# FAILURE TRACKING
+#=============================================================================
+# Steps that failed. install.sh exits non-zero when this is not empty: a package that did not
+# install must not look like a successful run to CI, to cloud-init or to an agent over SSH.
+# Use log_fail for things that mean the machine is not in the state it should be, and log_warn
+# for the genuinely optional ones (an upgrade check, a font, an extra).
+declare -a FAILED_STEPS=()
+
+log_fail() {
+    # A dry run changes nothing, so nothing failed: it reports what a real run would fail on.
+    if is_dry_run; then
+        log_warn "would fail: $1"
+        return 0
+    fi
+    FAILED_STEPS+=("$1")
+    log_error "$1"
+}
+
+#=============================================================================
 # PACKAGE MANAGER DETECTION
 #=============================================================================
 detect_package_manager() {
@@ -335,20 +354,38 @@ download() {
 #=============================================================================
 # PROMPT HELPERS
 #=============================================================================
+# Unattended mode: --yes / -y, or DOTFILES_ASSUME_YES=1 from cloud-init or a CI job. Every
+# prompt goes through ask(), which returns the default instead of blocking on a read that
+# would only ever see EOF - an agent over SSH and a Docker build have no terminal either.
+ASSUME_YES="${ASSUME_YES:-${DOTFILES_ASSUME_YES:-0}}"
+export ASSUME_YES
+
+is_tty() { [[ -t 0 && -t 1 ]]; }
+
+# Prints the answer on stdout (the prompt itself goes to stderr).
+ask() {
+    local prompt="$1" default="${2:-}" reply
+    if [[ "$ASSUME_YES" == "1" ]] || ! is_tty; then
+        [[ -n "$default" ]] && printf '%s' "$default"
+        return 0
+    fi
+    read -r -p "$prompt" reply || true
+    [[ -z "$reply" ]] && reply="$default"
+    printf '%s' "$reply"
+}
+
 prompt_yes_no() {
     local prompt="$1"
     local default="${2:-N}"
-
     local yn
+
     if [[ "$default" == "Y" ]]; then
-        read -p "$prompt [Y/n]: " -n 1 -r yn
-        echo
-        [[ -z "$yn" || "$yn" =~ ^[Yy]$ ]]
+        yn="$(ask "$prompt [Y/n]: " y)"
     else
-        read -p "$prompt [y/N]: " -n 1 -r yn
-        echo
-        [[ "$yn" =~ ^[Yy]$ ]]
+        yn="$(ask "$prompt [y/N]: " n)"
     fi
+
+    [[ "$yn" =~ ^[Yy] ]]
 }
 
 #=============================================================================
@@ -382,11 +419,11 @@ cleanup_on_exit() {
 detect_os
 
 # Export functions for use in subshells
-export -f log_info log_success log_error log_warn
+export -f log_info log_success log_error log_warn log_fail
 export -f command_exists ensure_command require_commands
 export -f is_macos is_linux is_arch is_debian
 export -f save_dir restore_dir cdmkdir
 export -f has_sudo ensure_sudo
-export -f download prompt_yes_no
+export -f download prompt_yes_no ask is_tty
 export -f git_clone_or_update
 export -f pm_install

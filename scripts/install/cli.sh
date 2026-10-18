@@ -8,6 +8,8 @@ print_help() {
     echo ""
     echo "Options:"
     echo "  --dry-run       Show what would be installed without making changes"
+    echo "  -y, --yes       Never ask: take the default selection, and never block on a prompt"
+    echo "                  (also DOTFILES_ASSUME_YES=1, for cloud-init and CI)"
     echo "  --list-groups   List available installation groups"
     echo "  --with-brew     Use Homebrew on Linux (default: skip)"
     echo "  --user-local    Prefer current-user installs for supported SSH/dev tools"
@@ -45,6 +47,11 @@ parse_cli_args() {
 
     while [[ $# -gt 0 ]]; do
         case $1 in
+            -y|--yes)
+                ASSUME_YES=1
+                INTERACTIVE=0
+                shift
+                ;;
             --dry-run)
                 DRY_RUN=1
                 shift

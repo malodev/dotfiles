@@ -58,6 +58,8 @@ else
     log_success() { echo "[SUCCESS] $1"; }
     log_error() { echo "[ERROR] $1" >&2; }
     log_warn() { echo "[WARN] $1"; }
+    declare -a FAILED_STEPS=()
+    log_fail() { FAILED_STEPS+=("$1"); log_error "$1"; }
     log_dry_run() {
         if [[ "$DRY_RUN" == "1" ]]; then
             echo "[DRY RUN] $1"
@@ -112,7 +114,7 @@ install_node_dependencies() {
     fi
 
     if ! command -v npm &>/dev/null; then
-        log_warn "npm not found — skipping Node.js dependency installation"
+        log_fail "npm not found — skipping Node.js dependency installation"
         log_info "Install Node.js and run: cd $SCRIPT_DIR && npm ci"
         return
     fi
@@ -122,7 +124,7 @@ install_node_dependencies() {
     if npm ci --no-audit --no-fund 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Node.js dependencies installed"
     else
-        log_error "npm ci failed — extension may not load"
+        log_fail "npm ci failed — extension may not load"
         log_info "Try manually: cd $SCRIPT_DIR && npm ci"
     fi
     cd "$ORIGINAL_DIR"
@@ -147,13 +149,13 @@ setup_agent_skills() {
         else
             log_info "Initializing skill submodule..."
             git -C "$SCRIPT_DIR" submodule update --init --recursive 2>&1 | tee -a "$LOG_FILE" \
-                || log_warn "Submodule init failed — shared agent skills will not be linked"
+                || log_fail "Submodule init failed — shared agent skills will not be linked"
         fi
     fi
 
     local linker="$SCRIPT_DIR/pi/mattpocock-skills/scripts/link-skills.sh"
     if [[ ! -x "$linker" ]]; then
-        log_warn "Skill linker not found: $linker — skipping shared agent skills"
+        log_fail "Skill linker not found: $linker — skipping shared agent skills"
         return
     fi
 
@@ -166,7 +168,7 @@ setup_agent_skills() {
     if "$linker" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Shared agent skills linked"
     else
-        log_error "Linking shared agent skills failed"
+        log_fail "Linking shared agent skills failed"
     fi
 }
 
@@ -185,7 +187,7 @@ link_pi_agent_entries() {
 
     local linker="$SCRIPT_DIR/scripts/link-pi-agent-entries.sh"
     if [[ ! -x "$linker" ]]; then
-        log_warn "Pi agent entry linker not found: $linker — skipping"
+        log_fail "Pi agent entry linker not found: $linker — skipping"
         return
     fi
 
@@ -209,7 +211,7 @@ link_pi_agent_entries() {
             log_warn "  $linker --unfold"
             ;;
         *)
-            log_error "Linking pi agent extensions and skills failed"
+            log_fail "Linking pi agent extensions and skills failed"
             ;;
     esac
 }
@@ -280,6 +282,14 @@ main() {
     mise_sync_tools
     install_node_dependencies
     show_final_summary
+
+    # The contract, for CI and for agents: 0 = everything asked for is in place, 1 = something
+    # failed (the summary lists it), 2 = install.sh could not even start (bad arguments,
+    # unsupported platform). Failures are collected instead of aborting the run, so one broken
+    # package does not stop the rest from installing.
+    if [[ ${#FAILED_STEPS[@]} -gt 0 ]]; then
+        exit 1
+    fi
 }
 
 # Run main function

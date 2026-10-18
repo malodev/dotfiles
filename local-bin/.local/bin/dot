@@ -253,7 +253,9 @@ deploy_one() {
     # 4. Optional system layer
     if [[ -n "$dp_groups" ]]; then
       echo "  system layer:" >&2
-      run_remote "cd $dp_dir && sudo ./install.sh $dp_groups"
+      # Not `sudo ./install.sh`: the installer escalates by itself where it needs to, and
+      # running the whole thing as root would stow into root's $HOME instead of the user's.
+      run_remote "cd $dp_dir && ./install.sh $dp_groups"
     fi
   fi
 

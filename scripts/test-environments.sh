@@ -182,6 +182,30 @@ else
   fail "offline bundle surface missing"
 fi
 
+# Unattended mode and the exit-code contract: what CI and an agent over SSH depend on.
+if grep -q "log_fail()" "$REPO/scripts/common.sh" \
+   && grep -q -- "--yes" "$REPO/scripts/install/cli.sh" \
+   && grep -q "FAILED_STEPS" "$REPO/install.sh" \
+   && [[ -f "$REPO/.github/workflows/validate.yml" ]]; then
+  pass "unattended installer surface present (ask/log_fail, --yes, exit contract, CI workflow)"
+else
+  fail "unattended installer surface missing"
+fi
+
+if [[ "${SKIP_SLOW:-0}" != "1" ]]; then
+  ci_home="$(mktemp -d)"
+  if HOME="$ci_home" "$REPO/install.sh" --yes --dry-run --minimal </dev/null >"$ci_home/out.txt" 2>&1; then
+    if grep -q "Your choice" "$ci_home/out.txt"; then
+      fail "install.sh --yes still showed a prompt"
+    else
+      pass "install.sh --yes --dry-run runs with no terminal and never prompts"
+    fi
+  else
+    fail "install.sh --yes --dry-run failed without a terminal"
+  fi
+  rm -rf "$ci_home"
+fi
+
 if [[ -f "$REPO/scripts/windows/enable-ssh-server.ps1" ]] && grep -q 'enable-ssh-server' "$REPO/bootstrap.ps1" && grep -q 'EnableSsh' "$REPO/bootstrap.ps1"; then
   pass "bootstrap.ps1 -EnableSsh wires in the OpenSSH server script"
 else
