@@ -34,7 +34,9 @@ Each tool/application has its own directory containing configuration files, typi
 
 ## Architecture
 
-### Neovim Configuration (`nvim-malo/`)
+### Neovim Configuration (`nvim-lite/`, `nvim-malo/`)
+
+Stage 0 bootstrap links **`nvim-lite`** as `~/.config/nvim`: no plugins, no C compilation, sub-5ms startup, keeping nvim-malo's leader and keymap habits. `nvim-malo` is the full daily driver, selected with `bootstrap.sh --full` or `dot nvim malo` (`dot nvim status` shows the active profile).
 
 The main Neovim config uses **LazyVim** as a base with **lazy.nvim** as the plugin manager.
 
@@ -114,7 +116,7 @@ The `install.sh` script automatically detects OS (`uname -s`) and installs platf
 
 ## Directory Structure Notes
 
-- Multiple Neovim configs exist (`nvim-malo`, `nvim-test`, `nvim-astro`, `nvim-php`, etc.) - `nvim-malo` is the primary
+- Multiple Neovim configs exist (`nvim-lite` — the Stage 0 bootstrap default, `nvim-malo` — the primary daily driver, `nvim-test`, `nvim-astro`, `nvim-php`, etc.)
 - Directories ending in `.ignore` or `.disabled` are excluded via `.gitignore`
 - Some configs have `-old` variants (e.g., `sketchybar-old/`, `nvim-malo-old.ignore/`) as backups
 
