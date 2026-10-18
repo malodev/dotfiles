@@ -187,12 +187,29 @@ with (`os`, `privilege`, `groups`, `features`, `ssh`). Without it, "the minimum 
 whatever the agent happens to decide, and no deployment can be verified against a target
 state.
 
-### S10 — Fully offline recovery
+### S10 — Fully offline
 
-Nothing here is bundled yet: Stage 0 needs the network for `mise` and `pi`. For an air-gapped
-machine the deployment must carry (a) the repository as a tarball or bundle, (b) the `mise`
-binary, and (c) the tool archives from the `mise` cache (`~/.local/share/mise/downloads`), and
-`pi` plus its npm packages as a tarball. Worth building before it is needed, not after.
+```bash
+# on a machine that already has everything (the source):
+scripts/make-offline-bundle.sh [--tools "node jq"] [--with-git] [--out DIR]
+
+# on the machine with no internet at all:
+scripts/install-offline-bundle.sh dotfiles-offline-<os>-<arch>-<date>.tar.gz [target-dir]
+```
+
+The bundle carries the repository, the `mise` binary, the tool installs, a **pinned** mise
+config (`node = "24.22.0"`, not `lts`, which needs the network to resolve) and pi's npm
+packages. The installer restores them into `$HOME`, rebuilds the shims, and runs
+`bootstrap.sh --offline`, which skips every step that would reach out: `mise install` from the
+pinned config instead of `mise use -g …@latest`, no npm install for pi, no skill submodule
+fetch.
+
+Verified on a Linux VM inside `unshare -n` — no network at all, confirmed by a `curl` control
+in the same namespace: restore, Stage 0 and `dot doctor` all complete, and the bundled `jq`
+resolves from the restored installs.
+
+Not covered, on purpose: the system layer (it needs a package manager), `nvim-malo`'s plugins
+(`nvim-lite`, the bootstrap default, needs none), and Windows.
 
 ---
 

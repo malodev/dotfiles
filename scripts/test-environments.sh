@@ -173,6 +173,15 @@ else
   fail "deployment surface missing or undocumented"
 fi
 
+# The offline path is what a machine without internet depends on.
+if [[ -x "$REPO/scripts/make-offline-bundle.sh" && -x "$REPO/scripts/install-offline-bundle.sh" ]] \
+   && grep -q -- "--offline" "$REPO/bootstrap.sh" \
+   && grep -q "unshare -n" "$REPO/DEPLOYMENT.md"; then
+  pass "offline bundle surface present (make + install scripts, bootstrap --offline, documented)"
+else
+  fail "offline bundle surface missing"
+fi
+
 if [[ -f "$REPO/scripts/windows/enable-ssh-server.ps1" ]] && grep -q 'enable-ssh-server' "$REPO/bootstrap.ps1" && grep -q 'EnableSsh' "$REPO/bootstrap.ps1"; then
   pass "bootstrap.ps1 -EnableSsh wires in the OpenSSH server script"
 else
