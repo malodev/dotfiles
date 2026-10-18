@@ -16,10 +16,9 @@ rem DOTFILES_REPO tells the evaluated script where the repository is, because
 rem $MyInvocation.MyCommand.Path is empty when a script is read instead of run.
 rem=============================================================================
 setlocal
-set "REPO=%~dp0.."
 pushd "%~dp0.."
 set "DOTFILES_REPO=%CD%"
 echo Bootstrapping dotfiles from %DOTFILES_REPO%
-powershell.exe -NoLogo -NoProfile -Command "$ErrorActionPreference='Stop'; iex ((Get-Content -Raw '%DOTFILES_REPO%\bootstrap.ps1') -replace '(?m)^#Requires.*$','')"
+powershell.exe -NoLogo -NoProfile -Command "iex ((Get-Content -Raw '%DOTFILES_REPO%\bootstrap.ps1') -replace '(?m)^#Requires.*$','')"
 popd
 pause
