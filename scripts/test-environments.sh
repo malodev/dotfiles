@@ -99,6 +99,21 @@ if command -v jq >/dev/null 2>&1; then
   done
 fi
 
+# PowerShell 5.1 reads BOM-less UTF-8 as Windows-1252, where a byte above 0x7F can
+# land where a quote is expected and swallow the rest of the line: a '✓' inside a
+# string broke bootstrap.ps1 exactly that way. Every .ps1 stays 7-bit ASCII.
+ps1_nonascii=""
+while IFS= read -r ps1; do
+  if LC_ALL=C grep -q $'[^\t\r -~]' "$ps1"; then
+    ps1_nonascii+=" ${ps1#$REPO/}"
+  fi
+done < <(find "$REPO" -name '*.ps1' -not -path '*/node_modules/*')
+if [[ -z "$ps1_nonascii" ]]; then
+  pass "PowerShell scripts are pure 7-bit ASCII (no smart quotes, no BOM-less UTF-8)"
+else
+  fail "non-ASCII bytes in PowerShell scripts:$ps1_nonascii"
+fi
+
 #-----------------------------------------------------------------------------
 # 2. Isolated Clean-$HOME Sandbox Simulation (Zero Host Mutation)
 #-----------------------------------------------------------------------------
@@ -362,8 +377,24 @@ EOF_REMOTE
   fi
 fi
 
-# 4c. Verify PowerShell scripts (bootstrap.ps1, link-windows.ps1, doctor.ps1, Profile) via PowerShell AST parser
-#     and check Omarchy Windows VM shared mount (/media/VIRT/omarchy-windows/Windows) if reachable
+# 4c. PowerShell AST parse of every .ps1 when pwsh is available, plus the Omarchy
+#     Windows VM shared mount (/media/VIRT/omarchy-windows/Windows) when reachable.
+if command -v pwsh >/dev/null 2>&1; then
+  ps1_parse_fail=""
+  while IFS= read -r ps1; do
+    if ! pwsh -NoProfile -Command "\$e=\$null; [System.Management.Automation.Language.Parser]::ParseFile('$ps1',[ref]\$null,[ref]\$e) | Out-Null; if (\$e.Count) { exit 1 }" >/dev/null 2>&1; then
+      ps1_parse_fail+=" ${ps1#$REPO/}"
+    fi
+  done < <(find "$REPO" -name '*.ps1' -not -path '*/node_modules/*')
+  if [[ -z "$ps1_parse_fail" ]]; then
+    pass "PowerShell AST parse clean for every .ps1"
+  else
+    fail "PowerShell parse errors in:$ps1_parse_fail"
+  fi
+else
+  printf "  \033[1;33m•\033[0m pwsh not on PATH: skipped the PowerShell AST parse (section 1 still checks ASCII purity)\n"
+fi
+
 if ssh -o ConnectTimeout=2 -o BatchMode=yes Ubuntu-Home "test -d /media/VIRT/omarchy-windows/Windows" 2>/dev/null; then
   pass "Omarchy Windows 11 VM shared directory (/media/VIRT/omarchy-windows/Windows) detected on Ubuntu-Home"
 fi
