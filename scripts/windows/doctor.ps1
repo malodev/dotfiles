@@ -43,12 +43,19 @@ $PersistentPolicy = if (-not $IsWindowsHost) { "n/a" } else {
     $p = Get-ExecutionPolicy -Scope CurrentUser
     if ($p -eq "Undefined") { (Get-ExecutionPolicy -Scope LocalMachine).ToString() } else { $p.ToString() }
 }
-$ProfileCanLoad = if (-not $IsWindowsHost) { $true } else { $PersistentPolicy -notin @("Restricted", "AllSigned", "Undefined") }
 $PolicyScopes = [ordered]@{}
 if ($IsWindowsHost) {
     foreach ($scope in @("MachinePolicy", "UserPolicy", "CurrentUser", "LocalMachine", "Process")) {
         $PolicyScopes[$scope.ToLower()] = (Get-ExecutionPolicy -Scope $scope).ToString()
     }
+}
+
+$ProfileCanLoad = if (-not $IsWindowsHost) { $true } else {
+    # Group Policy wins over the local scopes, so a RemoteSigned CurrentUser does not make
+    # the profile loadable on a managed machine.
+    $gpoBlocks = ((@($PolicyScopes['machinepolicy'], $PolicyScopes['userpolicy']) |
+        Where-Object { $_ -ne 'Undefined' }) -join ' ') -match '=(Restricted|AllSigned)'
+    if ($gpoBlocks) { $false } else { $PersistentPolicy -notin @("Restricted", "AllSigned", "Undefined") }
 }
 
 $Report = [ordered]@{

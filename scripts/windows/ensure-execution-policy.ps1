@@ -123,45 +123,58 @@ if ($env:OS -ne "Windows_NT") {
     return
 }
 
-$blocking = @("Restricted", "AllSigned", "Undefined")
+$blocking = @("Restricted", "AllSigned")
 
-# Only the persistent scopes matter: this script is normally started with
-# -ExecutionPolicy Bypass, which sets the Process scope and hides the real state, so
-# looking at Get-ExecutionPolicy alone reported "already allows local scripts" and left
-# every new shell Restricted. Undefined means Restricted as well, it is just not written
-# down anywhere.
-$current = Get-ExecutionPolicy -Scope CurrentUser
-if ($current -eq "Undefined") { $current = Get-ExecutionPolicy -Scope LocalMachine }
-
-if ($current -notin $blocking) {
-    Write-Ok "Execution policy already allows local scripts ($current)"
-    return
-}
-
+# Group Policy scopes outrank every local setting, so they are read first: with
+# UserPolicy=Restricted the profile cannot load no matter what CurrentUser says, which is
+# how a managed machine still failed after RemoteSigned had been set for the user.
 $managed = @()
 foreach ($scope in @("MachinePolicy", "UserPolicy")) {
     $value = Get-ExecutionPolicy -Scope $scope
     if ($value -ne "Undefined") { $managed += "$scope=$value" }
 }
+$gpoBlocks = ($managed -join " ") -match ("=(" + ($blocking -join "|") + ")$")
 
-if ($managed.Count -eq 0) {
-    if ($DryRun) {
-        Write-Info "[dry-run] Set-ExecutionPolicy -Scope CurrentUser RemoteSigned (currently $current)"
-        return
-    }
-    try {
-        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
-        Write-Ok "Execution policy set to RemoteSigned for this user (was $current), so the profile loads"
-        return
-    } catch {
-        Write-Warn "Could not set the execution policy: $($_.Exception.Message)"
-    }
-} else {
+if ($gpoBlocks) {
     Write-Warn "Execution policy is enforced by Group Policy ($($managed -join ', '))"
     Write-Warn "  Nothing local outranks it, so the profile is loaded inline instead of executed."
+    Install-Launchers
+    if (-not $SkipWindowsTerminal) { Set-WindowsTerminalLoader }
+    Show-ManualSteps
+    return
 }
 
-# Blocked: make the configuration run anyway.
+if ($managed.Count -gt 0) {
+    Write-Ok "Execution policy comes from Group Policy and allows local scripts ($($managed -join ', '))"
+    return
+}
+
+# No Group Policy: make the persistent setting allow local scripts. This script is usually
+# started with -ExecutionPolicy Bypass, which sets the Process scope and hides the real
+# state, so only CurrentUser and LocalMachine are inspected. Undefined means Restricted, it
+# is simply not written down anywhere.
+$persistent = Get-ExecutionPolicy -Scope CurrentUser
+if ($persistent -eq "Undefined") { $persistent = Get-ExecutionPolicy -Scope LocalMachine }
+
+if ($persistent -notin ($blocking + "Undefined")) {
+    Write-Ok "Execution policy already allows local scripts ($persistent)"
+    return
+}
+
+if ($DryRun) {
+    Write-Info "[dry-run] Set-ExecutionPolicy -Scope CurrentUser RemoteSigned (currently $persistent)"
+    return
+}
+
+try {
+    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+    Write-Ok "Execution policy set to RemoteSigned for this user (was $persistent), so the profile loads"
+    return
+} catch {
+    Write-Warn "Could not set the execution policy: $($_.Exception.Message)"
+    Write-Warn "  Falling back to the inline loader."
+}
+
 Install-Launchers
 if (-not $SkipWindowsTerminal) { Set-WindowsTerminalLoader }
 Show-ManualSteps
