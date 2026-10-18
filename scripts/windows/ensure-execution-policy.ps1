@@ -65,9 +65,10 @@ function Install-Launchers {
     }
 }
 
-# Windows Terminal launches `powershell.exe -NoLogo` / `pwsh.exe -NoLogo`, which needs
-# the profile to be a loadable script. Replace exactly those two commandlines with the
-# inline loader; anything else in settings.json is left byte for byte alone.
+# Windows Terminal launches PowerShell from a commandline that differs per machine: stock
+# settings use "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" with no
+# arguments, the template in this repo uses "pwsh.exe -NoLogo". Both have to end up at the
+# loader, and nothing else in settings.json is touched.
 function Set-WindowsTerminalLoader {
     $loader = Join-Path $HOME ".local\bin\dotfiles-shell.cmd"
     $loaderJson = $loader -replace '\\', '\\'
@@ -79,23 +80,32 @@ function Set-WindowsTerminalLoader {
         if (-not (Test-Path $settings)) { continue }
 
         $text = Get-Content -Raw $settings
-        $new = $text
-        foreach ($exe in @("powershell.exe", "pwsh.exe")) {
-            $pattern = '"commandline"\s*:\s*"' + [regex]::Escape($exe) + ' -NoLogo"'
-            $new = [regex]::Replace($new, $pattern, '"commandline": "' + $loaderJson + '"')
+        $pattern = '("commandline"\s*:\s*")[^"]*(?:powershell\.exe|pwsh\.exe)[^"]*(")'
+        $count = [regex]::Matches($text, $pattern).Count
+        if ($count -eq 0) {
+            Write-Info "Windows Terminal has no PowerShell profile to repoint ($settings)"
+            continue
         }
-        if ($new -eq $text) { continue }
+        $new = [regex]::Replace($text, $pattern, ('$1' + $loaderJson + '$2'))
 
-        if ($DryRun) { Write-Info "[dry-run] point the PowerShell profiles at $loader in $settings"; continue }
+        if ($DryRun) {
+            Write-Info "[dry-run] point $count PowerShell profile(s) at $loader in $settings"
+            continue
+        }
 
         Copy-Item $settings "$settings.bak-$(Get-Date -Format 'yyyyMMdd-HHmmss')" -Force
         [IO.File]::WriteAllText($settings, $new, (New-Object Text.UTF8Encoding($false)))
-        Write-Ok "Windows Terminal now starts the profile through $loader"
+        Write-Ok "Windows Terminal: $count PowerShell profile(s) now start through $loader"
+
+        $default = ([regex]::Match($new, '"defaultProfile"\s*:\s*"([^"]+)"')).Groups[1].Value
+        if ($default) {
+            Write-Info "  default profile GUID is $default - pick a repointed profile if it is not"
+        }
         $patched++
     }
 
     if ($patched -eq 0 -and -not $DryRun) {
-        Write-Info "No Windows Terminal profile needed repointing (not installed, or already using the loader)"
+        Write-Info "Windows Terminal settings left unchanged"
     }
 }
 
