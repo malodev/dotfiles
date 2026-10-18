@@ -19,6 +19,10 @@ Before proposing or executing any configuration or package changes:
   ```powershell
   .\scripts\windows\doctor.ps1 -Json
   ```
+- **Another machine over SSH** (the target's own sensor, nothing needed there beyond the repo):
+  ```bash
+  dot doctor --host <host> [--ssh-port N] [--json]
+  ```
 
 Inspect the JSON output for:
 - `platform.os`, `platform.distro` (`omarchy`, `arch`, `ubuntu`, `macos`, `windows`), `platform.is_ssh`, `platform.has_gui`, `platform.sudo`.
@@ -45,7 +49,40 @@ have not touched before, especially a locked-down one.
 
 ---
 
-## 3. Core Workflows
+## 3. Deployment Decision Tree
+
+Run `dot doctor --host <host>` before and after any deployment: it is the target's own sensor
+over SSH, and it needs nothing installed there beyond the repository.
+
+1. **Can you reach the machine over SSH?**
+   - yes -> stay on the driver: `dot deploy --to <host>` (or `--profile <name>`, `--dry-run`
+     first). The agent never needs a shell on the target.
+   - no -> get a terminal there and pull: `git clone … && ./bootstrap.sh`, the
+     `curl …/bootstrap.sh | bash` form (the script clones the repository itself), or a mounted
+     share.
+2. **Which OS and privilege?**
+   - Linux / macOS / WSL, userspace or sudo -> `bootstrap.sh`, then `install.sh --minimal`,
+     `--standard`, `--full`, or `-g <group>`
+   - Windows with Administrator -> `bootstrap.ps1 [-Full] [-EnableSsh]`
+   - Windows without Administrator, or a Group Policy that blocks scripts ->
+     `windows\bootstrap-dotfiles.cmd` (evaluates the bootstrap instead of executing it) and
+     `windows\dotfiles-shell.cmd` for the profile
+3. **Verify** with `dot doctor --host <host>`: `tools` missing, `providers.ready` (a fresh host
+   has no key, so `pi`'s first prompt fails auth until one is added),
+   `execution_policy.profile_can_load` (a Group Policy wins over the local scopes), `drift`.
+4. **When a step fails**, the fix is usually already in the repository:
+
+| Symptom | What to do |
+|---|---|
+| `Add-WindowsCapability` hangs | the helper times out after 180 s and installs Win32-OpenSSH from the GitHub release; `-SkipCapability` goes straight there |
+| no `winget` (standard account) | the bootstrap downloads the `mise` release zip into `%LOCALAPPDATA%\mise`: userspace, no Admin |
+| "running scripts is disabled on this system" | the policy blocks script *files*: evaluate instead (`iex (Get-Content -Raw …)`), and let `ensure-execution-policy.ps1` install the launchers and repoint Windows Terminal |
+| key login refused, and no log explains it | sshd runs as SYSTEM: `~\.ssh\authorized_keys` needs `SYSTEM` read access as well as the user's full control |
+| `pi` cannot authenticate | no provider key on that host: add the file a provider expects, or run `pi auth` |
+| repository missing on the target | `dot deploy --transport clone` (needs GitHub there) or the share path of S3 |
+| remote `dot` not found | `dot deploy` links `~/.local/bin/dot`; otherwise run the copy inside the repository |
+
+## 4. Core Workflows
 
 ### A. Bootstrapping a Fresh Machine (Stage 0 -> Stage 1)
 1. **Stage 0 Seed** (runs without any agent installed):
@@ -79,7 +116,7 @@ Skills in `pi/.pi/agent/skills/` are shared across Pi, Claude Code, Codex, and A
 
 ---
 
-## 4. Mandatory Verification & Safety Rules
+## 5. Mandatory Verification & Safety Rules
 
 - **Never run `rm -rf`** or destructive file operations without explicit user confirmation.
 - **Always run `--dry-run` first** on `install.sh`, `bootstrap.sh`, `link-pi-agent-entries.sh`, and `extract-local-overrides.sh`.

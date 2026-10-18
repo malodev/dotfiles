@@ -48,6 +48,7 @@ dot — Agent-Managed Dotfiles CLI ($REPO)
 
 Usage:
   dot doctor [--json]           Inspect OS capabilities, toolchain, symlinks, and drift
+  dot doctor --host <h>         Same sensor on another machine, over SSH (--ssh-port, --dir, --json)
   dot bootstrap [--full]        Run Stage 0 seed (essential pi + nvim-lite by default; --full for all)
   dot link [--full] [args...]   Sync agent skills & seed pi templates (--full includes optional extensions)
   dot deploy [--to HOST]        Push the repository to a target over SSH, seed it, verify it
@@ -62,6 +63,67 @@ Usage:
   dot agent [prompt...]         Launch an AI coding agent (pi/claude/agy) in the repo with doctor context
   dot <prompt...>               Shorthand for 'dot agent <prompt...>'
 EOF
+}
+
+#-----------------------------------------------------------------------------
+# Remote sensor: the target's own `dot doctor`, summarised. Shared by `dot deploy`
+# and `dot doctor --host`.
+#-----------------------------------------------------------------------------
+remote_doctor() {
+  local host="$1" port="$2" dir="$3"; shift 3
+  local json=0 a
+  for a in "$@"; do [[ "$a" == "--json" ]] && json=1; done
+
+  local -a ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15)
+  [[ "$port" != "22" ]] && ssh_cmd+=(-p "$port")
+
+  # `uname` answers on Unix and fails on Windows, where the default shell is PowerShell;
+  # a failing probe must not abort the caller (set -e plus pipefail would).
+  local platform="unix" os
+  os="$("${ssh_cmd[@]}" "$host" 'uname -s 2>/dev/null' 2>/dev/null | tr -d '\r' || true)"
+  case "$os" in
+    Linux|Darwin|FreeBSD|OpenBSD|NetBSD) ;;
+    *) if "${ssh_cmd[@]}" "$host" 'powershell -NoLogo -NoProfile -Command exit 0' >/dev/null 2>&1; then
+         platform="windows"
+       else
+         echo "  [!] uname said '$os' and PowerShell is not there either; assuming unix" >&2
+       fi ;;
+  esac
+
+  local doctor_json=""
+  if [[ "$platform" == "windows" ]]; then
+    # `dot` comes from the profile, which loads for SSH sessions on a healthy machine.
+    doctor_json="$("${ssh_cmd[@]}" "$host" 'dot doctor -Json' 2>/dev/null || true)"
+  else
+    # Prefer the linked CLI, fall back to the copy in the repository.
+    doctor_json="$("${ssh_cmd[@]}" "$host" \
+      "if [ -x \"\$HOME/.local/bin/dot\" ]; then \"\$HOME/.local/bin/dot\" doctor --json; else cd $dir && ./local-bin/.local/bin/dot doctor --json; fi" \
+      2>/dev/null || true)"
+  fi
+  # A PowerShell host can print a profile warning before the JSON; everything up to the
+  # opening brace is noise.
+  doctor_json="$(printf '%s\n' "$doctor_json" | sed -n '/^{/,$p')"
+
+  if [[ -z "$doctor_json" ]]; then
+    echo "  [!] $host did not answer with doctor JSON (is the repository there and dot linked?)" >&2
+    return 1
+  fi
+  if [[ "$json" == "1" ]]; then
+    printf '%s\n' "$doctor_json"
+    return 0
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s\n' "$doctor_json" | jq -r '
+      "  platform:  " + (.platform.os // "?") + " / " + (.platform.distro // "?") + " (" + (.platform.recommended_profile // "?") + ")",
+      "  tools:     missing: " + (([.tools | to_entries[] | select(.value == false) | .key] | join(", ")) // "none"),
+      "  agents:    pi: " + ((.agents.pi // "absent") | tostring),
+      "  providers: ready: " + (if .providers.ready == null then "?" else (.providers.ready | tostring) end),
+      "  profile:   can_load: " + (if .execution_policy.profile_can_load == null then "?" else (.execution_policy.profile_can_load | tostring) end),
+      "  drift:     " + ((.drift.git_branch // "?") | tostring) + " dirty: " + ((.drift.git_dirty_files // 0) | tostring)'
+  else
+    printf '%s\n' "$doctor_json"
+  fi
+  return 0
 }
 
 deploy_usage() {
@@ -221,32 +283,10 @@ deploy() {
 
   # 5. Verify: the target's own doctor, summarised (or verbatim with --json)
   echo "  verify:"
-  local doctor_json=""
-  if [[ "$platform" == "windows" ]]; then
-    doctor_json="$("${ssh_cmd[@]}" "$host" 'dot doctor -Json' 2>/dev/null || true)"
-  else
-    doctor_json="$("${ssh_cmd[@]}" "$host" "cd $target_dir && ./local-bin/.local/bin/dot doctor --json" 2>/dev/null || true)"
-  fi
-
-  if [[ -z "$doctor_json" ]]; then
-    echo "  [!] the target did not answer with doctor JSON" >&2
-    return 1
-  fi
-  # A PowerShell host can print a profile warning before the JSON (mise does, for one);
-  # everything up to the opening brace is noise.
-  doctor_json="$(printf '%s\n' "$doctor_json" | sed -n '/^{/,$p')"
-  if [[ "$json" == "1" ]]; then
-    printf '%s\n' "$doctor_json"
-  elif command -v jq >/dev/null 2>&1; then
-    printf '%s\n' "$doctor_json" | jq -r '
-      "  os:        " + (.platform.os // "?") + " / " + (.platform.distro // "?") + " (" + (.platform.recommended_profile // "?") + ")",
-      "  tools:     missing: " + (([.tools | to_entries[] | select(.value == false) | .key] | join(", ")) // "none"),
-      "  agents:    pi: " + ((.agents.pi // "absent") | tostring),
-      "  providers: ready: " + (if .providers.ready == null then "?" else (.providers.ready | tostring) end),
-      "  profile:   can_load: " + (if .execution_policy.profile_can_load == null then "?" else (.execution_policy.profile_can_load | tostring) end),
-      "  drift:     " + ((.drift.git_branch // "?") | tostring) + " dirty: " + ((.drift.git_dirty_files // 0) | tostring)'
-  else
-    printf '%s\n' "$doctor_json"
+  local -a json_flag=()
+  [[ "$json" == "1" ]] && json_flag=(--json)
+  if ! remote_doctor "$host" "$ssh_port" "$target_dir" "${json_flag[@]}"; then
+    deploy_failed=1
   fi
 
   if [[ "$deploy_failed" == "1" ]]; then
@@ -260,7 +300,21 @@ shift || true
 
 case "$cmd" in
   doctor)
-    exec "$REPO/scripts/doctor.sh" "$@"
+    d_host=""; d_port="22"; d_dir='~/dotfiles'; d_pass=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --host)     d_host="$2"; shift 2 ;;
+        --ssh-port) d_port="$2"; shift 2 ;;
+        --dir)      d_dir="$2"; shift 2 ;;
+        *)          d_pass+=("$1"); shift ;;
+      esac
+    done
+    if [[ -z "$d_host" ]]; then
+      exec "$REPO/scripts/doctor.sh" "${d_pass[@]}"
+    fi
+    # Keep stdout clean when the caller asked for JSON.
+    [[ " ${d_pass[*]} " == *" --json "* ]] || echo "── dot doctor → $d_host ──"
+    remote_doctor "$d_host" "$d_port" "$d_dir" "${d_pass[@]}"
     ;;
   bootstrap)
     exec "$REPO/bootstrap.sh" "$@"

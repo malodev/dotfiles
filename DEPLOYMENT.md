@@ -193,6 +193,15 @@ binary, and (c) the tool archives from the `mise` cache (`~/.local/share/mise/do
 
 ## 3. Verification after any deployment
 
+The target's own sensor, over SSH, needs nothing installed there beyond the repository:
+
+```bash
+dot doctor --host <host>              # summarised: platform, tools, agents, providers, drift
+dot doctor --host <host> --json       # raw JSON, for an agent to parse
+dot doctor --host <host> --ssh-port 2222
+dot deploy --verify-only --to <host>  # the same probe, inside a deploy
+```
+
 Per target (`dot doctor --json`):
 
 - `platform.os`, `platform.distro`, `platform.is_ssh`, `platform.has_gui`, `platform.sudo`,
@@ -228,17 +237,23 @@ Repository-side suites (run on the driver, they cover every platform they can re
 
 ## 4. Roadmap
 
-1. **`dot deploy --to <host> [--profile <name>] [--dry-run]`** — transport (clone or push),
-   the right entry point for the target OS and privilege, then `dot doctor --json` back and a
-   summary. This is the piece S1 and S7 are missing.
-2. **Host profiles** — `hosts/<name>.yaml` with `os`, `privilege: userspace|system`,
-   `groups[]`, `features[]`, `ssh: bool`. Makes "the minimum necessary" explicit, repeatable
-   and verifiable.
-3. **`dot doctor --host <h>`** — the remote variant of the sensor, so an agent can compare
-   targets before and after.
-4. **`--yes` and a CI exit code** for S5, plus a documented tarball entry for machines without
+Done:
+
+- **`dot deploy --to <host> | --profile <name>`** — transport (tar or clone), the right entry
+  point for the target OS and privilege, then the target's doctor back. `--dry-run`,
+  `--verify-only`, `--groups`, `--json`. The tar transport ships the working tree, uncommitted
+  changes included; `--transport clone` ships what is on GitHub.
+- **Host profiles** — `hosts/<name>.env` (tracked) or `hosts/<name>.local.env` (untracked) with
+  `HOST`, `USER`, `SSH_PORT`, `TRANSPORT`, `FULL`, `INSTALL_GROUPS`, `DIR`. See
+  `hosts/example.env`.
+- **`dot doctor --host <h>`** — the remote variant of the sensor.
+
+Still missing:
+
+1. **`dot deploy --hosts <file>`** — the fleet case (S7): many targets, one report, grouped by
+   profile.
+2. **`--yes` and a CI exit code** for S5, plus a documented tarball entry for machines without
    `git`.
-5. **The decision tree in `dotfiles-maintainer`** — which entry point for which OS and
-   privilege, what to verify, what to do when a step fails (S4 is the interesting case). This
-   is what makes S1 autonomous rather than a script the agent has to be told about.
-6. **Offline bundle** (S10) — repository + `mise` + tool archives + `pi` packages.
+3. **Windows `tar` transport** — today Windows targets need `--transport clone` (git on the
+   target) or the share path of S3.
+4. **Offline bundle** (S10) — repository + `mise` + tool archives + `pi` packages.

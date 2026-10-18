@@ -161,6 +161,16 @@ else
   fail "inline-evaluated helpers use exit:$inline_exit (it would abort the caller)"
 fi
 
+# The deployment surface has to stay documented where an agent looks for it.
+if grep -q "dot doctor --host" "$REPO/local-bin/.local/bin/dot" \
+   && grep -q -- "--profile NAME" "$REPO/local-bin/.local/bin/dot" \
+   && grep -q "Deployment Decision Tree" "$REPO/pi/.pi/agent/skills/dotfiles-maintainer/SKILL.md" \
+   && [[ -f "$REPO/DEPLOYMENT.md" ]]; then
+  pass "deployment surface documented (DEPLOYMENT.md, dot deploy, dot doctor --host, skill decision tree)"
+else
+  fail "deployment surface missing or undocumented"
+fi
+
 if [[ -f "$REPO/scripts/windows/enable-ssh-server.ps1" ]] && grep -q 'enable-ssh-server' "$REPO/bootstrap.ps1" && grep -q 'EnableSsh' "$REPO/bootstrap.ps1"; then
   pass "bootstrap.ps1 -EnableSsh wires in the OpenSSH server script"
 else
