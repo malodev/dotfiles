@@ -17,12 +17,17 @@
 #   ./bootstrap.sh --full         # Stage 0 bootstrap including all optional pi extensions
 #   ./bootstrap.sh --dry-run      # Preview actions without writing
 #   ./bootstrap.sh --launch-agent # Launch `pi` agent immediately after seed
+#   ./bootstrap.sh --offline      # No network: use a restored bundle (see scripts/install-offline-bundle.sh)
 #=============================================================================
 set -eo pipefail
 
 DRY_RUN=0
 LAUNCH_AGENT=0
 FULL_PI=0
+# Offline mode: everything Stage 0 needs was restored from a bundle (see
+# scripts/install-offline-bundle.sh), so every step that would reach the network is skipped.
+OFFLINE=0
+[[ "${DOTFILES_OFFLINE:-0}" == "1" ]] && OFFLINE=1
 REPO_URL="${DOTFILES_REPO_URL:-https://github.com/malodev/dotfiles.git}"
 TARGET_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
 
@@ -31,6 +36,7 @@ for arg in "$@"; do
     --dry-run)      DRY_RUN=1 ;;
     --launch-agent) LAUNCH_AGENT=1 ;;
     --full)         FULL_PI=1 ;;
+    --offline)      OFFLINE=1 ;;
     --help|-h)
       sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
@@ -74,6 +80,11 @@ export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 if command -v mise >/dev/null 2>&1; then
   ok "mise already available: $(command -v mise)"
 else
+  if [[ "$OFFLINE" == "1" ]]; then
+    warn "offline mode: mise is not installed and cannot be downloaded"
+    warn "  restore a bundle first: scripts/install-offline-bundle.sh <bundle.tar.gz>"
+    exit 1
+  fi
   info "Installing mise into ~/.local/bin/mise..."
   if [[ "$DRY_RUN" == "1" ]]; then
     run curl -fsSL https://mise.run \| sh
@@ -101,12 +112,19 @@ if [[ "$FULL_PI" == "1" ]]; then
 fi
 
 if command -v mise >/dev/null 2>&1 || [[ "$DRY_RUN" == "1" ]]; then
-  info "Declaring portable baseline tools in mise..."
-  for tool in "${PORTABLE_TOOLS[@]}"; do
-    run mise use -g "$tool" || warn "mise use -g $tool failed"
-  done
-  info "Installing mise tools..."
-  run mise install || warn "Some mise tools had warnings"
+  if [[ "$OFFLINE" == "1" ]]; then
+    # `mise use -g node@lts` has to resolve "lts" over the network; the bundle ships a config
+    # with exact versions and the installs themselves, so `mise install` is a no-op here.
+    info "Offline mode: using the versions restored from the bundle"
+    run mise install || warn "mise install reported problems (are the bundle installs in place?)"
+  else
+    info "Declaring portable baseline tools in mise..."
+    for tool in "${PORTABLE_TOOLS[@]}"; do
+      run mise use -g "$tool" || warn "mise use -g $tool failed"
+    done
+    info "Installing mise tools..."
+    run mise install || warn "Some mise tools had warnings"
+  fi
 fi
 
 # Seed zoxide with the dotfiles repo path so `z dot` works immediately on a fresh machine
@@ -121,6 +139,10 @@ fi
 if command -v pi >/dev/null 2>&1 && ! readlink -f "$(command -v pi)" 2>/dev/null | grep -q "@mariozechner"; then
   ok "pi coding agent already installed: $(command -v pi)"
 else
+  if [[ "$OFFLINE" == "1" ]]; then
+    warn "offline mode: pi is not on PATH and cannot be installed from npm"
+    warn "  the bundle carries it inside the node install; check that the installs were restored"
+  else
   info "Installing @earendil-works/pi-coding-agent and @earendil-works/pi-tui..."
   if command -v npm >/dev/null 2>&1 || [[ "$DRY_RUN" == "1" ]]; then
     run rm -f "$HOME/.local/bin/pi"
@@ -130,6 +152,7 @@ else
     command -v mise >/dev/null 2>&1 && [[ "$DRY_RUN" == "0" ]] && mise reshim || true
   else
     warn "npm not yet on PATH; run 'mise exec node@lts -- npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui' after bootstrap"
+  fi
   fi
 fi
 
@@ -203,7 +226,7 @@ fi
 
 # 8. Link Matt Pocock skills if submodule is present (initializes submodule if git is available and empty)
 if [[ ! -f "$REPO/pi/mattpocock-skills/scripts/link-skills.sh" && -d "$REPO/.git" && "$DRY_RUN" == "0" ]]; then
-  git -C "$REPO" submodule update --init --depth 1 pi/mattpocock-skills 2>/dev/null || true
+  [[ "$OFFLINE" == "1" ]] || git -C "$REPO" submodule update --init --depth 1 pi/mattpocock-skills 2>/dev/null || true
 fi
 if [[ -x "$REPO/pi/mattpocock-skills/scripts/link-skills.sh" ]]; then
   info "Linking Matt Pocock skills..."
@@ -216,6 +239,7 @@ fi
 
 echo ""
 ok "Stage 0 seed complete!"
+[[ "$OFFLINE" == "1" ]] && info "offline bundle: no network was used"
 echo ""
 info "Next steps:"
 info "  1. Ensure ~/.local/bin and ~/.local/share/mise/shims are on your PATH"
