@@ -137,7 +137,11 @@ function Install-AuthorizedKey {
         if ($isAdminUser) {
             & icacls.exe $keyFile /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
         } else {
-            & icacls.exe $keyFile /inheritance:r /grant "$($env:USERNAME):F" | Out-Null
+            # sshd runs as SYSTEM and has to READ this file: stripping the inherited ACEs
+            # without granting it back makes every key login fail silently, with no log to
+            # explain it. The user keeps full control, SYSTEM and Administrators only read,
+            # and nobody else can write.
+            & icacls.exe $keyFile /inheritance:r /grant "$($env:USERNAME):F" /grant "SYSTEM:R" /grant "Administrators:R" | Out-Null
         }
         Write-Ok "Authorised key in $keyFile (ACL locked to the account)"
     }
