@@ -62,7 +62,7 @@ package-lock.json
 /pi/.config/pi/web-search-cache/
 
 # Machine-local deployment profiles: hosts/<machine>.env is tracked, *.local.env is not.
-/hosts/*.local.env
+/hosts/*.local.*
 
 # Omarchy owns ~/.config/omarchy/shell.json. It rewrites it whenever the bar or
 # a plugin changes (keeping its own shell.json.bak-* beside it), so the copy

@@ -1,0 +1,18 @@
+# Fleet file for `dot deploy --hosts <file>`: one target per line.
+#
+# A line is either
+#   * a profile name      -> hosts/<name>.env, or hosts/<name>.local.env when present
+#   * an ssh destination  -> user@host, used when no such profile exists
+# optionally followed by per-host overrides:
+#   transport=tar|clone   port=N   dir=PATH   full=0|1   groups="…"   verify_only=0|1
+#
+# Blank lines, and everything after a #, are ignored. A target that is neither a known
+# profile nor a destination is reported and skipped; the run keeps going either way.
+
+# Lab VMs (see DEPLOYMENT.md S1/S3/S4)
+debian-vm
+mauro@192.168.6.30
+mauro@192.168.6.33 port=2222 verify_only=1
+
+# A school laptop: userspace only, no system layer, and the shell is what needs fixing
+# school-laptop full=0 groups=

@@ -69,6 +69,9 @@ EOF
 # Remote sensor: the target's own `dot doctor`, summarised. Shared by `dot deploy`
 # and `dot doctor --host`.
 #-----------------------------------------------------------------------------
+# Remote sensor: the target's own `dot doctor`, summarised. Shared by `dot deploy`
+# and `dot doctor --host`. Also leaves the JSON in REMOTE_DOCTOR_JSON.
+#-----------------------------------------------------------------------------
 remote_doctor() {
   local host="$1" port="$2" dir="$3"; shift 3
   local json=0 a
@@ -108,6 +111,8 @@ remote_doctor() {
     echo "  [!] $host did not answer with doctor JSON (is the repository there and dot linked?)" >&2
     return 1
   fi
+  REMOTE_DOCTOR_JSON="$doctor_json"
+
   if [[ "$json" == "1" ]]; then
     printf '%s\n' "$doctor_json"
     return 0
@@ -128,16 +133,20 @@ remote_doctor() {
 
 deploy_usage() {
   cat <<EOF
-dot deploy — push these dotfiles to a machine you can reach over SSH
+dot deploy — push these dotfiles to one machine, or to a fleet, over SSH
 
 Usage:
   dot deploy --to <host> [options]
   dot deploy --profile <name> [options]
+  dot deploy --hosts <file> [options]
 
 Options:
   --to HOST          ssh destination, e.g. 192.168.6.30 or mauro@host
   --profile NAME     defaults from hosts/NAME.env (HOST, USER, SSH_PORT, TRANSPORT,
                      FULL, INSTALL_GROUPS, DIR)
+  --hosts FILE       one target per line: a profile name, or an ssh destination, with
+                     optional per-host overrides (transport=, port=, dir=, full=,
+                     groups=, verify_only=). See hosts/example.fleet.
   --ssh-port N       ssh port (default 22)
   --transport MODE   tar (default, nothing needed on the target) | clone (GitHub on the target)
   --full             include the optional pi extension set / nvim-malo
@@ -145,154 +154,237 @@ Options:
   --dir PATH         repository path on the target (default ~/dotfiles)
   --dry-run          print the commands instead of running them (the verification probe
                      still runs: it is read-only and shows the state before the change)
-  --verify-only      skip transport and bootstrap, just inspect the target
-  --json             print the target's doctor JSON verbatim
+  --verify-only      skip transport and bootstrap, just inspect the target(s)
+  --json             print each target's doctor JSON verbatim (no fleet table)
 EOF
 }
 
-# Stage 0 on a Windows target: the bootstrap is evaluated, not executed, so a Group Policy
-# that blocks script files cannot stop it. $env:DOTFILES_REPO covers the fact that
-# $MyInvocation.MyCommand.Path is empty when a script is read instead of run.
-deploy_windows_bootstrap() {
-  local dir="$1" flags="$2"
-  local ps="\$env:DOTFILES_REPO='$dir'; iex ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','')"
-  [[ "$flags" == *full* ]] && ps="\$env:DOTFILES_REPO='$dir'; iex ('& { ' + ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','') + ' } -Full')"
-  run_remote "powershell -NoLogo -NoProfile -Command \"$ps\""
+# A profile is a shell fragment. Declaring the names first keeps it from touching anything
+# else, and every value is optional: whatever it does not set keeps the CLI default.
+load_host_profile() {
+  local name="$1" pf
+  pf="$REPO/hosts/$name.env"
+  [[ -f "$pf" ]] || pf="$REPO/hosts/$name.local.env"
+  [[ -f "$pf" ]] || return 1
+  # GROUPS is a bash special variable and cannot be assigned, hence INSTALL_GROUPS.
+  local HOST="" USER="" SSH_PORT="" TRANSPORT="" FULL="" INSTALL_GROUPS="" DIR=""
+  # shellcheck disable=SC1090
+  source "$pf"
+  [[ -n "$HOST" ]] && dp_host="${USER:+$USER@}$HOST"
+  [[ -n "$SSH_PORT" ]] && dp_port="$SSH_PORT"
+  [[ -n "$TRANSPORT" ]] && dp_transport="$TRANSPORT"
+  [[ "${FULL:-0}" == "1" ]] && dp_full="1"
+  [[ -n "$INSTALL_GROUPS" ]] && dp_groups="$INSTALL_GROUPS"
+  [[ -n "$DIR" ]] && dp_dir="$DIR"
+  return 0
+}
+
+# One target; every setting is already in dp_*.
+deploy_one() {
+  local -a ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15)
+  [[ "$dp_port" != "22" ]] && ssh_cmd+=(-p "$dp_port")
+  local failed=0
+
+  run_remote() {
+    if [[ "$dp_dry" == "1" ]]; then
+      printf '  [dry-run] ssh %s: %s\n' "$dp_host" "$1"
+    elif ! "${ssh_cmd[@]}" "$dp_host" "$1"; then
+      # Keep going: the verification step below is what tells the caller where it ended up.
+      echo "  [!] remote command failed" >&2
+      failed=1
+    fi
+  }
+
+  echo "── dot deploy → $dp_host ──" >&2
+
+  # 1. What is on the other side?
+  local platform="unix" os
+  os="$("${ssh_cmd[@]}" "$dp_host" 'uname -s 2>/dev/null' 2>/dev/null | tr -d '\r' || true)"
+  case "$os" in
+    Linux|Darwin|FreeBSD|OpenBSD|NetBSD) echo "  target:   $os" >&2 ;;
+    *) if "${ssh_cmd[@]}" "$dp_host" 'powershell -NoLogo -NoProfile -Command exit 0' >/dev/null 2>&1; then
+         platform="windows"; echo "  target:   Windows" >&2
+       else
+         echo "  [!] uname said '$os' and PowerShell is not there either; assuming unix" >&2
+       fi ;;
+  esac
+  echo "  platform: $platform" >&2
+  [[ -n "$dp_groups" ]] && echo "  groups:   $dp_groups (system layer)" >&2
+
+  if [[ "$dp_verify_only" != "1" ]]; then
+    # 2. Transport
+    case "$dp_transport" in
+      tar)
+        if [[ "$platform" == "windows" ]]; then
+          echo "  [!] tar transport is not implemented for Windows: use transport=clone" >&2
+          failed=1
+        else
+          echo "  transport: tar (no git needed on the target)" >&2
+          if [[ "$dp_dry" == "1" ]]; then
+            printf '  [dry-run] COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . | ssh %s "mkdir -p %s && tar -xzf - -C %s"\n' "$dp_host" "$dp_dir" "$dp_dir"
+          else
+            # COPYFILE_DISABLE keeps macOS tar from shipping AppleDouble ._* files, which
+            # otherwise land in the target as thousands of junk files.
+            if ! COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . \
+                 | "${ssh_cmd[@]}" "$dp_host" "mkdir -p $dp_dir && tar -xzf - -C $dp_dir"; then
+              echo "  [!] tar transport failed" >&2
+              failed=1
+            fi
+          fi
+        fi
+        ;;
+      clone)
+        echo "  transport: clone (needs GitHub on the target)" >&2
+        run_remote "if [ -d $dp_dir/.git ]; then git -C $dp_dir pull --ff-only; else git clone https://github.com/malodev/dotfiles.git $dp_dir; fi"
+        ;;
+      *) echo "dot deploy: unknown transport '$dp_transport' (tar|clone)" >&2; return 1 ;;
+    esac
+
+    # 3. Stage 0
+    echo "  bootstrap:" >&2
+    local flags=""
+    [[ "$dp_full" == "1" ]] && flags="--full"
+    if [[ "$platform" == "windows" ]]; then
+      deploy_windows_bootstrap '$env:USERPROFILE\dotfiles' "$flags"
+    else
+      run_remote "cd $dp_dir && bash ./bootstrap.sh $flags"
+    fi
+
+    # 4. Optional system layer
+    if [[ -n "$dp_groups" ]]; then
+      echo "  system layer:" >&2
+      run_remote "cd $dp_dir && sudo ./install.sh $dp_groups"
+    fi
+  fi
+
+  # 5. Verify
+  echo "  verify:" >&2
+  local -a json_flag=()
+  [[ "$dp_json" == "1" ]] && json_flag=(--json)
+  remote_doctor "$dp_host" "$dp_port" "$dp_dir" "${json_flag[@]}" || failed=1
+
+  if [[ "$failed" != "0" ]]; then
+    echo "  [!] something on $dp_host failed: see the messages above" >&2
+  fi
+  return "$failed"
 }
 
 deploy() {
-  local host="" user="" ssh_port="22" transport="tar" full="0" install_groups=""
-  local target_dir="" dry_run="0" verify_only="0" json="0" profile=""
+  # Defaults. The fleet loop resets every one of these before each host.
+  dp_host=""; dp_port="22"; dp_transport="tar"; dp_full="0"; dp_groups=""; dp_dir='~/dotfiles'
+  dp_dry="0"; dp_verify_only="0"; dp_json="0"; dp_profile=""; dp_hosts_file=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --to)          host="$2"; shift 2 ;;
-      --profile)     profile="$2"; shift 2 ;;
-      --ssh-port)    ssh_port="$2"; shift 2 ;;
-      --transport)   transport="$2"; shift 2 ;;
-      --full)        full="1"; shift ;;
-      --groups)      install_groups="$2"; shift 2 ;;
-      --dir)         target_dir="$2"; shift 2 ;;
-      --dry-run)     dry_run="1"; shift ;;
-      --verify-only) verify_only="1"; shift ;;
-      --json)        json="1"; shift ;;
+      --to)          dp_host="$2"; shift 2 ;;
+      --profile)     dp_profile="$2"; shift 2 ;;
+      --hosts)       dp_hosts_file="$2"; shift 2 ;;
+      --ssh-port)    dp_port="$2"; shift 2 ;;
+      --transport)   dp_transport="$2"; shift 2 ;;
+      --full)        dp_full="1"; shift ;;
+      --groups)      dp_groups="$2"; shift 2 ;;
+      --dir)         dp_dir="$2"; shift 2 ;;
+      --dry-run)     dp_dry="1"; shift ;;
+      --verify-only) dp_verify_only="1"; shift ;;
+      --json)        dp_json="1"; shift ;;
       -h|--help)     deploy_usage; return 0 ;;
       *) echo "dot deploy: unknown option: $1" >&2; deploy_usage >&2; return 1 ;;
     esac
   done
 
-  if [[ -n "$profile" ]]; then
-    local pf="$REPO/hosts/$profile.env"
-    [[ -f "$pf" ]] || pf="$REPO/hosts/$profile.local.env"
-    [[ -f "$pf" ]] || { echo "dot deploy: no such profile: hosts/$profile.env" >&2; return 1; }
-    # The profile is a shell fragment. Declaring the names first keeps it from touching
-    # anything else in the environment.
-    # GROUPS is a bash special variable and cannot be assigned, hence INSTALL_GROUPS.
-    local HOST="" USER="" SSH_PORT="" TRANSPORT="" FULL="" INSTALL_GROUPS="" DIR=""
-    # shellcheck disable=SC1090
-    source "$pf"
-    host="${host:-${USER:+$USER@}${HOST}}"
-    ssh_port="${SSH_PORT:-$ssh_port}"
-    transport="${TRANSPORT:-$transport}"
-    [[ "${FULL:-0}" == "1" ]] && full="1"
-    install_groups="${install_groups:-${INSTALL_GROUPS:-}}"
-    target_dir="${target_dir:-${DIR:-}}"
+  if [[ -n "$dp_profile" ]]; then
+    load_host_profile "$dp_profile" || { echo "dot deploy: no such profile: hosts/$dp_profile.env" >&2; return 1; }
+    [[ -n "$dp_host" ]] || { echo "dot deploy: profile hosts/$dp_profile.env has no HOST; set it there or pass --to" >&2; return 1; }
   fi
 
-  if [[ -n "$profile" && -z "$host" ]]; then
-    echo "dot deploy: profile hosts/$profile.env has no HOST; set it there or pass --to" >&2
-    return 1
+  # One target
+  if [[ -z "$dp_hosts_file" ]]; then
+    [[ -n "$dp_host" ]] || { echo "dot deploy: --to <host>, --profile <name> or --hosts <file> is required" >&2; deploy_usage >&2; return 1; }
+    deploy_one
+    return $?
   fi
-  [[ -n "$host" ]] || { echo "dot deploy: --to <host> or --profile <name> is required" >&2; deploy_usage >&2; return 1; }
-  target_dir="${target_dir:-~/dotfiles}"
 
-  local -a ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15)
-  [[ "$ssh_port" != "22" ]] && ssh_cmd+=(-p "$ssh_port")
+  # A fleet: one target per line, grouped by profile
+  [[ -f "$dp_hosts_file" ]] || { echo "dot deploy: no such fleet file: $dp_hosts_file" >&2; return 1; }
 
-  local deploy_failed=0
+  local base_host="$dp_host" base_port="$dp_port" base_transport="$dp_transport"
+  local base_full="$dp_full" base_groups="$dp_groups" base_dir="$dp_dir"
+  local base_verify_only="$dp_verify_only"
+  local line entry kv row r shown_host fleet_failed=0
+  local -a rows=()
+  local -a fleet_lines=()
 
-  run_remote() {
-    if [[ "$dry_run" == "1" ]]; then
-      printf '  [dry-run] ssh %s: %s\n' "$host" "$1"
-    elif ! "${ssh_cmd[@]}" "$host" "$1"; then
-      # Keep going: the verification step below is what tells the caller where it ended up.
-      echo "  [!] remote command failed (exit $?)" >&2
-      deploy_failed=1
+  # Read the whole file first: the ssh calls inside the loop would otherwise consume the
+  # remaining lines from stdin and the fleet would stop after the first host.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    fleet_lines+=("$line")
+  done < "$dp_hosts_file"
+
+  for line in "${fleet_lines[@]}"; do
+    line="${line%%#*}"
+    # Intentional word splitting: the line is "<target> [key=value ...]".
+    # shellcheck disable=SC2086
+    set -- $line
+    [[ $# -gt 0 ]] || continue
+    entry="$1"; shift
+
+    dp_host="$base_host"; dp_port="$base_port"; dp_transport="$base_transport"
+    dp_full="$base_full"; dp_groups="$base_groups"; dp_dir="$base_dir"
+    dp_verify_only="$base_verify_only"
+    # A profile name, or an ssh destination when no such profile exists.
+    load_host_profile "$entry" || dp_host="$entry"
+
+    for kv in "$@"; do
+      case "$kv" in
+        transport=*)   dp_transport="${kv#*=}" ;;
+        port=*)        dp_port="${kv#*=}" ;;
+        dir=*)         dp_dir="${kv#*=}" ;;
+        full=*)        dp_full="${kv#*=}" ;;
+        groups=*)      dp_groups="${kv#*=}" ;;
+        verify_only=*) dp_verify_only="${kv#*=}" ;;
+        *) echo "  [!] unknown fleet option: $kv" >&2 ;;
+      esac
+    done
+
+    if [[ -z "$dp_host" ]]; then
+      echo "  [!] '$entry' is neither a profile nor a destination; skipping" >&2
+      fleet_failed=1
+      continue
     fi
-  }
 
-  echo "── dot deploy → $host ──"
+    echo ""
+    REMOTE_DOCTOR_JSON=""
+    if deploy_one; then row="ok"; else row="failed"; fleet_failed=1; fi
 
-  # 1. What is on the other side? uname answers on Unix, PowerShell on Windows.
-  local platform="unix" os
-  # `uname` answers on Unix, fails on Windows (where the default shell is PowerShell), and a
-  # failing probe must not abort the deploy: set -e plus pipefail would end the script here.
-  os="$("${ssh_cmd[@]}" "$host" 'uname -s 2>/dev/null' 2>/dev/null | tr -d '\r' || true)"
-  case "$os" in
-    Linux|Darwin|FreeBSD|OpenBSD|NetBSD) platform="unix"; echo "  target:   $os" ;;
-    *) if "${ssh_cmd[@]}" "$host" 'powershell -NoLogo -NoProfile -Command exit 0' >/dev/null 2>&1; then
-         platform="windows"; echo "  target:   Windows"
-       else
-         echo "  [!] uname said '$os' and PowerShell is not there either; assuming unix" >&2
-       fi ;;
-  esac
-  echo "  platform: $platform"
-  [[ -n "$install_groups" ]] && echo "  groups:   $install_groups (system layer)"
-
-  # 2. Transport
-  if [[ "$verify_only" != "1" ]]; then
-    case "$transport" in
-      tar)
-        if [[ "$platform" == "windows" ]]; then
-          echo "  [!] tar transport is not implemented for Windows: use --transport clone" >&2
-        else
-          echo "  transport: tar (no git needed on the target)"
-          if [[ "$dry_run" == "1" ]]; then
-            printf '  [dry-run] COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . | ssh %s "mkdir -p %s && tar -xzf - -C %s"\n' "$host" "$target_dir" "$target_dir"
-          else
-            # COPYFILE_DISABLE keeps macOS tar from shipping AppleDouble ._* files, which
-            # otherwise land in the target as a thousand junk files.
-            COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . \
-              | "${ssh_cmd[@]}" "$host" "mkdir -p $target_dir && tar -xzf - -C $target_dir"
-          fi
-        fi
-        ;;
-      clone)
-        echo "  transport: clone (needs GitHub on the target)"
-        run_remote "if [ -d $target_dir/.git ]; then git -C $target_dir pull --ff-only; else git clone https://github.com/malodev/dotfiles.git $target_dir; fi"
-        ;;
-      *) echo "dot deploy: unknown transport '$transport' (tar|clone)" >&2; return 1 ;;
-    esac
-
-    # 3. Stage 0
-    echo "  bootstrap:"
-    local flags=""
-    [[ "$full" == "1" ]] && flags="--full"
-    if [[ "$platform" == "windows" ]]; then
-      deploy_windows_bootstrap '$env:USERPROFILE\dotfiles' "$flags"
+    if [[ -n "$REMOTE_DOCTOR_JSON" ]] && command -v jq >/dev/null 2>&1; then
+      shown_host="$dp_host"
+      [[ "$dp_port" != "22" ]] && shown_host="$dp_host:$dp_port"
+      rows+=("$(printf '%s\n' "$REMOTE_DOCTOR_JSON" | jq -r --arg h "$shown_host" --arg r "$row" \
+        '[$h, (.platform.os // "?") + "/" + (.platform.distro // "?"), $r,
+          (if .providers.ready == null then "?" else (.providers.ready | tostring) end),
+          ((.drift.git_dirty_files // 0) | tostring)] | @tsv')")
     else
-      run_remote "cd $target_dir && bash ./bootstrap.sh $flags"
+      shown_host="$dp_host"
+      [[ "$dp_port" != "22" ]] && shown_host="$dp_host:$dp_port"
+      rows+=("$(printf '%s\t%s\t%s\t%s\t%s' "$shown_host" "?" "$row" "?" "?")")
     fi
+  done
 
-    # 4. Optional system layer, only when the caller asked for groups
-    if [[ -n "$install_groups" ]]; then
-      echo "  system layer:"
-      run_remote "cd $target_dir && sudo ./install.sh $install_groups"
-    fi
+  if [[ "$dp_json" != "1" ]]; then
+    echo ""
+    echo "── fleet summary ──"
+    printf '  %-24s %-18s %-7s %-10s %s\n' "host" "platform" "result" "providers" "dirty"
+    for r in "${rows[@]}"; do
+      # shellcheck disable=SC2086
+      printf '  %-24s %-18s %-7s %-10s %s\n' $r
+    done
   fi
 
-  # 5. Verify: the target's own doctor, summarised (or verbatim with --json)
-  echo "  verify:"
-  local -a json_flag=()
-  [[ "$json" == "1" ]] && json_flag=(--json)
-  if ! remote_doctor "$host" "$ssh_port" "$target_dir" "${json_flag[@]}"; then
-    deploy_failed=1
+  if [[ "$fleet_failed" != "0" ]]; then
+    echo ""
+    echo "  [!] at least one host failed" >&2
   fi
-
-  if [[ "$deploy_failed" == "1" ]]; then
-    echo "  [!] something on $host failed: see the messages above" >&2
-    return 1
-  fi
+  return "$fleet_failed"
 }
 
 cmd="${1:-doctor}"

@@ -164,6 +164,8 @@ fi
 # The deployment surface has to stay documented where an agent looks for it.
 if grep -q "dot doctor --host" "$REPO/local-bin/.local/bin/dot" \
    && grep -q -- "--profile NAME" "$REPO/local-bin/.local/bin/dot" \
+   && grep -q -- "--hosts FILE" "$REPO/local-bin/.local/bin/dot" \
+   && [[ -f "$REPO/hosts/example.fleet" ]] \
    && grep -q "Deployment Decision Tree" "$REPO/pi/.pi/agent/skills/dotfiles-maintainer/SKILL.md" \
    && [[ -f "$REPO/DEPLOYMENT.md" ]]; then
   pass "deployment surface documented (DEPLOYMENT.md, dot deploy, dot doctor --host, skill decision tree)"

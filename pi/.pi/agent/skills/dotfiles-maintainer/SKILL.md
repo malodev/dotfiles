@@ -57,6 +57,9 @@ over SSH, and it needs nothing installed there beyond the repository.
 1. **Can you reach the machine over SSH?**
    - yes -> stay on the driver: `dot deploy --to <host>` (or `--profile <name>`, `--dry-run`
      first). The agent never needs a shell on the target.
+   - several machines at once -> `dot deploy --hosts hosts/<name>.fleet`: one target per line
+     (profile name or `user@host`), with per-host overrides such as `port=2222` or
+     `verify_only=1`, and a summary table with a non-zero exit code if any host failed.
    - no -> get a terminal there and pull: `git clone … && ./bootstrap.sh`, the
      `curl …/bootstrap.sh | bash` form (the script clones the repository itself), or a mounted
      share.

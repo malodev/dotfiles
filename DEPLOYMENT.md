@@ -147,14 +147,19 @@ sides, and keep the agent assets (`~/.agents/skills`, `~/.claude/skills`) linked
 
 ### S7 — Fleet: many targets from one driver
 
-What S1 does for one host, repeated. Today this is a shell loop plus the per-host `doctor`
-JSON; the natural home for it is `dot deploy --hosts <file>` (roadmap). Two rules that already
-pay off on a fleet:
+```bash
+dot deploy --hosts hosts/lab.fleet [--dry-run] [--verify-only] [--json]
+```
 
-- group the targets by *profile* (see S9) instead of per host, so "school laptop" and
-  "workstation" are two profiles and not twenty command lines;
-- collect `dot doctor --json` from every host before changing anything, so the report shows
-  what differed, not just what ran.
+One target per line: a profile name (`hosts/<name>.env`) or an ssh destination, with optional
+per-host overrides (`transport=`, `port=`, `dir=`, `full=`, `groups=`, `verify_only=`). See
+`hosts/example.fleet`. Every host gets the full S1 treatment in turn, and the run ends with a
+table — host, platform, result, `providers.ready`, drift — plus a non-zero exit code if any
+host failed. `--json` prints each host's raw doctor output instead of the table.
+
+Group targets by *profile* rather than per host: "school laptop" and "workstation" are two
+profiles, not twenty command lines. Verified on the lab VMs in one run: two Linux hosts
+deployed with the tar transport and a Windows host inspected through its forwarded port.
 
 ### S8 — Repair or re-deploy on an existing machine
 
@@ -247,12 +252,12 @@ Done:
   `HOST`, `USER`, `SSH_PORT`, `TRANSPORT`, `FULL`, `INSTALL_GROUPS`, `DIR`. See
   `hosts/example.env`.
 - **`dot doctor --host <h>`** — the remote variant of the sensor.
+- **`dot deploy --hosts <file>`** — the fleet case (S7): many targets, one report, grouped by
+  profile, per-host overrides, non-zero exit code when any host fails.
 
 Still missing:
 
-1. **`dot deploy --hosts <file>`** — the fleet case (S7): many targets, one report, grouped by
-   profile.
-2. **`--yes` and a CI exit code** for S5, plus a documented tarball entry for machines without
+1. **`--yes` and a CI exit code** for S5, plus a documented tarball entry for machines without
    `git`.
 3. **Windows `tar` transport** — today Windows targets need `--transport clone` (git on the
    target) or the share path of S3.
