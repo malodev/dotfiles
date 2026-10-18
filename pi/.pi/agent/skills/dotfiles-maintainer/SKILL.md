@@ -34,8 +34,14 @@ Inspect the JSON output for:
 | :--- | :--- | :--- | :--- |
 | **`workstation-macos`** | macOS Desktop | `Brewfile` + `mise` | GNU Stow (`./install.sh`) + `scripts/link-pi-agent-entries.sh` |
 | **`workstation-linux`** | Arch / Omarchy / Ubuntu GUI | System PM (`pacman`/`apt`) + `mise` | GNU Stow (`./install.sh`) + `scripts/link-pi-agent-entries.sh` |
-| **`headless-ssh`** | Rootless / Remote Linux SSH | `mise` in userspace (`~/.local/bin/mise`) | `bootstrap.sh` or `./install.sh --preset minimal` |
-| **`workstation-windows`** | Native Windows + Windows Terminal | `mise` (`winget`/`scoop` fallback) | `bootstrap.ps1` + `scripts/windows/link-windows.ps1` (Directory Junctions + `XDG_CONFIG_HOME=$HOME\.config`) |
+| **`headless-ssh`** | Rootless / Remote Linux SSH | `mise` in userspace (`~/.local/bin/mise`) | `bootstrap.sh` or `./install.sh --minimal` |
+| **`workstation-windows`** | Native Windows + Windows Terminal | `mise` (`winget`/`scoop`/GitHub release zip fallback) | `bootstrap.ps1` + `scripts/windows/link-windows.ps1` (Directory Junctions + `XDG_CONFIG_HOME=$HOME\.config`) |
+
+The full deployment catalogue — who drives, how the repository gets there, privilege and
+scope, the exact commands per scenario, what to verify and what is still missing — is
+`DEPLOYMENT.md`, at the repository root (five levels up from this file, and the same
+directory the `dot` CLI prints with `dot cd`). Read it before deploying to a machine you
+have not touched before, especially a locked-down one.
 
 ---
 

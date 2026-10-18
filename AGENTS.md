@@ -70,6 +70,8 @@ On **Native Windows (PowerShell in Windows Terminal)**:
   `settings`, `keybindings`, `models`, `mcp` (native pi MCP, live file `~/.pi/agent/mcp.json`) and `herdr` ship as tracked templates; `scripts/init-pi-settings.sh` and `scripts/init-herdr-config.sh` seed the live, untracked files on first run and never overwrite an existing one. `--force` skips the host-endpoint files (`models`, `mcp`) unless `--force-host` is passed.
 - **Sentinel-Based Local Overrides (`scripts/extract-local-overrides.sh`):**
   Managed shell/git/WM files end with `# >>> END MANAGED CONFIG <<<` and source untracked `*_local` files (`~/.zshrc_local`, `~/.gitconfig_local`, etc.).
+- **Deployment Scenarios ([`DEPLOYMENT.md`](file:///Users/mauro/dotfiles/DEPLOYMENT.md)):**
+  The three axes of any deployment (who drives, how the repository gets there, privilege and scope), the ten scenarios with exact commands — driver agent over SSH, terminal on the target, share or mount, locked-down targets, CI, WSL, fleet, repair, handover, offline — plus what to verify afterwards and the roadmap (`dot deploy`, host profiles).
 
 ---
 
