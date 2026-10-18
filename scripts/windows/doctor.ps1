@@ -33,19 +33,21 @@ function Get-LinkStatus([string]$Path) {
 }
 
 $IsWindowsHost = ($env:OS -eq "Windows_NT")
-$EffectivePolicy = if ($IsWindowsHost) { Get-ExecutionPolicy } else { "n/a" }
+# .ToString() matters: ConvertTo-Json turns the ExecutionPolicy enum into its number
+# (RemoteSigned would show up as 1).
+$EffectivePolicy = if ($IsWindowsHost) { (Get-ExecutionPolicy).ToString() } else { "n/a" }
 # Whether the profile can load depends on the persistent scopes, not on the effective
 # policy of this process: a shell started with -ExecutionPolicy Bypass reports Bypass
 # while every new shell is still Restricted.
 $PersistentPolicy = if (-not $IsWindowsHost) { "n/a" } else {
     $p = Get-ExecutionPolicy -Scope CurrentUser
-    if ($p -eq "Undefined") { Get-ExecutionPolicy -Scope LocalMachine } else { $p }
+    if ($p -eq "Undefined") { (Get-ExecutionPolicy -Scope LocalMachine).ToString() } else { $p.ToString() }
 }
 $ProfileCanLoad = if (-not $IsWindowsHost) { $true } else { $PersistentPolicy -notin @("Restricted", "AllSigned", "Undefined") }
 $PolicyScopes = [ordered]@{}
 if ($IsWindowsHost) {
-    foreach ($scope in @("MachinePolicy", "UserPolicy", "Machine", "User", "Process")) {
-        $PolicyScopes[$scope.ToLower()] = Get-ExecutionPolicy -Scope $scope
+    foreach ($scope in @("MachinePolicy", "UserPolicy", "CurrentUser", "LocalMachine", "Process")) {
+        $PolicyScopes[$scope.ToLower()] = (Get-ExecutionPolicy -Scope $scope).ToString()
     }
 }
 
