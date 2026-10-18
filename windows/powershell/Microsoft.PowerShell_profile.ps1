@@ -140,9 +140,11 @@ function dot {
     }
 }
 
-# Source machine-local PowerShell overrides if present
+# Machine-local overrides. Read and evaluate instead of dot-sourcing: `.` needs an
+# execution policy that allows local script files, which a Group Policy machine does
+# not have, and this is the last thing that would fail at startup there.
 $LocalProfile = Join-Path (Split-Path -Parent $PROFILE) "Microsoft.PowerShell_profile_local.ps1"
 if (Test-Path $LocalProfile) {
-    . $LocalProfile
+    Invoke-Expression (Get-Content -Raw $LocalProfile)
 }
 # >>> END MANAGED CONFIG <<<

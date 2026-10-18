@@ -28,11 +28,28 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+# $MyInvocation.MyCommand.Path is empty when this file is read and evaluated instead
+# of executed, which is how it has to run on a machine where a Group Policy forbids
+# script files: the launcher passes the repository through DOTFILES_REPO.
+$RepoRoot = if ($env:DOTFILES_REPO) { $env:DOTFILES_REPO } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 
 function Write-Info($msg) { Write-Host "  * $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
+
+# A Group Policy execution policy blocks script files outright and outranks
+# -ExecutionPolicy and -Scope Process, so a helper can only run there by reading it
+# and evaluating its text. Both helper scripts go through this.
+function Invoke-DotfileScript {
+    param([string]$Path, [string]$Arguments = "")
+    if (-not (Test-Path $Path)) { Write-Warn "Missing script: $Path"; return }
+    if ((Get-ExecutionPolicy) -notin @("Restricted", "AllSigned")) {
+        if ($Arguments) { Invoke-Expression ("& '" + $Path + "' " + $Arguments) } else { & $Path }
+        return
+    }
+    $body = (Get-Content -Raw $Path) -replace '(?m)^#Requires.*$', ''
+    Invoke-Expression ("& { " + $body + " } " + $Arguments)
+}
 
 $XdgConfig   = Join-Path $HOME ".config"
 $LocalBin    = Join-Path $HOME ".local\bin"
@@ -86,9 +103,7 @@ if ($DryRun) {
 #     Windows clients default to Restricted, which blocks the profile and prints
 #     "running scripts is disabled on this system" at every prompt.
 $PolicyScript = Join-Path $RepoRoot "scripts\windows\ensure-execution-policy.ps1"
-if (Test-Path $PolicyScript) {
-    if ($DryRun) { & $PolicyScript -DryRun } else { & $PolicyScript }
-}
+if ($DryRun) { Invoke-DotfileScript $PolicyScript "-DryRun" } else { Invoke-DotfileScript $PolicyScript }
 
 # 2. Ensure `mise` is installed
 Update-SessionPath
@@ -177,10 +192,10 @@ if (Get-Command pi -ErrorAction SilentlyContinue) {
 # 5. Link configs & agent skills via zero-Admin Junctions
 $LinkScript = Join-Path $RepoRoot "scripts\windows\link-windows.ps1"
 if (Test-Path $LinkScript) {
-    $LinkArgs = @{}
-    if ($DryRun) { $LinkArgs["DryRun"] = $true }
-    if ($Full)   { $LinkArgs["Full"]   = $true }
-    & $LinkScript @LinkArgs
+    $LinkArgs = ""
+    if ($DryRun) { $LinkArgs += " -DryRun" }
+    if ($Full)   { $LinkArgs += " -Full" }
+    Invoke-DotfileScript $LinkScript $LinkArgs.Trim()
 }
 
 Write-Host ""

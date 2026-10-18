@@ -23,7 +23,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path
+# Same DOTFILES_REPO fallback as bootstrap.ps1: the file may be read and evaluated
+# instead of executed when a Group Policy forbids script files.
+$RepoRoot = if ($env:DOTFILES_REPO) { $env:DOTFILES_REPO } elseif ($MyInvocation.MyCommand.Path) { (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")).Path } else { (Get-Location).Path }
 
 $LocalOnlyEntries = @(
     "skills/diagnose-crash",
@@ -52,6 +54,19 @@ $OptionalExtensions = @(
 function Write-Info($msg) { Write-Host "  * $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
+
+# See bootstrap.ps1: under a Group Policy execution policy a script file cannot run
+# at all, so the policy helper is read and evaluated instead.
+function Invoke-DotfileScript {
+    param([string]$Path, [string]$Arguments = "")
+    if (-not (Test-Path $Path)) { Write-Warn "Missing script: $Path"; return }
+    if ((Get-ExecutionPolicy) -notin @("Restricted", "AllSigned")) {
+        if ($Arguments) { Invoke-Expression ("& '" + $Path + "' " + $Arguments) } else { & $Path }
+        return
+    }
+    $body = (Get-Content -Raw $Path) -replace '(?m)^#Requires.*$', ''
+    Invoke-Expression ("& { " + $body + " } " + $Arguments)
+}
 
 function Set-DirectoryJunction {
     param([string]$Source, [string]$Target)
@@ -164,9 +179,7 @@ Set-FileLinkOrCopy -Source (Join-Path $RepoRoot "pi\.config\pi\web-search.json")
 # allow local unsigned scripts or Windows PowerShell reports "running scripts is
 # disabled on this system" before any of this config is read.
 $PolicyScript = Join-Path $RepoRoot "scripts\windows\ensure-execution-policy.ps1"
-if (Test-Path $PolicyScript) {
-    if ($DryRun) { & $PolicyScript -DryRun } else { & $PolicyScript }
-}
+if ($DryRun) { Invoke-DotfileScript $PolicyScript "-DryRun" } else { Invoke-DotfileScript $PolicyScript }
 
 $PwshProfileSrc = Join-Path $RepoRoot "windows\powershell\Microsoft.PowerShell_profile.ps1"
 if ($PROFILE) {

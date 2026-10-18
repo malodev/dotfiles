@@ -125,6 +125,28 @@ else
   fail "execution-policy helper missing or not wired into both entry points (refs=$policy_refs)"
 fi
 
+# A Group Policy execution policy blocks script files outright and outranks every
+# local override, so the repo also ships policy-proof launchers: a .cmd that loads
+# the profile with an inline command (which no policy governs).
+launcher_ok=0
+if [[ -f "$REPO/windows/dotfiles-shell.cmd" ]] && grep -q 'NoProfile -NoExit -Command "iex (Get-Content -Raw \$PROFILE)"' "$REPO/windows/dotfiles-shell.cmd"; then
+  launcher_ok=$((launcher_ok + 1))
+fi
+if [[ -f "$REPO/windows/bootstrap-dotfiles.cmd" ]] && grep -q 'DOTFILES_REPO' "$REPO/windows/bootstrap-dotfiles.cmd"; then
+  launcher_ok=$((launcher_ok + 1))
+fi
+if [[ $launcher_ok -eq 2 ]] && grep -q "Install-Launchers" "$REPO/scripts/windows/ensure-execution-policy.ps1"; then
+  pass "policy-proof launchers exist and the policy helper installs them"
+else
+  fail "policy-proof launchers missing or not installed by the policy helper (found=$launcher_ok)"
+fi
+
+if grep -qE '^[[:space:]]*\.[[:space:]]+\$LocalProfile' "$REPO/windows/powershell/Microsoft.PowerShell_profile.ps1"; then
+  fail "the profile dot-sources the local override, which needs a policy that allows scripts"
+else
+  pass "the profile imports the local override without dot-sourcing a script file"
+fi
+
 #-----------------------------------------------------------------------------
 # 2. Isolated Clean-$HOME Sandbox Simulation (Zero Host Mutation)
 #-----------------------------------------------------------------------------
