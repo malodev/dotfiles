@@ -18,8 +18,11 @@ foreach ($p in @($LocalBin, $MiseShims, $WinGetLinks, $MiseProgBin)) {
     }
 }
 
-# Activate mise if available
+# Activate mise if available. Its chpwd hook (switching tool versions when the directory
+# changes) needs PowerShell 7, and on Windows PowerShell 5.1 mise prints a warning at every
+# single shell start: silence it there only, so a pwsh 7 session keeps the feature.
 if (Get-Command mise -ErrorAction SilentlyContinue) {
+    if ($PSVersionTable.PSVersion.Major -lt 7) { $env:MISE_PWSH_CHPWD_WARNING = "0" }
     mise activate pwsh | Out-String | Invoke-Expression
 }
 
