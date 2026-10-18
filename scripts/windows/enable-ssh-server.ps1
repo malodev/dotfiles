@@ -90,12 +90,66 @@ if ($env:DOTFILES_SSH_PUBKEY) { $PublicKey = $env:DOTFILES_SSH_PUBKEY }
 if ($env:DOTFILES_SSH_DRYRUN -eq "1") { $DryRun = $true }
 if ($env:DOTFILES_SSH_SKIPCAP -eq "1") { $SkipCapability = $true }
 
+# Resolve the key before anything else: authorising it in the user's own profile needs no
+# Administrator rights, so a standard account can set up its key even on a machine where it
+# cannot install the server.
+if (-not $PublicKey -and -not $PublicKeyPath) {
+    $defaultKey = Join-Path $HOME ".ssh\id_ed25519.pub"
+    if (Test-Path $defaultKey) { $PublicKeyPath = $defaultKey }
+}
+if ($PublicKeyPath -and -not $PublicKey) {
+    if (-not (Test-Path $PublicKeyPath)) {
+        Write-Warn "Public key not found: $PublicKeyPath"
+    } else {
+        # First usable line only: a .pub file can hold several keys or comments.
+        $PublicKey = (Get-Content $PublicKeyPath | Where-Object { $_ -match '^\s*(ssh-|ecdsa-|sk-)' } | Select-Object -First 1)
+    }
+}
+# A key pasted from a wrapped line arrives with newlines inside it, and sshd then sees a line
+# that is only the key type and rejects the login. Collapse all whitespace.
+if ($PublicKey) { $PublicKey = ($PublicKey -replace '\s+', ' ').Trim() }
+
+# Windows reads administrators_authorized_keys for members of Administrators and the
+# per-user file for everyone else, and both need an ACL only that account can write.
+function Install-AuthorizedKey {
+    if (-not $PublicKey) {
+        Write-Info "No public key given: password login stays in use"
+        Write-Info "  add one later with -PublicKeyPath <file>"
+        return
+    }
+
+    $isAdminUser = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdminUser) {
+        $keyFile = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+    } else {
+        $keyFile = Join-Path $HOME ".ssh\authorized_keys"
+    }
+
+    $existing = if (Test-Path $keyFile) { Get-Content -Raw $keyFile } else { "" }
+    if ($existing -match [regex]::Escape(($PublicKey -split ' ')[1])) {
+        Write-Ok "Key already authorised in $keyFile"
+    } elseif ($DryRun) {
+        Write-Info "[dry-run] append the key to $keyFile and lock its ACL"
+    } else {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $keyFile) | Out-Null
+        $text = ($existing.TrimEnd() + "`n" + $PublicKey + "`n").TrimStart("`n")
+        [IO.File]::WriteAllText($keyFile, $text, (New-Object Text.UTF8Encoding($false)))
+        if ($isAdminUser) {
+            & icacls.exe $keyFile /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
+        } else {
+            & icacls.exe $keyFile /inheritance:r /grant "$($env:USERNAME):F" | Out-Null
+        }
+        Write-Ok "Authorised key in $keyFile (ACL locked to the account)"
+    }
+}
+
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $IsAdmin) {
     if ($DryRun -or $NoElevate) {
         Write-Warn "Administrator rights are needed to install the SSH server, start the"
         Write-Warn "sshd service and open the firewall. Not elevating."
+        Install-AuthorizedKey
         Write-Info "Alternatives without admin rights:"
         Write-Info "  1. Ask IT to install the 'OpenSSH Server' optional feature and start sshd"
         Write-Info "  2. Tailscale SSH: 'tailscale up --ssh' reaches this machine over the tailnet"
@@ -253,54 +307,8 @@ if (-not $KeepDefaultShell) {
     Write-Info "Default shell left alone (-KeepDefaultShell)"
 }
 
-# 5. Authorised key. Windows uses a different file for administrators, and both need an
-#    ACL that only the account (or Administrators/SYSTEM) can write.
-if (-not $PublicKey -and -not $PublicKeyPath) {
-    $defaultKey = Join-Path $HOME ".ssh\id_ed25519.pub"
-    if (Test-Path $defaultKey) { $PublicKeyPath = $defaultKey }
-}
-
-if ($PublicKeyPath -and -not $PublicKey) {
-    if (-not (Test-Path $PublicKeyPath)) {
-        Write-Warn "Public key not found: $PublicKeyPath"
-    } else {
-        # First usable line only: a .pub file can hold several keys or comments.
-        $PublicKey = (Get-Content $PublicKeyPath | Where-Object { $_ -match '^\s*(ssh-|ecdsa-|sk-)' } | Select-Object -First 1)
-    }
-}
-
-# A key pasted from a wrapped line arrives with newlines inside it, and sshd then sees a
-# line that is only the key type and rejects the login. Collapse all whitespace.
-if ($PublicKey) { $PublicKey = ($PublicKey -replace '\s+', ' ').Trim() }
-
-if ($PublicKey) {
-    $isAdminUser = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($isAdminUser) {
-        $keyFile = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
-    } else {
-        $keyFile = Join-Path $HOME ".ssh\authorized_keys"
-    }
-
-    $existing = if (Test-Path $keyFile) { Get-Content -Raw $keyFile } else { "" }
-    if ($existing -match [regex]::Escape(($PublicKey -split ' ')[1])) {
-        Write-Ok "Key already authorised in $keyFile"
-    } elseif ($DryRun) {
-        Write-Info "[dry-run] append key to $keyFile and lock its ACL"
-    } else {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $keyFile) | Out-Null
-        $text = ($existing.TrimEnd() + "`n" + $PublicKey + "`n").TrimStart("`n")
-        [IO.File]::WriteAllText($keyFile, $text, (New-Object Text.UTF8Encoding($false)))
-        if ($isAdminUser) {
-            & icacls.exe $keyFile /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
-        } else {
-            & icacls.exe $keyFile /inheritance:r /grant "$($env:USERNAME):F" | Out-Null
-        }
-        Write-Ok "Authorised key in $keyFile (ACL locked to the account)"
-    }
-} else {
-    Write-Info "No public key given: password login stays in use"
-    Write-Info "  add one later with -PublicKeyPath <file>, or copy it to $HOME\.ssh\authorized_keys"
-}
+# 5. Authorised key (the function decides which file: see above).
+Install-AuthorizedKey
 
 Write-Host ""
 Write-Ok "SSH server ready"
