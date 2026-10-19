@@ -68,7 +68,9 @@ over SSH, and it needs nothing installed there beyond the repository.
      `--standard`, `--full`, or `-g <group>`. Add `--yes` (or set `DOTFILES_ASSUME_YES=1`) when
      nobody can answer a prompt: over SSH, in cloud-init, in a container. The installer then
      exits non-zero if a step failed, which is the signal to act on.
-   - Windows with Administrator -> `bootstrap.ps1 [-Full] [-EnableSsh]`
+   - Windows with Administrator -> `bootstrap.ps1 [-Full] [-EnableSsh]`, or `dot deploy` as for
+     any other host: the archive is extracted with `tar.exe`/`7z.exe` and the bootstrap is
+     evaluated, so a policy that blocks script files does not matter
    - Windows without Administrator, or a Group Policy that blocks scripts ->
      `windows\bootstrap-dotfiles.cmd` (evaluates the bootstrap instead of executing it) and
      `windows\dotfiles-shell.cmd` for the profile

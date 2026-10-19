@@ -180,6 +180,39 @@ load_host_profile() {
 }
 
 # One target; every setting is already in dp_*.
+# Stage 0 on a Windows target: the bootstrap is evaluated, not executed, so a Group Policy that
+# blocks script files cannot stop it. $env:DOTFILES_REPO covers the fact that
+# $MyInvocation.MyCommand.Path is empty when a script is read instead of run.
+# An SSH command for a Windows target is parsed by the *outer* PowerShell first, which expands
+# $env:... and $HOME before the child ever sees them. Base64 (UTF-16LE, as -EncodedCommand wants)
+# sidesteps every quoting and interpolation question.
+ps_encoded() {
+  printf '%s' "$1" | iconv -f UTF-8 -t UTF-16LE | base64 | tr -d '\n'
+}
+
+deploy_windows_bootstrap() {
+  local dir="$1" flags="$2"
+  local ps="\$env:DOTFILES_REPO=\"$dir\"; iex ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','')"
+  [[ "$flags" == *full* ]] && ps="\$env:DOTFILES_REPO=\"$dir\"; iex ('& { ' + ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','') + ' } -Full')"
+  # 2>$null: the child serialises its error stream as CLIXML when it has no console, and the
+  # same messages are already on stdout. The exit code still reports a real failure.
+  if [[ "$dp_dry" == "1" ]]; then
+    printf '  [dry-run] ssh %s: powershell -NoLogo -NoProfile -EncodedCommand <bootstrap>\n' "$dp_host"
+    return 0
+  fi
+
+  local out rc=0
+  out="$("${ssh_cmd[@]}" "$dp_host" "powershell -NoLogo -NoProfile -EncodedCommand $(ps_encoded "$ps")" 2>&1)" || rc=$?
+  # PowerShell serialises its streams as CLIXML when it has no console, so the output carries a
+  # wrapper around the same text that is on stdout. Cosmetic: the deploy's own summary and the
+  # exit code are what matter, and unwrapping it here only made the noise worse.
+  printf '%s\n' "$out"
+  if [[ "$rc" != "0" ]]; then
+    echo "  [!] the Windows bootstrap failed (exit $rc)" >&2
+    failed=1
+  fi
+}
+
 deploy_one() {
   local -a ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15)
   [[ "$dp_port" != "22" ]] && ssh_cmd+=(-p "$dp_port")
@@ -215,17 +248,49 @@ deploy_one() {
     # 2. Transport
     case "$dp_transport" in
       tar)
+        # The skills submodule travels with the archive (only its .git stays behind), so the
+        # target gets working skills without touching the network.
+        local -a tar_args=(--exclude=.git --exclude=dist --exclude=node_modules
+                           --exclude=.DS_Store --exclude=pi/mattpocock-skills/.git)
         if [[ "$platform" == "windows" ]]; then
-          echo "  [!] tar transport is not implemented for Windows: use transport=clone" >&2
-          failed=1
+          # Windows has bsdtar (tar.exe) since 10 1803 and 7-Zip is common, but PowerShell
+          # mangles a binary stream on stdin, so the archive travels as a file and is extracted
+          # on the target instead of being piped.
+          echo "  transport: tar (archive uploaded, extracted with tar.exe or 7z)" >&2
+          local tmpdir archive
+          tmpdir="$(mktemp -d)"
+          archive="$tmpdir/dotfiles-deploy.tar.gz"
+          # Symlinks in the repository cannot be materialised on Windows, and the ones the linker
+          # already replaced with a junction make bsdtar fail on a non-empty directory.
+          local link
+          while IFS= read -r link; do
+            [[ -n "$link" ]] && tar_args+=("--exclude=$link")
+          done < <(git -C "$REPO" ls-files -s 2>/dev/null | awk '$1=="120000" {print $4}')
+          if [[ "$dp_dry" == "1" ]]; then
+            printf '  [dry-run] COPYFILE_DISABLE=1 tar -czf %s %s . ; scp -P %s %s %s:dotfiles-deploy.tar.gz ; extract with tar.exe/7z\n' \
+              "$archive" "${tar_args[*]}" "$dp_port" "$archive" "$dp_host"
+          else
+            if COPYFILE_DISABLE=1 tar -czf "$archive" "${tar_args[@]}" . \
+               && scp -q -P "$dp_port" "$archive" "$dp_host:dotfiles-deploy.tar.gz"; then
+              local ps
+              ps='$a = Join-Path $HOME "dotfiles-deploy.tar.gz"; $d = Join-Path $HOME "dotfiles"; New-Item -ItemType Directory -Force -Path $d | Out-Null; if (Get-Command tar.exe -ErrorAction SilentlyContinue) { tar.exe -xzf $a -C $d; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } elseif (Get-Command 7z.exe -ErrorAction SilentlyContinue) { 7z.exe x $a "-o$d" -y | Out-Null; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } else { Write-Error "neither tar.exe nor 7z.exe on this host: install 7-Zip"; exit 1 }; Remove-Item $a -Force'
+              run_remote "powershell -NoLogo -NoProfile -EncodedCommand $(ps_encoded "$ps")"
+            else
+              echo "  [!] tar transport failed" >&2
+              failed=1
+            fi
+          fi
+          rm -f "$archive"
+          rmdir "$tmpdir" 2>/dev/null || true
         else
           echo "  transport: tar (no git needed on the target)" >&2
           if [[ "$dp_dry" == "1" ]]; then
-            printf '  [dry-run] COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . | ssh %s "mkdir -p %s && tar -xzf - -C %s"\n' "$dp_host" "$dp_dir" "$dp_dir"
+            printf '  [dry-run] COPYFILE_DISABLE=1 tar -czf - %s . | ssh %s "mkdir -p %s && tar -xzf - -C %s"\n' \
+              "${tar_args[*]}" "$dp_host" "$dp_dir" "$dp_dir"
           else
             # COPYFILE_DISABLE keeps macOS tar from shipping AppleDouble ._* files, which
             # otherwise land in the target as thousands of junk files.
-            if ! COPYFILE_DISABLE=1 tar -czf - --exclude=.git --exclude=pi/mattpocock-skills . \
+            if ! COPYFILE_DISABLE=1 tar -czf - "${tar_args[@]}" . \
                  | "${ssh_cmd[@]}" "$dp_host" "mkdir -p $dp_dir && tar -xzf - -C $dp_dir"; then
               echo "  [!] tar transport failed" >&2
               failed=1

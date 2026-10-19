@@ -58,11 +58,21 @@ ssh target '~/dotfiles/local-bin/.local/bin/dot doctor --json'
 ssh target '~/dotfiles/install.sh --minimal'        # or -g editor, --standard, --full
 ```
 
-Windows targets take the policy-proof path instead of `-File`:
+A Windows target goes through the same `dot deploy`: the archive is uploaded (PowerShell mangles
+a binary stream on stdin, so nothing is piped into it) and extracted on the target with
+`tar.exe`, which Windows 10 1803 and later ship, or with `7z.exe` when tar is missing. Symlinks
+tracked in the repository are left out of that archive: they cannot be materialised on Windows
+and the ones the linker already replaced with a junction make bsdtar stop on a non-empty
+directory. Stage 0 then runs the policy-proof way — the bootstrap is evaluated, not executed —
+so a Group Policy that blocks script files cannot stop it.
 
 ```bash
-ssh -p 2222 user@host 'powershell -NoLogo -NoProfile -Command "$env:DOTFILES_REPO=\"$env:USERPROFILE\dotfiles\"; iex ((Get-Content -Raw \"$env:DOTFILES_REPO\bootstrap.ps1\") -replace \"(?m)^#Requires.*$\",\"\")"'
+dot deploy --to mauro@192.168.6.33 --ssh-port 2222      # tar transport, verified end to end
 ```
+
+Cosmetic wart: a nested PowerShell serialises its streams as CLIXML when it has no console, so
+the bootstrap's chatter arrives wrapped in it. The deploy's own summary and the exit code are
+unaffected.
 
 **Needs:** SSH access (Tailscale makes this trivial and survives NAT), and a non-interactive
 shell that is not blocked by policy. **Missing today:** one command that does transport +
@@ -301,7 +311,5 @@ Still missing, deliberately:
 1. **A tarball entry for machines without `git`** — `curl | bash` needs `git` because the
    bootstrap clones the repository itself. A machine with only `curl` (or a USB stick) needs the
    repository as a tarball; today the offline bundle covers that case, minus the network.
-2. **Windows `tar` transport** — a Windows target takes `--transport clone` (git on the target)
-   or the share path of S3. The tar transport refuses rather than half-working.
-3. **An offline bundle for Windows** — the Unix one does not apply: there `mise` and the tools
+2. **An offline bundle for Windows** — the Unix one does not apply: there `mise` and the tools
    arrive as a zip, the launchers are `.cmd`, and the execution policy has its own rules.

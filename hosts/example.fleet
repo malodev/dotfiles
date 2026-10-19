@@ -12,7 +12,10 @@
 # Lab VMs (see DEPLOYMENT.md S1/S3/S4)
 debian-vm
 mauro@192.168.6.30
-mauro@192.168.6.33 port=2222 verify_only=1
+
+# Windows goes through the same transport: the archive is extracted with tar.exe (Windows 10
+# 1803+) or 7z.exe on the target, and Stage 0 runs the policy-proof way.
+mauro@192.168.6.33 port=2222
 
 # A school laptop: userspace only, no system layer, and the shell is what needs fixing
 # school-laptop full=0 groups=
