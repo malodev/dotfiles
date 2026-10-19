@@ -533,6 +533,32 @@ install_fzf_user_local() {
     fi
 }
 
+# Resolve a GitHub release asset from the API instead of composing its filename. The projects
+# disagree: ripgrep's tags have no "v" while fd, lsd and bat keep it inside the asset name, some
+# ship gnu and musl builds, and the CPU part is x86_64 or aarch64. A wrong guess is a 404 that
+# looks exactly like a network problem.
+# Prints the first matching download URL, musl builds first (static, so they run anywhere).
+github_release_asset() {
+    local repo="$1" pattern="$2" json
+    json="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null)" || return 1
+    printf '%s' "$json" \
+        | grep -o '"browser_download_url": *"[^"]*"' \
+        | sed 's/.*"\(https[^"]*\)".*/\1/' \
+        | grep -E "$pattern" \
+        | sort -r \
+        | head -1
+}
+
+# The CPU part of an asset name for this machine.
+github_release_arch() {
+    case "$(uname -m)" in
+        aarch64|arm64) echo "aarch64" ;;
+        armv7l|armv6l) echo "arm" ;;
+        i386|i686)     echo "i686" ;;
+        *)             echo "x86_64" ;;
+    esac
+}
+
 # Install ripgrep from GitHub releases (always, to get latest even if apt version exists)
 install_ripgrep_user_local() {
     local target_dir="$HOME/.local/bin"
@@ -548,10 +574,14 @@ install_ripgrep_user_local() {
     log_info "Installing ripgrep from GitHub releases..."
 
     ensure_user_local_bin
-    local version_tag version_short
-    version_tag=$(curl -s "https://api.github.com/repos/BurntSushi/ripgrep/releases/latest" | grep -Po '"tag_name": "\K[^"]*' 2>/dev/null || echo "14.1.1")
-    version_short="${version_tag#v}"
-    local url="https://github.com/BurntSushi/ripgrep/releases/download/${version_tag}/ripgrep-${version_short}-x86_64-unknown-linux-musl.tar.gz"
+    local arch url
+    arch="$(github_release_arch)"
+    url="$(github_release_asset "BurntSushi/ripgrep" "^https.*/ripgrep-[0-9.]+-${arch}-unknown-linux-(gnu|musl)\\.tar\\.gz$")"
+    if [[ -z "$url" ]]; then
+        log_fail "ripgrep: no release asset for $arch"
+        return 1
+    fi
+    log_info "  $url"
 
     curl -fL "$url" -o /tmp/rg.tar.gz 2>/dev/null \
         && tar -xzf /tmp/rg.tar.gz -C /tmp --wildcards "*/rg" --strip-components=1 \
@@ -578,10 +608,14 @@ install_fd_user_local() {
     log_info "Installing fd from GitHub releases..."
 
     ensure_user_local_bin
-    local version_tag version_short
-    version_tag=$(curl -s "https://api.github.com/repos/sharkdp/fd/releases/latest" | grep -Po '"tag_name": "\K[^"]*' 2>/dev/null || echo "v10.2.0")
-    version_short="${version_tag#v}"
-    local url="https://github.com/sharkdp/fd/releases/download/${version_tag}/fd-${version_short}-x86_64-unknown-linux-musl.tar.gz"
+    local arch url
+    arch="$(github_release_arch)"
+    url="$(github_release_asset "sharkdp/fd" "^https.*/fd-v?[0-9.]+-${arch}-unknown-linux-(gnu|musl)\\.tar\\.gz$")"
+    if [[ -z "$url" ]]; then
+        log_fail "fd: no release asset for $arch"
+        return 1
+    fi
+    log_info "  $url"
 
     curl -fL "$url" -o /tmp/fd.tar.gz 2>/dev/null \
         && tar -xzf /tmp/fd.tar.gz -C /tmp --strip-components=1 \
@@ -607,10 +641,14 @@ install_lsd_user_local() {
     log_info "Installing lsd from GitHub releases..."
 
     ensure_user_local_bin
-    local version_tag version_short
-    version_tag=$(curl -s "https://api.github.com/repos/Peltoche/lsd/releases/latest" | grep -Po '"tag_name": "\K[^"]*' 2>/dev/null || echo "v1.1.5")
-    version_short="${version_tag#v}"
-    local url="https://github.com/Peltoche/lsd/releases/download/${version_tag}/lsd-${version_short}-x86_64-unknown-linux-musl.tar.gz"
+    local arch url
+    arch="$(github_release_arch)"
+    url="$(github_release_asset "lsd-rs/lsd" "^https.*/lsd-v?[0-9.]+-${arch}-unknown-linux-(gnu|musl)\\.tar\\.gz$")"
+    if [[ -z "$url" ]]; then
+        log_fail "lsd: no release asset for $arch"
+        return 1
+    fi
+    log_info "  $url"
 
     curl -fL "$url" -o /tmp/lsd.tar.gz 2>/dev/null \
         && tar -xzf /tmp/lsd.tar.gz -C /tmp --strip-components=1 \
@@ -637,10 +675,14 @@ install_bat_user_local() {
     log_info "Installing bat from GitHub releases..."
 
     ensure_user_local_bin
-    local version_tag version_short
-    version_tag=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" | grep -Po '"tag_name": "\K[^"]*' 2>/dev/null || echo "v0.25.0")
-    version_short="${version_tag#v}"
-    local url="https://github.com/sharkdp/bat/releases/download/${version_tag}/bat-${version_short}-x86_64-unknown-linux-musl.tar.gz"
+    local arch url
+    arch="$(github_release_arch)"
+    url="$(github_release_asset "sharkdp/bat" "^https.*/bat-v?[0-9.]+-${arch}-unknown-linux-(gnu|musl)\\.tar\\.gz$")"
+    if [[ -z "$url" ]]; then
+        log_fail "bat: no release asset for $arch"
+        return 1
+    fi
+    log_info "  $url"
 
     curl -fL "$url" -o /tmp/bat.tar.gz 2>/dev/null \
         && tar -xzf /tmp/bat.tar.gz -C /tmp --strip-components=1 \
