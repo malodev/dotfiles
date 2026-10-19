@@ -276,23 +276,32 @@ Repository-side suites (run on the driver, they cover every platform they can re
 
 ## 4. Roadmap
 
-Done:
+Done and verified:
 
 - **`dot deploy --to <host> | --profile <name>`** — transport (tar or clone), the right entry
   point for the target OS and privilege, then the target's doctor back. `--dry-run`,
-  `--verify-only`, `--groups`, `--json`. The tar transport ships the working tree, uncommitted
-  changes included; `--transport clone` ships what is on GitHub.
+  `--verify-only`, `--groups`, `--full`, `--json`. The tar transport ships the working tree,
+  uncommitted changes included; `--transport clone` ships what is on GitHub. Verified on the lab
+  VMs: tar, clone (git pull on an existing checkout), `--groups` through the system installer,
+  and `--verify-only` against a Windows host over its forwarded port.
 - **Host profiles** — `hosts/<name>.env` (tracked) or `hosts/<name>.local.env` (untracked) with
   `HOST`, `USER`, `SSH_PORT`, `TRANSPORT`, `FULL`, `INSTALL_GROUPS`, `DIR`. See
   `hosts/example.env`.
 - **`dot doctor --host <h>`** — the remote variant of the sensor.
 - **`dot deploy --hosts <file>`** — the fleet case (S7): many targets, one report, grouped by
   profile, per-host overrides, non-zero exit code when any host fails.
+- **Unattended installer and exit codes** (S5) — `install.sh --yes` /
+  `DOTFILES_ASSUME_YES=1`, failures collected and a non-zero exit when any happened, and
+  `.github/workflows/validate.yml` running the suites on every push and pull request.
+- **Offline bundles** (S10) — `make-offline-bundle.sh` / `install-offline-bundle.sh` plus
+  `bootstrap.sh --offline`, verified inside `unshare -n` with no network at all.
 
-Still missing:
+Still missing, deliberately:
 
-1. **`--yes` and a CI exit code** for S5, plus a documented tarball entry for machines without
-   `git`.
-3. **Windows `tar` transport** — today Windows targets need `--transport clone` (git on the
-   target) or the share path of S3.
-4. **Offline bundle** (S10) — repository + `mise` + tool archives + `pi` packages.
+1. **A tarball entry for machines without `git`** — `curl | bash` needs `git` because the
+   bootstrap clones the repository itself. A machine with only `curl` (or a USB stick) needs the
+   repository as a tarball; today the offline bundle covers that case, minus the network.
+2. **Windows `tar` transport** — a Windows target takes `--transport clone` (git on the target)
+   or the share path of S3. The tar transport refuses rather than half-working.
+3. **An offline bundle for Windows** — the Unix one does not apply: there `mise` and the tools
+   arrive as a zip, the launchers are `.cmd`, and the execution policy has its own rules.
