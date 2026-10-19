@@ -308,8 +308,12 @@ Done and verified:
 
 Still missing, deliberately:
 
-1. **A tarball entry for machines without `git`** — `curl | bash` needs `git` because the
-   bootstrap clones the repository itself. A machine with only `curl` (or a USB stick) needs the
-   repository as a tarball; today the offline bundle covers that case, minus the network.
-2. **An offline bundle for Windows** — the Unix one does not apply: there `mise` and the tools
-   arrive as a zip, the launchers are `.cmd`, and the execution policy has its own rules.
+1. **A tarball entry for machines without `git`** — `curl | bash` clones the repository itself,
+   so it needs `git`. A machine with only `curl` (or a USB stick) needs the tree as a tarball:
+   `curl -fsSL …/dotfiles.tar.gz | tar -xz -C ~/dotfiles && ~/dotfiles/bootstrap.sh`, and
+   `bootstrap.sh` has to accept a repository that is already there without a `.git`. The offline
+   bundle covers the *no-network* case; this covers the *no-git* one.
+2. **An offline bundle for Windows** — port `make-offline-bundle.sh` /
+   `install-offline-bundle.sh` to PowerShell: the `mise` release zip (the same source the
+   bootstrap already falls back to), the tool installs, the `.cmd` launchers and the
+   execution-policy handling. The Unix bundle does not apply as it stands.
