@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1091  # the modules are sourced through $SCRIPT_DIR, which shellcheck cannot follow
 
 #=============================================================================
 # Dotfiles Installation Script
@@ -15,7 +16,8 @@
 if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
     for _modern_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
         if [[ -x "$_modern_bash" ]]; then
-            export PATH="$(dirname "$_modern_bash"):$PATH"
+            _modern_bash_dir="$(dirname "$_modern_bash")"
+            export PATH="$_modern_bash_dir:$PATH"
             exec "$_modern_bash" "$0" "$@"
         fi
     done
@@ -28,7 +30,7 @@ if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
         echo "  brew install bash"
         echo ""
         echo "Then run this script with:"
-        echo "  /opt/homebrew/bin/bash $0 \"$@\""
+        echo "  /opt/homebrew/bin/bash $0 $*"
         echo ""
         echo "Or set it as your default shell."
     fi
@@ -44,8 +46,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/tmp/dotfiles_install_$(date +%Y%m%d_%H%M%S).log"
 ORIGINAL_DIR="$(pwd)"
 DRY_RUN=0
-INTERACTIVE=1
-USER_LOCAL=0
+# Exported because the sourced installer modules read them.
+export INTERACTIVE=1
+export USER_LOCAL=0
 
 #=============================================================================
 # SOURCE COMMON FUNCTIONS (must be early for log_* functions)

@@ -26,8 +26,13 @@ run_case() {
     log_path="$(case_log_path "$name")"
 
     echo "==> $name"
-    "$@" >"$log_path" 2>&1
-    echo "    ok"
+    if "$@" >"$log_path" 2>&1; then
+        echo "    ok"
+    else
+        echo "    FAILED - output:"
+        sed 's/^/    /' "$log_path"
+        return 1
+    fi
 }
 
 assert_in_log() {
