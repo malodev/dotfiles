@@ -81,6 +81,12 @@ The test that follows from the criterion, and the reason this phase exists:
    repository, and the machine keeps working.
 5. **Omarchy's skills and its `shell.json` are the OS's.** `LOCAL_ONLY_ENTRIES` plus a
    `.gitignore` rule with a comment that says who owns the file and why it only goes stale here.
+6. **`~/.ssh/config` is owned by Coder, OrbStack and Gitpod** — three `Include` blocks and a
+   `Host` per machine, all rewritten by those tools. It is *not* a dotfile: adopting it would
+   mean fighting three generators. It still carries one deliberate block from this repository
+   (prefer `~/.ssh/id_ed25519` over `id_rsa`), short, commented, additive and outside every
+   managed section. That is the exception worth writing down rather than a rule to generalise:
+   a file can be someone else's and still take a few documented lines.
 
 ## 8. Roadmap
 
