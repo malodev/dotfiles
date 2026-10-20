@@ -69,6 +69,7 @@ so a Group Policy that blocks script files cannot stop it.
 ```bash
 scripts/windows/authorize-ssh-key.sh <user>@<host>   # installs the driver's key, asks only the password
 dot deploy --to mauro@192.168.6.33 --ssh-port 2222   # tar transport, verified end to end
+dot deploy --to <user>@<host> --links-only            # base only: repository, links, skills, no tools
 ```
 
 `authorize-ssh-key.sh` exists because `ssh-copy-id` cannot do this on Windows: it runs
@@ -295,6 +296,10 @@ Repository-side suites (run on the driver, they cover every platform they can re
 
 Done and verified:
 
+- **`--links-only`** — links the repository and stops: no mise, no tools, no npm. Measured on a
+  workstation that already had node, neovim, starship, git and pi, the portable baseline would
+  have re-downloaded ~275 MB of copies of them; this mode installs nothing and leaves the list of
+  what is still missing to the agent (or the person) working on that machine.
 - **`dot deploy --to <host> | --profile <name>`** — transport (tar or clone), the right entry
   point for the target OS and privilege, then the target's doctor back. `--dry-run`,
   `--verify-only`, `--groups`, `--full`, `--json`. The tar transport ships the working tree,
