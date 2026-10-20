@@ -95,8 +95,14 @@ remote_doctor() {
 
   local doctor_json=""
   if [[ "$platform" == "windows" ]]; then
-    # `dot` comes from the profile, which loads for SSH sessions on a healthy machine.
+    # `dot` comes from the profile, which loads for SSH sessions on a configured machine.
     doctor_json="$("${ssh_cmd[@]}" "$host" 'dot doctor -Json' 2>/dev/null || true)"
+    if [[ -z "$(printf '%s\n' "$doctor_json" | sed -n '/^{/,$p')" ]]; then
+      # No profile and no `dot` - a fresh machine, or cmd.exe as the default shell: evaluate the
+      # sensor straight from the repository, which asks nothing of the host but the repository.
+      local ps="\$d = Join-Path \$HOME 'dotfiles'; iex ('& { ' + ((Get-Content -Raw (Join-Path \$d 'scripts\\windows\\doctor.ps1')) -replace '(?m)^#Requires.*\$','') + ' } -Json')"
+      doctor_json="$("${ssh_cmd[@]}" "$host" "powershell -NoLogo -NoProfile -EncodedCommand $(ps_encoded "$ps")" 2>/dev/null || true)"
+    fi
   else
     # Prefer the linked CLI, fall back to the copy in the repository.
     doctor_json="$("${ssh_cmd[@]}" "$host" \
@@ -324,7 +330,12 @@ deploy_one() {
     fi
   fi
 
-  # 5. Verify
+  # 5. Verify. Nothing was deployed in a dry run, so probing would only report the state before
+  # the change and, on a machine without the repository yet, fail for the wrong reason.
+  if [[ "$dp_dry" == "1" ]]; then
+    echo "  verify:   skipped (dry run)" >&2
+    return "$failed"
+  fi
   echo "  verify:" >&2
   local -a json_flag=()
   [[ "$dp_json" == "1" ]] && json_flag=(--json)
