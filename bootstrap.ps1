@@ -19,6 +19,10 @@
     Immediately launch `pi` inside the dotfiles repo after bootstrap completes.
 .PARAMETER Full
     Include all optional Pi extensions and packages in addition to the essential set.
+.PARAMETER LinksOnly
+    Link the configuration and stop there: no mise, no portable tools, no npm install. This is the
+    base that lets an agent working on the machine decide (and install) whatever else that host
+    needs - the useful choice on a machine that already has node, neovim, starship, git and pi.
 .PARAMETER EnableSsh
     Also enable the built-in OpenSSH server (scripts\windows\enable-ssh-server.ps1) so
     the machine can be driven over SSH. Needs Administrator rights once, through UAC.
@@ -30,6 +34,7 @@ param(
     [switch]$DryRun,
     [switch]$LaunchAgent,
     [switch]$Full,
+    [switch]$LinksOnly,
     [switch]$EnableSsh,
     [string]$SshPublicKeyPath
 )
@@ -58,6 +63,9 @@ function Invoke-DotfileScript {
     Invoke-Expression ("& { " + $body + " } " + $Arguments)
 }
 
+# Windows always sets this; the fallback keeps the script parse-testable on a host without it
+# (pwsh on Linux) instead of failing at the first Join-Path.
+if (-not $env:LOCALAPPDATA) { $env:LOCALAPPDATA = Join-Path $HOME "AppData/Local" }
 $XdgConfig   = Join-Path $HOME ".config"
 $LocalBin    = Join-Path $HOME ".local\bin"
 $MiseShims   = Join-Path $env:LOCALAPPDATA "mise\shims"
@@ -112,7 +120,10 @@ if ($DryRun) {
 $PolicyScript = Join-Path $RepoRoot "scripts\windows\ensure-execution-policy.ps1"
 if ($DryRun) { Invoke-DotfileScript $PolicyScript "-DryRun" } else { Invoke-DotfileScript $PolicyScript }
 
-# 2. Ensure `mise` is installed
+# 2. Ensure `mise` is installed (skipped with -LinksOnly)
+if ($LinksOnly) {
+    Write-Info "Links only: not touching mise"
+} else {
 #    winget is per-user and often missing on a locked-down or standard account, and there is
 #    no official mise.run one-liner for Windows (https://mise.run/pwsh is a 404), so the last
 #    fallback is the release zip from GitHub unpacked into %LOCALAPPDATA%\mise.
@@ -226,6 +237,7 @@ if (Get-Command pi -ErrorAction SilentlyContinue) {
     } else {
         Write-Warn "npm not found on PATH yet; reopen Windows Terminal after bootstrap and run: npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-tui"
     }
+}
 }
 
 # 5. Link configs & agent skills via zero-Admin Junctions

@@ -156,6 +156,8 @@ Options:
   --ssh-port N       ssh port (default 22)
   --transport MODE   tar (default, nothing needed on the target) | clone (GitHub on the target)
   --full             include the optional pi extension set / nvim-malo
+  --links-only       Windows: link the configuration and stop, installing no tools at all
+                     (the base an agent on that machine needs to finish the job)
   --groups "a b c"   system installer groups to run after Stage 0 (needs sudo on the target)
   --dir PATH         repository path on the target (default ~/dotfiles)
   --dry-run          print the commands instead of running them (the verification probe
@@ -197,13 +199,18 @@ ps_encoded() {
 }
 
 deploy_windows_bootstrap() {
-  local dir="$1" flags="$2"
-  local ps="\$env:DOTFILES_REPO=\"$dir\"; iex ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','')"
-  [[ "$flags" == *full* ]] && ps="\$env:DOTFILES_REPO=\"$dir\"; iex ('& { ' + ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','') + ' } -Full')"
+  local dir="$1" flags="$2" ps_args="" ps
+  [[ "$flags" == *links-only* ]] && ps_args="-LinksOnly"
+  [[ "$flags" == *full* ]] && ps_args="-Full"
+  if [[ -n "$ps_args" ]]; then
+    ps="\$env:DOTFILES_REPO=\"$dir\"; iex ('& { ' + ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','') + ' } $ps_args')"
+  else
+    ps="\$env:DOTFILES_REPO=\"$dir\"; iex ((Get-Content -Raw (Join-Path \$env:DOTFILES_REPO 'bootstrap.ps1')) -replace '(?m)^#Requires.*\$','')"
+  fi
   # 2>$null: the child serialises its error stream as CLIXML when it has no console, and the
   # same messages are already on stdout. The exit code still reports a real failure.
   if [[ "$dp_dry" == "1" ]]; then
-    printf '  [dry-run] ssh %s: powershell -NoLogo -NoProfile -EncodedCommand <bootstrap>\n' "$dp_host"
+    printf '  [dry-run] ssh %s: powershell -NoLogo -NoProfile -EncodedCommand <bootstrap%s>\n' "$dp_host" "${ps_args:+ $ps_args}"
     return 0
   fi
 
@@ -314,11 +321,19 @@ deploy_one() {
     # 3. Stage 0
     echo "  bootstrap:" >&2
     local flags=""
-    [[ "$dp_full" == "1" ]] && flags="--full"
+    [[ "$dp_full" == "1" ]] && flags="full"
+    if [[ "$dp_links_only" == "1" ]]; then
+      if [[ "$platform" != "windows" ]]; then
+        echo "  [!] --links-only is only implemented for Windows targets" >&2
+        failed=1
+      else
+        flags="${flags:+$flags }links-only"
+      fi
+    fi
     if [[ "$platform" == "windows" ]]; then
       deploy_windows_bootstrap '$env:USERPROFILE\dotfiles' "$flags"
     else
-      run_remote "cd $dp_dir && bash ./bootstrap.sh $flags"
+      run_remote "cd $dp_dir && bash ./bootstrap.sh $([[ "$flags" == *full* ]] && echo --full)"
     fi
 
     # 4. Optional system layer
@@ -351,6 +366,7 @@ deploy() {
   # Defaults. The fleet loop resets every one of these before each host.
   dp_host=""; dp_port="22"; dp_transport="tar"; dp_full="0"; dp_groups=""; dp_dir='~/dotfiles'
   dp_dry="0"; dp_verify_only="0"; dp_json="0"; dp_profile=""; dp_hosts_file=""
+  dp_links_only="0"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -360,6 +376,7 @@ deploy() {
       --ssh-port)    dp_port="$2"; shift 2 ;;
       --transport)   dp_transport="$2"; shift 2 ;;
       --full)        dp_full="1"; shift ;;
+      --links-only)  dp_links_only="1"; shift ;;
       --groups)      dp_groups="$2"; shift 2 ;;
       --dir)         dp_dir="$2"; shift 2 ;;
       --dry-run)     dp_dry="1"; shift ;;
