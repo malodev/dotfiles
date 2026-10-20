@@ -75,7 +75,8 @@ for script in \
   "$REPO/local-bin/.local/bin/dot" \
   "$REPO/scripts/link-pi-agent-entries.sh" \
   "$REPO/scripts/init-pi-settings.sh" \
-  "$REPO/scripts/extract-local-overrides.sh"; do
+  "$REPO/scripts/extract-local-overrides.sh" \
+  "$REPO/scripts/windows/authorize-ssh-key.sh"; do
   if bash -n "$script"; then
     pass "bash -n $(basename "$script")"
   else

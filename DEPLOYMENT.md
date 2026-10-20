@@ -67,8 +67,15 @@ directory. Stage 0 then runs the policy-proof way — the bootstrap is evaluated
 so a Group Policy that blocks script files cannot stop it.
 
 ```bash
-dot deploy --to mauro@192.168.6.33 --ssh-port 2222      # tar transport, verified end to end
+scripts/windows/authorize-ssh-key.sh <user>@<host>   # installs the driver's key, asks only the password
+dot deploy --to mauro@192.168.6.33 --ssh-port 2222   # tar transport, verified end to end
 ```
+
+`authorize-ssh-key.sh` exists because `ssh-copy-id` cannot do this on Windows: it runs
+`umask`/`cat >>` on the remote shell, which there is PowerShell, and it always writes
+`~/.ssh/authorized_keys` while sshd reads `%ProgramData%\ssh\administrators_authorized_keys`
+for an administrator. The script sends one encoded PowerShell command that picks the right file,
+appends only when the key is missing, and sets the ACLs sshd insists on.
 
 Cosmetic wart: a nested PowerShell serialises its streams as CLIXML when it has no console, so
 the bootstrap's chatter arrives wrapped in it. The deploy's own summary and the exit code are
