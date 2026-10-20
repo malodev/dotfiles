@@ -58,7 +58,8 @@ function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
 
 function Install-Launchers {
     $destDir = Join-Path $HOME ".local\bin"
-    foreach ($name in @("dotfiles-shell.cmd", "bootstrap-dotfiles.cmd")) {
+    # dot.cmd + dot.ps1 make `dot` callable from cmd.exe, whose sessions load no profile.
+    foreach ($name in @("dotfiles-shell.cmd", "bootstrap-dotfiles.cmd", "dot.cmd", "dot.ps1")) {
         $src = Join-Path $RepoRoot "windows\$name"
         if (-not (Test-Path $src)) { Write-Warn "Launcher missing from the repo: $src"; continue }
         if ($DryRun) { Write-Info "[dry-run] copy $name to $destDir"; continue }
@@ -141,43 +142,33 @@ $gpoBlocks = ($managed -join " ") -match ("=(" + ($blocking -join "|") + ")$")
 if ($gpoBlocks) {
     Write-Warn "Execution policy is enforced by Group Policy ($($managed -join ', '))"
     Write-Warn "  Nothing local outranks it, so the profile is loaded inline instead of executed."
-    Install-Launchers
-    if (-not $SkipWindowsTerminal) { Set-WindowsTerminalLoader }
-    Show-ManualSteps
-    return
-}
-
-if ($managed.Count -gt 0) {
+} elseif ($managed.Count -gt 0) {
     Write-Ok "Execution policy comes from Group Policy and allows local scripts ($($managed -join ', '))"
-    return
+} else {
+    # No Group Policy: make the persistent setting allow local scripts. This script is usually
+    # started with -ExecutionPolicy Bypass, which sets the Process scope and hides the real
+    # state, so only CurrentUser and LocalMachine are inspected. Undefined means Restricted, it
+    # is simply not written down anywhere.
+    $persistent = Get-ExecutionPolicy -Scope CurrentUser
+    if ($persistent -eq "Undefined") { $persistent = Get-ExecutionPolicy -Scope LocalMachine }
+
+    if ($persistent -notin ($blocking + "Undefined")) {
+        Write-Ok "Execution policy already allows local scripts ($persistent)"
+    } elseif ($DryRun) {
+        Write-Info "[dry-run] Set-ExecutionPolicy -Scope CurrentUser RemoteSigned (currently $persistent)"
+    } else {
+        try {
+            Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+            Write-Ok "Execution policy set to RemoteSigned for this user (was $persistent), so the profile loads"
+        } catch {
+            Write-Warn "Could not set the execution policy: $($_.Exception.Message)"
+            Write-Warn "  Falling back to the inline loader."
+        }
+    }
 }
 
-# No Group Policy: make the persistent setting allow local scripts. This script is usually
-# started with -ExecutionPolicy Bypass, which sets the Process scope and hides the real
-# state, so only CurrentUser and LocalMachine are inspected. Undefined means Restricted, it
-# is simply not written down anywhere.
-$persistent = Get-ExecutionPolicy -Scope CurrentUser
-if ($persistent -eq "Undefined") { $persistent = Get-ExecutionPolicy -Scope LocalMachine }
-
-if ($persistent -notin ($blocking + "Undefined")) {
-    Write-Ok "Execution policy already allows local scripts ($persistent)"
-    return
-}
-
-if ($DryRun) {
-    Write-Info "[dry-run] Set-ExecutionPolicy -Scope CurrentUser RemoteSigned (currently $persistent)"
-    return
-}
-
-try {
-    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
-    Write-Ok "Execution policy set to RemoteSigned for this user (was $persistent), so the profile loads"
-    return
-} catch {
-    Write-Warn "Could not set the execution policy: $($_.Exception.Message)"
-    Write-Warn "  Falling back to the inline loader."
-}
-
+# The launchers and the Windows Terminal loader are installed on every path: a machine whose
+# policy was already fine still needs them, and that early return used to skip them entirely.
 Install-Launchers
 if (-not $SkipWindowsTerminal) { Set-WindowsTerminalLoader }
 Show-ManualSteps
