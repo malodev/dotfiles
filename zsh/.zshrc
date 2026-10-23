@@ -37,6 +37,36 @@ if [[ "$IS_LINUX" == "1" ]]; then
 fi
 
 #=============================================================================
+# PI CLIPBOARD FORWARDING (herdr)
+#=============================================================================
+# Inside herdr panes, pi has no SSH_* variables, so it cannot tell the session
+# is remote and would copy to this machine's clipboard (wl-copy) only.
+# PI_CLIPBOARD_OSC52=1 makes pi also emit OSC 52; herdr forwards that to the
+# connected client, which writes it to the local clipboard.
+[[ -n "${HERDR_ENV:-}" ]] && export PI_CLIPBOARD_OSC52=1
+
+#=============================================================================
+# GRAPHICAL SESSION ENV FOR SSH-SPAWNED SHELLS
+#=============================================================================
+# The herdr server is started over SSH, so its environment has no
+# WAYLAND_DISPLAY/DISPLAY (sshd does not forward them). Everything spawned in
+# its panes inherits that, and clipboard tools then fail with
+#   "Failed to connect to a Wayland server ... falling back to wayland-0"
+# which breaks pi's Ctrl+V image paste (wl-paste) and wl-copy. Hyprland exposes
+# the socket as wayland-1, not wayland-0, so point at whatever socket exists.
+if [[ -z "${WAYLAND_DISPLAY:-}" && -n "${XDG_RUNTIME_DIR:-}" ]]; then
+    for _dotfiles_wl_socket in "$XDG_RUNTIME_DIR"/wayland-[0-9]*(N); do
+        [[ -S "$_dotfiles_wl_socket" ]] || continue
+        export WAYLAND_DISPLAY="${_dotfiles_wl_socket##*/}"
+        break
+    done
+    unset _dotfiles_wl_socket
+fi
+if [[ -z "${DISPLAY:-}" && -S /tmp/.X11-unix/X0 ]]; then
+    export DISPLAY=:0
+fi
+
+#=============================================================================
 # HISTORY SETTINGS
 #=============================================================================
 HISTFILE="$HOME/.zsh_history"
