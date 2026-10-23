@@ -8,6 +8,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type {
@@ -300,7 +301,7 @@ async function findConfigPath(cwd: string): Promise<string | undefined> {
   if (subtree) return subtree;
 
   const globalExtensionConfig = resolve(
-    process.env.HOME || "/Users/mauro",
+    homedir(),
     ".pi", "agent", "extensions", "auto-router", CONFIG_FILE
   );
   if (existsSync(globalExtensionConfig)) return globalExtensionConfig;

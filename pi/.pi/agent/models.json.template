@@ -21,7 +21,7 @@
       "name": "vllm-mlx locale (questa Mac)",
       "baseUrl": "http://127.0.0.1:8000/v1",
       "api": "openai-completions",
-      "apiKey": "!cat /Users/mauro/.config/tokenator/vllm-api-key",
+      "apiKey": "!cat ~/.config/tokenator/vllm-api-key",
       "models": [
         {
           "id": "qwen3.8-27b",

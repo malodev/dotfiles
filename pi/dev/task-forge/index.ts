@@ -16,6 +16,7 @@ import { Box, Text } from "@mariozechner/pi-tui";
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
 import { appendEvent as appendV2Event, createLayout, deriveSnapshot as deriveV2Snapshot, loadSnapshot as loadV2Snapshot, readEvents as readV2Events, writeSnapshot as writeV2Snapshot } from "./src/storage";
 import { migrateV1StateToEvents, migrateV1StateToSnapshot } from "./src/migrate";
 import { TaskForgeV2Engine } from "./src/engine";
@@ -869,7 +870,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     const subtree = await searchSubdirs(cwd, 4);
     if (subtree) return subtree;
 
-    const globalExtensionConfig = resolve(process.env.HOME || "/Users/mauro", ".pi", "agent", "extensions", "task-forge", "task-forge.json");
+    const globalExtensionConfig = resolve(homedir(), ".pi", "agent", "extensions", "task-forge", "task-forge.json");
     if (existsSync(globalExtensionConfig)) return globalExtensionConfig;
 
     return undefined;
@@ -1237,7 +1238,7 @@ function isTerminalCommandStatus(status: V2RunStatus | "needs_human_intervention
     const cached = agentCache.get(role);
     if (cached) return cached;
 
-    const baseDir = resolve(process.env.HOME || "/Users/mauro", ".pi", "agent", "extensions", "task-forge", "agents");
+    const baseDir = resolve(homedir(), ".pi", "agent", "extensions", "task-forge", "agents");
     const sourcePath = resolve(baseDir, roleFiles[role]);
     const raw = await readFile(sourcePath, "utf-8");
     const { frontmatter, body } = parseFrontmatter(raw);
