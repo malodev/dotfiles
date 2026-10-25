@@ -87,3 +87,13 @@ On **Native Windows (PowerShell in Windows Terminal)**:
 3. **Run the Test Suite:** Any change to `install.sh`, `bootstrap.*`, `scripts/install/*`, `scripts/doctor.sh`, `scripts/windows/*`, `nvim-lite`, or `nvim-malo` must pass:
    - `./scripts/validate-install.sh`
    - `./scripts/test-environments.sh`
+
+4. **Expect another agent in the same repository.** `git fetch` before every push and rebase rather
+   than force, keep commits small and single-purpose, and never rewrite a file another session
+   touched in its last few commits without fetching first. Do not `git add` what you did not
+   create or change on purpose: someone else's `*_local`, plan or scratch directory stays out.
+
+5. **The clean room is checked, not remembered.** `./scripts/check-clean-room.sh` (and the suite)
+   fails when a home path, a site domain, a private address or an absolute credential path
+   reaches a tracked file. Deliberate exceptions are entries in `scripts/clean-room-allow.txt`,
+   each with the reason it is not one machine's.

@@ -1,0 +1,8 @@
+# path|text|reason
+#
+# A line is not a finding when the file matches the path *and* contains the text. Each entry is
+# a decision that the value is not one machine's, so the reason has to say why. When a reason
+# starts to read like an apology, the value belongs in a live file instead.
+
+pi/.pi/agent/models.json.template|api.tokenator.marconi.loc|The LAN endpoint belongs to the fleet, not to one machine: every host on this network reaches it, and the template is what makes a fresh machine work at home.
+sketchybar-omerxx/.config/sketchybar/items/aerospace.sh|/Users/omerxx/|Vendored sketchybar theme from its author: the path is his, and the item only runs when that theme is chosen.

@@ -513,6 +513,17 @@ if ssh -o ConnectTimeout=2 -o BatchMode=yes Ubuntu-Home "test -d /media/VIRT/oma
 fi
 
 #-----------------------------------------------------------------------------
+# Clean room: the tracked configuration carries nothing that is only true here
+# (ADOPTION.md section 2; deliberate exceptions live in scripts/clean-room-allow.txt)
+#-----------------------------------------------------------------------------
+if bash "$REPO/scripts/check-clean-room.sh" >/dev/null 2>&1; then
+  pass "clean-room: no home path, site domain, private address or credential path in the tracked files"
+else
+  fail "clean-room: a value that is only true on one machine reached the tracked files"
+  bash "$REPO/scripts/check-clean-room.sh" 2>&1 | sed -n '2,10p' | sed 's/^/      /'
+fi
+
+#-----------------------------------------------------------------------------
 # Summary
 #-----------------------------------------------------------------------------
 echo ""
