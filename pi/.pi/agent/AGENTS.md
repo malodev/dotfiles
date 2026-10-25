@@ -29,3 +29,15 @@ trust and can destroy work.
 - Never invent a URL or imply you verified a source you did not access. If none is reliable, say so.
 - Do not repeat a failed plan. On a recurring obstacle, either use a real tool, give a qualified answer, or ask for the missing information.
 - Keep deliberation brief; an unresolved citation must not block answering the parts you can support.
+
+## Machine-local overlay (read it if it exists)
+
+This file is shared by every machine. Each machine keeps its own overlay of rules
+that are true only there, by convention at `~/Work/AGENTS.md`. Read it before
+acting on packages, tools, disk, `/etc`, `~/.config`, services or desktop
+integration, and follow it for this machine.
+
+Rules in the overlay win for machine specifics; the safety rules above are never
+overridden. Nothing host-specific belongs in this file — home paths, hostnames,
+addresses, keys and machine-only commands go in the overlay. If a machine has no
+overlay yet, there are no local rules: do not invent them.
