@@ -43,6 +43,12 @@ package-lock.json
 # keybindings.json.template and are seeded by scripts/init-pi-settings.sh.
 /pi/.pi/agent/keybindings.json
 
+# pi's search settings are the same shape as models.json: the routing is common, but every
+# provider key is a `!cat` command naming files in one user's home, and the browser profile is
+# that machine's Chrome. Shared defaults live in web-search.json.template and are seeded by
+# scripts/init-pi-settings.sh; the live file is this host's and pi rewrites it.
+/pi/.config/pi/web-search.json
+
 # herdr's theme is a per-machine preference (this box pins tokyo-night while
 # Omarchy is on Ayaka), and config.toml is edited in place. Shared defaults
 # live in config.toml.template and are seeded by scripts/init-herdr-config.sh.

@@ -156,4 +156,45 @@ for name in "${NAMES[@]}"; do
   esac
 done
 
+# The search settings live in the XDG directory rather than .pi/agent, and hold the same
+# credential commands, so they get the same treatment: tracked template, live file, and --force
+# leaves the live one alone unless --force-host says otherwise.
+search_template="$SCRIPT_DIR/pi/.config/pi/web-search.json.template"
+search_live="${XDG_CONFIG_HOME:-$HOME/.config}/pi/web-search.json"
+
+if [[ -f "$search_template" ]]; then
+  case "$MODE" in
+    diff)
+      echo "=== web-search.json ==="
+      if [[ ! -f "$search_live" ]]; then
+        info "No existing web-search.json — template would be copied fresh"
+      else
+        diff -u "$search_live" "$search_template" 2>/dev/null && info "Identical" || true
+      fi
+      ;;
+    dry-run)
+      info "[DRY-RUN] web-search.json: $([[ -f "$search_live" ]] && echo "exists, --force would reset it" || echo "would be created")"
+      ;;
+    force)
+      if [[ "$FORCE_HOST" != "1" ]]; then
+        warn "web-search.json holds credential commands — left alone (--force-host to reset it)"
+      else
+        mkdir -p "$(dirname "$search_live")"
+        cp "$search_template" "$search_live"
+        warn "Overwrote $search_live with template"
+      fi
+      ;;
+    *)
+      if [[ -f "$search_live" ]]; then
+        ok "$search_live already exists — no action needed (use --force to reset to template)"
+      else
+        mkdir -p "$(dirname "$search_live")"
+        cp "$search_template" "$search_live"
+        ok "Created $search_live from template"
+        info "Add this host's provider keys here: \"braveApiKey\": \"!cat ~/.config/pi-secrets/brave\", ..."
+      fi
+      ;;
+  esac
+fi
+
 exit $failed
