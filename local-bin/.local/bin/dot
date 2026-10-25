@@ -558,6 +558,9 @@ case "$cmd" in
         ;;
     esac
     ;;
+  adopt)
+    exec "$REPO/scripts/adopt-report.sh" "$@"
+    ;;
   overrides)
     exec "$REPO/scripts/extract-local-overrides.sh" "$@"
     ;;
