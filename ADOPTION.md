@@ -87,6 +87,15 @@ The test that follows from the criterion, and the reason this phase exists:
    (prefer `~/.ssh/id_ed25519` over `id_rsa`), short, commented, additive and outside every
    managed section. That is the exception worth writing down rather than a rule to generalise:
    a file can be someone else's and still take a few documented lines.
+7. **`hyprland.lua` grew a `require` that a third-party installer appended.** `oma-cast setup
+   hyprland` writes `~/.config/hypr/oma-cast.lua` and then appends `require("hypr.oma-cast")` to
+   `~/.config/hypr/hyprland.lua` — a stow symlink, so the tool edited the repository. The signal is
+   section 4's "owned by another tool": the plugin is installed outside the repo (in
+   `~/.config/omarchy/plugins`), so neither the launcher nor its bind is *common*. The tracked file
+   was restored and the machine-local layer took the load (`hyprland_local.lua` ->
+   `require_optional().module("hypr.oma-cast")`), the same mechanism as `hypr.monitors_local`. The
+   tool will re-append its line on the next `setup hyprland`; the answer is to restore the file
+   again, not to keep the diff.
 
 ## 8. Roadmap
 

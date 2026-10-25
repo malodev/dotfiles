@@ -192,6 +192,14 @@ cannot clobber what Omarchy wrote.
   (`~/.config/autostart/variety-<...>.desktop`) plus a fresh stock script, so it rotates
   wallpapers in parallel without the Omarchy block. Check `pgrep -a variety` and the
   autostart folder; kill the stray and remove its entry.
+- `oma-cast setup hyprland` (the Omarchy shell plugin launcher, from `~/Projects/oma-cast`)
+  writes its own `~/.config/hypr/oma-cast.lua` holding the `Alt+Space` bind, then appends
+  `require("hypr.oma-cast")` to `~/.config/hypr/hyprland.lua` — which here is the stow symlink
+  into this repo, so the tool edits a tracked file. That line is the tool's, not a change to
+  commit. The bind is loaded from the machine-local layer instead (the last line of
+  `hyprland_local.lua`: `require_optional().module("hypr.oma-cast")`), which is skipped on a host
+  without the file and loaded once anyway, so re-running that setup cannot double the bind. If
+  the line reappears: `git -C <this repo> restore hyprland/.config/hypr/hyprland.lua`.
 
 ## Verifying
 
