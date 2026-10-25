@@ -41,3 +41,15 @@ Rules in the overlay win for machine specifics; the safety rules above are never
 overridden. Nothing host-specific belongs in this file — home paths, hostnames,
 addresses, keys and machine-only commands go in the overlay. If a machine has no
 overlay yet, there are no local rules: do not invent them.
+
+## Working in a shared repository
+
+- Another session may be working on the same repository at the same time. `git fetch`
+  before every push and rebase rather than force; keep commits small and
+  single-purpose; never rewrite a file another session touched in its last few commits
+  without fetching first.
+- Do not `git add` what you did not create or change on purpose. Someone else's
+  `*_local` file, plan or scratch directory is not yours to commit.
+- When a tracked file must not carry a value only one machine is true for, check for it
+  rather than remember it: `./scripts/check-clean-room.sh` in the dotfiles repository,
+  with deliberate exceptions written down next to a reason.
