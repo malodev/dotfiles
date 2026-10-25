@@ -223,6 +223,16 @@ trap 'rm -rf "$SANDBOX_HOME"' EXIT
 
 mkdir -p "$SANDBOX_HOME/.config" "$SANDBOX_HOME/.local/bin"
 
+# Anything a script locates through XDG_CONFIG_HOME must be pointed at the sandbox
+# as well. Left alone, a developer machine that exports it (as Omarchy does) sends
+# the sandbox run into the real ~/.config: init-pi-settings.sh then tries to seed
+# this machine's ~/.config/pi/web-search.json from a template, which is how this
+# showed up as "failed in virgin $HOME" on a host with no bug at all.
+_SAVED_XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}"
+_HAD_XDG_CONFIG_HOME=0
+[[ -n "${XDG_CONFIG_HOME:-}" ]] && _HAD_XDG_CONFIG_HOME=1
+export XDG_CONFIG_HOME="$SANDBOX_HOME/.config"
+
 # 2a. Test bootstrap.sh --dry-run in isolated HOME
 if HOME="$SANDBOX_HOME" "$REPO/bootstrap.sh" --dry-run >/dev/null 2>&1; then
   pass "bootstrap.sh --dry-run succeeds in virgin \$HOME"
@@ -327,6 +337,15 @@ fi
 #-----------------------------------------------------------------------------
 # 3. Headless Core Tool & Config Verification (Neovim, Starship, Shells, Tmux)
 #-----------------------------------------------------------------------------
+
+# The sandbox is finished: put the caller's XDG_CONFIG_HOME back, so the host checks
+# below read this machine's real config again.
+if [[ "$_HAD_XDG_CONFIG_HOME" == "1" ]]; then
+  export XDG_CONFIG_HOME="$_SAVED_XDG_CONFIG_HOME"
+else
+  unset XDG_CONFIG_HOME
+fi
+
 section "3. Headless Core Config Verification (Neovim, Starship, Zsh, Tmux)"
 
 # 3a. Neovim (`nvim-lite` & `nvim-malo`) headless startup verification
