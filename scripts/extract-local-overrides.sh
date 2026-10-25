@@ -61,7 +61,6 @@ MANAGED_FILES=(
   "git/.gitconfig|$HOME/.gitconfig|$HOME/.gitconfig_local"
   "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland_local.conf"
   "hyprland/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors_local.conf"
-  "pi/.pi/agent/models.json|$HOME/.pi/agent/models.json|$HOME/.pi/agent/models_local.json|$SCRIPT_DIR/scripts/merge-models.sh"
 )
 
 #-------------------------------------------------------------------------
@@ -85,7 +84,7 @@ if [[ "$MODE" == "help" ]]; then
   echo ""
   echo "  (no flag)  Show status of all managed files"
   echo "  --apply    Extract sentinel-based diffs to _local files"
-  echo "  --merge    Run merge scripts for merge-based files (e.g. models.json)"
+  echo "  --merge    Run merge scripts for merge-based files"
   echo "  --dry-run  Preview what would be extracted"
   echo "  --list     List tracked files and their local overrides"
   echo "  --help     Show this help"
@@ -138,14 +137,6 @@ for entry in "${MANAGED_FILES[@]}"; do
 
   [[ ! -f "$home_path" ]] && continue
   [[ ! -f "$repo_path" ]] && { warn "$repo_rel missing from repo — skipping"; continue; }
-
-  # models.json uses merge-models.sh instead of sentinel
-  if [[ "$name" == "models.json" ]]; then
-    if [[ "$MODE" == "interactive" ]]; then
-      printf '%-40s \033[1;36mmerge-based\033[0m\n' "$name"
-    fi
-    continue
-  fi
 
   last_line="$(tail -n 1 "$home_path" 2>/dev/null || true)"
 
