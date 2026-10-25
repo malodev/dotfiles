@@ -18,6 +18,17 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOTFILES_REPO="$SCRIPT_DIR"
+
+# Physical paths used to decide whether a managed link is ours. The second one matters
+# when doctor runs from a git worktree: the live links on the machine still point at the
+# main clone, and without it every managed link in a worktree reads as external.
+REPO_REAL="$(cd -P "$DOTFILES_REPO" 2>/dev/null && pwd)"
+COMMON_DIR="$(git -C "$DOTFILES_REPO" rev-parse --git-common-dir 2>/dev/null || true)"
+MAIN_REAL=""
+if [[ -n "$COMMON_DIR" ]]; then
+  [[ "$COMMON_DIR" == /* ]] || COMMON_DIR="$DOTFILES_REPO/$COMMON_DIR"
+  MAIN_REAL="$(cd -P "$COMMON_DIR/.." 2>/dev/null && pwd)"
+fi
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 JSON_MODE=0
@@ -99,13 +110,39 @@ AGENT_TOOLS=(pi claude agy llm)
 #-----------------------------------------------------------------------------
 # 3. Symlink & Config Health
 #-----------------------------------------------------------------------------
+# Follow a symlink chain to its physical path. `readlink -f` would do, but macOS
+# ships a readlink without that flag, and a one-hop link is exactly what
+# `dot nvim` writes: ~/.config/nvim -> nvim-malo -> ../dotfiles/nvim-malo/.config/nvim-malo.
+# Reading only the immediate target called that link external even though it
+# resolves into the repository.
+resolve_physical_path() {
+  local path="$1" target hop
+  for hop in 1 2 3 4 5 6 7 8 9 10; do
+    [[ -L "$path" ]] || break
+    target="$(readlink "$path" 2>/dev/null || true)"
+    [[ -n "$target" ]] || break
+    case "$target" in
+      /*) path="$target" ;;
+      *) path="$(dirname "$path")/$target" ;;
+    esac
+  done
+  local dir
+  if dir="$(cd -P "$(dirname "$path")" 2>/dev/null && pwd)"; then
+    printf '%s/%s\n' "$dir" "$(basename "$path")"
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
 check_link_state() {
   local target="$1"
   if [[ -L "$target" ]]; then
     if [[ -e "$target" ]]; then
       local resolved
-      resolved="$(readlink "$target" 2>/dev/null || true)"
-      if [[ "$resolved" == *"dotfiles"* || "$resolved" == "$DOTFILES_REPO"* ]]; then
+      resolved="$(resolve_physical_path "$target")"
+      if [[ "$resolved" == "$REPO_REAL"/* ]]; then
+        echo "linked"
+      elif [[ -n "$MAIN_REAL" && "$resolved" == "$MAIN_REAL"/* ]]; then
         echo "linked"
       else
         echo "external-symlink"
