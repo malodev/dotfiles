@@ -68,9 +68,13 @@ The test that follows from the criterion, and the reason this phase exists:
 
 ## 7. Worked examples, from this repository
 
-1. **`~/.zshrc` grew inline edits.** `scripts/extract-local-overrides.sh --apply` moves them to
-   `~/.zshrc_local` and restores the sentinel. `dot doctor` already flags it — on this Mac right
-   now: `sentinel_missing: ["zsh/.zshrc"]`.
+1. **`~/.zshrc` grew inline edits** — an IDE appended an absolute home path past the sentinel.
+   `scripts/extract-local-overrides.sh --apply` moved them to `~/.zshrc_local` and restored the
+   file from its committed version. Finding that it *could not* is how a real bug surfaced: the
+   live path is a symlink to the repository file, so it was diffing a file with itself, and
+   "restoring" by copying a file onto itself. It now diffs against HEAD and restores with
+   `git checkout`, and it refuses a file that also rewrites managed lines — that original text
+   is not in the repository any more, so restoring would destroy it.
 2. **`~/.pi/agent/models.json` holds LAN endpoints and `!cat` key commands.** Tracked
    `models.json.template` + live file; `init-pi-settings.sh --force` skips it unless
    `--force-host` is passed, precisely because resetting it repoints the machine.
@@ -97,12 +101,21 @@ The test that follows from the criterion, and the reason this phase exists:
    tool will re-append its line on the next `setup hyprland`; the answer is to restore the file
    again, not to keep the diff.
 
+7. **`~/.config/pi/web-search.json` carried the keys of every provider** — `!cat` commands
+   naming one user's home, tracked, on every machine that cloned the repository. The routing is
+   common (workflow, provider list, fallback order); the keys are not, and pi rewrites the file
+   anyway. So: `web-search.json.template` plus a live file that `init-pi-settings.sh` seeds and
+   `--force` leaves alone unless `--force-host` says otherwise. Third instance of the same shape
+   as `models.json` and `herdr/config.toml` — which is the argument for the pattern, not an
+   accident of three files.
+
 ## 8. Roadmap
 
-1. **`dot adopt --diff`** — read-only, and the piece that makes the decision explicit instead of a
-   judgement call in someone's head. It can reuse what already exists: `doctor`'s drift report,
-   `extract-local-overrides.sh --dry-run` for sentinel files, and a signal scan for the smells in
-   section 4.
+1. ~~**`dot adopt --diff`**~~ — **done** (`scripts/adopt-report.sh`, `dot adopt`). Read-only, and
+   it reuses what existed: `doctor`'s drift for links and sentinels for `extract-local-overrides.sh
+   --dry-run` for what would move. The one rule worth keeping: signals are read from the *added
+   lines* of a diff, never from the whole file — a script that contains `127.0.0.1` in its own
+   code is not a machine-specific value, and a hunk that adds `/Users/mauro` is.
 2. **`dot adopt --apply`** — promotion, quarantine and re-link, reusing `stow`/the linkers rather
    than inventing a second linking mechanism.
 3. **The clean-room check in the suite** — deploy to a throwaway host and fail when a
