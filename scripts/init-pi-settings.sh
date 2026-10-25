@@ -42,6 +42,17 @@ is_host_name() {
   return 1
 }
 
+# A live path that used to be a stow symlink into the repository dangles the moment
+# its tracked file is renamed, and `cp` then refuses to write through it
+# ("not writing through dangling symlink"). That is the documented migration path
+# for web-search.json, which became a template plus a live file. Dropping the dead
+# link loses nothing: its target is already gone.
+drop_dead_link() {
+  local path="$1"
+  [[ -L "$path" && ! -e "$path" ]] || return 0
+  unlink "$path" 2>/dev/null || rm -f "$path"
+}
+
 MODE="normal"
 FORCE_HOST=0
 SETTINGS_PROFILE="essential"
@@ -180,6 +191,7 @@ if [[ -f "$search_template" ]]; then
         warn "web-search.json holds credential commands — left alone (--force-host to reset it)"
       else
         mkdir -p "$(dirname "$search_live")"
+        drop_dead_link "$search_live"
         cp "$search_template" "$search_live"
         warn "Overwrote $search_live with template"
       fi
@@ -189,6 +201,7 @@ if [[ -f "$search_template" ]]; then
         ok "$search_live already exists — no action needed (use --force to reset to template)"
       else
         mkdir -p "$(dirname "$search_live")"
+        drop_dead_link "$search_live"
         cp "$search_template" "$search_live"
         ok "Created $search_live from template"
         info "Add this host's provider keys here: \"braveApiKey\": \"!cat ~/.config/pi-secrets/brave\", ..."
