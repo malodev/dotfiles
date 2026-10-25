@@ -4,5 +4,5 @@
 # a decision that the value is not one machine's, so the reason has to say why. When a reason
 # starts to read like an apology, the value belongs in a live file instead.
 
-pi/.pi/agent/models.json.template|api.tokenator.marconi.loc|The LAN endpoint belongs to the fleet, not to one machine: every host on this network reaches it, and the template is what makes a fresh machine work at home.
-sketchybar-omerxx/.config/sketchybar/items/aerospace.sh|/Users/omerxx/|Vendored sketchybar theme from its author: the path is his, and the item only runs when that theme is chosen.
+pi/.pi/agent/models.json.template|tokenator-api.marconirovereto.it|The endpoint is the fleet's, not one machine's: it is a public name that resolves through the tailnet from wherever the machine is, and the template is what makes a fresh machine work.
+launchd/com.malo.ensure-skhd.plist|/Users/mauro/dotfiles|macOS-only watchdog, and the fleet has one macOS machine: a plist cannot expand a variable, so the path is literal and a template would only add a step. A second macOS user would edit this line.

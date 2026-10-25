@@ -8,6 +8,11 @@ The repository already has the *mechanisms* to keep the two apart — templates,
 `LOCAL_ONLY_ENTRIES`, `.gitignore` rules — but no *process* for deciding, file by file, what to
 promote and what to quarantine. That is what this document defines.
 
+**Scope, as of this writing.** The Linux hosts are the working fleet and the Windows target is
+reached over SSH. macOS is one machine, kept as a backup of a configuration that still works —
+which is why its specifics (a launchd path, a SketchyBar theme) may stay literal in the
+repository while the same shape on a Linux host would be moved out. Volume follows machines.
+
 ## 2. The criterion
 
 > **If the value would be wrong on another machine, it does not belong in the repository.**
@@ -34,7 +39,7 @@ The test that follows from the criterion, and the reason this phase exists:
 | Signal | Example in this repository | Where it goes |
 |---|---|---|
 | absolute home path | `/Users/mauro/.config/tokenator/litellm-api-key`, `C:\Users\mauro\bin\gam7\gam` | template + live file |
-| hostname, LAN URL, IP | `api.tokenator.marconi.loc`, `http://127.0.0.1:8000/v1` | template + live file |
+| hostname, LAN URL, IP | `tokenator-api.marconirovereto.it`, `http://127.0.0.1:8000/v1` | template + live file |
 | key, token, credential command | `!cat ~/.config/…-api-key`, `!~/.local/bin/pi-inference credential …` | template + live file, never a tracked value |
 | written by the tool itself | pi rewrites `settings.json`, `keybindings.json`, `models.json` | tracked template + untracked live file |
 | a path that exists on one host | `~/.local/src/mcp-gam/dist/index.js`, `~/.config/vllm-mlx/…` | `LOCAL_ONLY_ENTRIES`, or `_local` |

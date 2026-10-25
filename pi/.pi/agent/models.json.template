@@ -1,7 +1,7 @@
 {
   "providers": {
     "tokenator": {
-      "baseUrl": "https://api.tokenator.marconi.loc/v1",
+      "baseUrl": "https://tokenator-api.marconirovereto.it/v1",
       "api": "openai-completions",
       "apiKey": "!cat ~/.config/tokenator/litellm-api-key",
       "models": [
