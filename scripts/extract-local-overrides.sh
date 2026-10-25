@@ -208,8 +208,25 @@ for entry in "${to_migrate[@]}"; do
   echo "━━━ $name ━━━"
 
   # --- Find additions: diff + added lines ---
-  diff_out="$(diff -u "$repo_path" "$home_path" 2>/dev/null || true)"
+  # `dot link` and stow both make the live path a symlink to the repository file, so diffing
+  # the two compares a file with itself and always finds nothing. What actually differs is the
+  # repository file against its committed version, which is also what has to be restored.
+  if [[ "$home_path" -ef "$repo_path" ]]; then
+    diff_out="$( cd "$DOTFILES_REPO" && git diff -- "$repo_rel" 2>/dev/null || true )"
+  else
+    diff_out="$(diff -u "$repo_path" "$home_path" 2>/dev/null || true)"
+  fi
   added="$(echo "$diff_out" | sed -n '/^+++/d; /^+/ s/^+//p' || true)"
+  removed="$(echo "$diff_out" | sed -n '/^---/d; /^-/ s/^-//p' || true)"
+
+  # Added lines can be moved out and the file restored. Rewritten or deleted lines cannot: the
+  # original text is not in the repository any more, so restoring would destroy it.
+  if [[ -n "$removed" ]]; then
+    warn "This file also rewrites or deletes managed lines - nothing was changed."
+    echo "$diff_out" | sed 's/^/    │ /'
+    info "Decide by hand: keep the edit and drop the managed line, or restore and move the edit."
+    continue
+  fi
 
   if [[ -z "$added" ]]; then
     warn "No added lines — file may have been modified inline (edits, not appends)."
@@ -236,8 +253,12 @@ for entry in "${to_migrate[@]}"; do
     ok "Appended to $local_name"
   fi
 
-  # --- Restore from repo ---
-  cp "$repo_path" "$home_path"
+  # --- Restore from repo: the committed version, which is the one with the sentinel ---
+  if [[ "$home_path" -ef "$repo_path" ]]; then
+    ( cd "$DOTFILES_REPO" && git checkout -- "$repo_rel" )
+  else
+    cp "$repo_path" "$home_path"
+  fi
   ok "Restored $name from repo (now has sentinel)"
   migrated=$((migrated + 1))
 done
