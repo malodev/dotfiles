@@ -5,7 +5,7 @@
     <key>Label</key>
     <string>com.malo.ensure-skhd</string>
     <key>Program</key>
-    <string>__DOTFILES_REPO__/scripts/ensure_skhd_running.sh</string>
+    <string>/Users/mauro/dotfiles/scripts/ensure_skhd_running.sh</string>
     <key>RunAtLoad</key>
     <true/>
     <key>StartInterval</key>
