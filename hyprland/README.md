@@ -193,13 +193,26 @@ cannot clobber what Omarchy wrote.
   wallpapers in parallel without the Omarchy block. Check `pgrep -a variety` and the
   autostart folder; kill the stray and remove its entry.
 - `oma-cast setup hyprland` (the Omarchy shell plugin launcher, from `~/Projects/oma-cast`)
-  writes its own `~/.config/hypr/oma-cast.lua` holding the `Alt+Space` bind, then appends
+  writes its own `~/.config/hypr/oma-cast.lua` holding an `Alt+Space` bind, then appends
   `require("hypr.oma-cast")` to `~/.config/hypr/hyprland.lua` — which here is the stow symlink
   into this repo, so the tool edits a tracked file. That line is the tool's, not a change to
-  commit. The bind is loaded from the machine-local layer instead (the last line of
+  commit. The bind is loaded from the machine-local layer instead (the last lines of
   `hyprland_local.lua`: `require_optional().module("hypr.oma-cast")`), which is skipped on a host
   without the file and loaded once anyway, so re-running that setup cannot double the bind. If
   the line reappears: `git -C <this repo> restore hyprland/.config/hypr/hyprland.lua`.
+- **`ALT + SPACE` and `SUPER + SPACE` are arbitrated by the local layer.** Omarchy 4 binds
+  `ALT + SPACE` to dictation (`default/hypr/bindings/dictation.lua`) and `SUPER + SPACE` to its
+  menu, while oma-cast ships the same `ALT + SPACE` for its launcher. `hyprland_local.lua`
+  therefore clears `ALT + SPACE` (which drops both owners), re-binds it to dictation when a
+  backend is installed, clears `SUPER + SPACE` and binds the launcher there — oma-cast already
+  carries the menu as a source (`services/OmarchyMenuSource.qml`), so nothing is lost. Nothing
+  under `/usr/share/omarchy` is edited: the local file loads after the defaults, so a future
+  default on either key is overridden the same way rather than fought.
+- Omarchy's migration `1793477875.sh` appends the *previous* dictation keys (`F9`,
+  `SUPER + CTRL + X`) to `~/.config/hypr/bindings.lua` — the tracked file again, through the
+  symlink — for users who had them before `Alt + Space` became the default. Here dictation keeps
+  its new keys, so that append is reverted rather than adopted; the migration writes a marker in
+  `~/.local/state/omarchy/migrations/`, so it does not run a second time.
 
 ## Verifying
 
