@@ -4,6 +4,12 @@ palette = "catppuccin_mocha"
 format = """$os $username${custom.hostname_local}${custom.hostname_ssh} $directory $git_branch $git_status $python
 $character"""
 command_timeout = 5000
+# The context scan (finding project files for $git_status, $python, …) aborts at 30 ms by
+# default and warns "Scanning current directory timed out". That default assumes a warm
+# cache: the first prompt after login, in a large directory on a slow mount, exceeds it
+# and the warning lands in every new shell started there. The scan itself normally takes
+# 10-20 ms even then, so the larger ceiling costs nothing until the disk is really slow.
+scan_timeout = 200
 # Starship modules
 [character]
 # Note the use of Catppuccin color 'peach'
