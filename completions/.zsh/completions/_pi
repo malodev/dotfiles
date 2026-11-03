@@ -1,0 +1,210 @@
+#compdef pi
+
+# Completion for pi, the pi coding agent (@earendil-works/pi-coding-agent).
+#
+# Hand-written on purpose: pi ships no `completion` command. `pi completion zsh`
+# is taken as a prompt and starts a session, so there is nothing to generate.
+# The specs below mirror `pi --help` and `pi install|remove|list|config|auth|
+# mcp|update --help` at pi 1.4.0. Run `./update.sh` in this package after a pi
+# upgrade: it lists options the binary grew that this file does not know yet.
+# Flags registered by extensions (--plan, ...) only exist at runtime, so they
+# cannot be completed here.
+
+# --list-models costs about a second, so its output is cached and shared with the
+# bash completion, and refreshed behind the prompt at most once a day.
+_pi_cache() {
+  print -r -- "${XDG_CACHE_HOME:-$HOME/.cache}/pi/models.txt"
+}
+
+_pi_cache_refresh() {
+  local cache=$(_pi_cache) tmp
+  [[ -r $cache ]] && [[ -z "$(find "$cache" -mmin +1440 2>/dev/null)" ]] && return 0
+  tmp="$cache.$$"
+  {
+    mkdir -p "${cache:h}" 2>/dev/null
+    pi --list-models >|"$tmp" 2>/dev/null && mv -f "$tmp" "$cache"
+  } &!
+}
+
+_pi_models() {
+  local cache=$(_pi_cache)
+  local -a models
+  [[ -r $cache ]] && models=(${(f)"$(awk 'NR > 1 && NF > 1 { print $1 "/" $2 }' "$cache" 2>/dev/null)"})
+  _pi_cache_refresh
+  models=(${models:#})
+  (( ${#models} )) || { _message -e models 'model pattern'; return 1 }
+  # l:|=* lets the typed text match anywhere, so `--model claude-fa` finds
+  # anthropic/claude-fable-5 and the whole provider/model still gets inserted.
+  compadd -M 'l:|=*' -a models
+}
+
+_pi_providers() {
+  local cache=$(_pi_cache)
+  local -a providers
+  [[ -r $cache ]] && providers=(${(f)"$(awk 'NR > 1 && NF > 1 { print $1 }' "$cache" 2>/dev/null | sort -u)"})
+  _pi_cache_refresh
+  providers=(${providers:#})
+  (( ${#providers} )) && _describe -t providers 'provider' providers
+}
+
+_pi_mcp_servers() {
+  local -a files servers
+  local file
+  for file in "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/mcp.json" "$PWD/.pi/mcp.json"; do
+    [[ -r $file ]] && files+=("$file")
+  done
+  (( ${#files} )) && (( $+commands[jq] )) &&
+    servers=(${(f)"$(jq -r '.mcpServers | keys[]' -- "${files[@]}" 2>/dev/null)"})
+  servers=(${servers:#})
+  (( ${#servers} )) && _describe -t servers 'MCP server' servers
+}
+
+_pi_package() {
+  _arguments \
+    '(-l --local)'{-l,--local}'[use the project settings (.pi/settings.json)]' \
+    '(-a --approve)'{-a,--approve}'[trust project-local files for this command]' \
+    '(-na --no-approve)'{-na,--no-approve}'[ignore project-local files for this command]' \
+    '1:source (npm:, git:, URL, or path):_files'
+}
+
+_pi_update() {
+  _arguments \
+    '1:target:(self pi)' \
+    '--self[update pi only (the default)]' \
+    '--extensions[update installed packages only]' \
+    '--models[refresh model catalogs only]' \
+    '--all[update pi and installed packages]' \
+    '*--extension[update one package only]:source:' \
+    '(-a --approve)'{-a,--approve}'[trust project-local files]' \
+    '(-na --no-approve)'{-na,--no-approve}'[ignore project-local files]' \
+    '--force[force the update]'
+}
+
+_pi_list() {
+  _arguments \
+    '(-a --approve)'{-a,--approve}'[trust project-local files]' \
+    '(-na --no-approve)'{-na,--no-approve}'[ignore project-local files]'
+}
+
+_pi_config() {
+  _arguments \
+    '(-l --local)'{-l,--local}'[edit the project overrides (.pi/settings.json)]' \
+    '(-a --approve)'{-a,--approve}'[trust project-local files with -l]' \
+    '(-na --no-approve)'{-na,--no-approve}'[ignore project-local files with -l]'
+}
+
+_pi_auth() {
+  _arguments \
+    '1:subcommand:(print-api-key print-bearer-token check)' \
+    '--provider[provider to use]:provider:_pi_providers' \
+    '--model[model to use]:model:_pi_models' \
+    '--min-expiry[minimum remaining credential lifetime]:duration:' \
+    '--json[json output]' \
+    '--credentials[include the credential in the output]' \
+    '--no-refresh[do not refresh expired OAuth credentials]'
+}
+
+_pi_mcp() {
+  _arguments \
+    '1:subcommand:(add remove list login logout)' \
+    '2:server:_pi_mcp_servers' \
+    '(-l --local)'{-l,--local}'[use .pi/mcp.json in this project]' \
+    '--url[server URL for add]:url:' \
+    '--timeout[login timeout in seconds]:seconds:' \
+    '::server command after --:_normal'
+}
+
+_pi() {
+  local curcontext="$curcontext" state line ret=1
+  typeset -A opt_args
+  local -a pi_commands
+  pi_commands=(
+    'install:install a package and add it to settings'
+    'remove:remove a package from settings'
+    'uninstall:alias for remove'
+    'update:update pi, installed packages, or model catalogs'
+    'list:list installed packages from settings'
+    'config:open the resource configuration TUI'
+    'auth:print credentials or check provider readiness'
+    'mcp:check MCP servers, sign in to or out of OAuth servers'
+  )
+
+  local cmd=${words[2]}
+  if (( CURRENT > 2 )) && [[ -n ${(M)pi_commands:#${(b)cmd}:*} ]]; then
+    curcontext="${curcontext%:*:*}:pi-${cmd}"
+    shift words
+    (( CURRENT-- ))
+    case ${cmd} in
+      install|remove|uninstall) _pi_package ;;
+      update)                   _pi_update  ;;
+      list)                     _pi_list    ;;
+      config)                   _pi_config  ;;
+      auth)                     _pi_auth    ;;
+      mcp)                      _pi_mcp     ;;
+    esac
+    return
+  fi
+
+  _arguments \
+    '(-h --help)'{-h,--help}'[show this help]' \
+    '(-v --version)'{-v,--version}'[show version number]' \
+    '--provider[provider to search for --model]:provider:_pi_providers' \
+    '--model[model pattern or ID; provider/id and an optional :<thinking>]:model:_pi_models' \
+    '--api-key[API key (defaults to the environment)]:key:' \
+    '--system-prompt[system prompt]:text:' \
+    '*--append-system-prompt[append text or a file to the system prompt]:text or file:_files' \
+    '--mode[output mode]:mode:(text json rpc)' \
+    '(-p --print)'{-p,--print}'[non-interactive mode: process the prompt and exit]' \
+    '(-c --continue)'{-c,--continue}'[continue the previous session]' \
+    '(-r --resume)'{-r,--resume}'[select a session to resume]' \
+    '--session[use a specific session file or partial UUID]:session:_files' \
+    '--session-id[use an exact project session ID, created when missing]:id:' \
+    '--fork[fork a session into a new one]:session:_files' \
+    '--session-dir[directory for session storage and lookup]:directory:_directories' \
+    '--no-session[do not save the session]' \
+    '(-n --name)'{-n,--name}'[set the session display name]:name:' \
+    '--models[models offered by Ctrl+P cycling]:model pattern:_pi_models' \
+    '(-nt --no-tools)'{-nt,--no-tools}'[disable every tool, built-in and extension]' \
+    '(-nbt --no-builtin-tools)'{-nbt,--no-builtin-tools}'[disable built-in tools, keep extension tools]' \
+    '(-t --tools)'{-t,--tools}'[allowlist of tool names or patterns]:tools:(read bash powershell edit write grep find ls)' \
+    '(-xt --exclude-tools)'{-xt,--exclude-tools}'[denylist of tool names or patterns]:tools:(read bash powershell edit write grep find ls)' \
+    '--thinking[set the thinking level]:level:(off minimal low medium high xhigh max)' \
+    '*-e[load an extension file or builtin: name]:extension:_files' \
+    '*--extension[load an extension file or builtin: name]:extension:_files' \
+    '(-ne --no-extensions)'{-ne,--no-extensions}'[disable extension discovery]' \
+    '--no-mcp[disable MCP support: no servers, no MCP tools]' \
+    '*--skill[load a skill file or directory]:skill:_files' \
+    '(-ns --no-skills)'{-ns,--no-skills}'[disable skill discovery and loading]' \
+    '*--prompt-template[load a prompt template file or directory]:template:_files' \
+    '(-np --no-prompt-templates)'{-np,--no-prompt-templates}'[disable prompt template discovery]' \
+    '*--theme[load a theme file or directory]:theme:_files' \
+    '--use-theme[initial interactive theme]:theme:' \
+    '--no-themes[disable theme discovery and loading]' \
+    '(-nc --no-context-files)'{-nc,--no-context-files}'[disable AGENTS.md and CLAUDE.md discovery]' \
+    '--export[export a session file to HTML and exit]:file:_files' \
+    '--list-models[list available models, optionally matching a search]' \
+    '--verbose[force verbose startup]' \
+    '--tui-mode[TUI mode]:mode:(fullscreen regular)' \
+    '(-a --approve)'{-a,--approve}'[trust project-local files for this run]' \
+    '(-na --no-approve)'{-na,--no-approve}'[ignore project-local files for this run]' \
+    '--offline[disable startup network operations]' \
+    '1: :->first' \
+    '*: :->rest' \
+  && ret=0
+
+  # Anything that is not a subcommand is prose, so the only completion worth
+  # offering there is the @file form (messages and files, never a bare path).
+  case $state in
+    first)
+      _describe -t commands 'pi command' pi_commands && ret=0
+      compset -P '@' && _files && ret=0
+      ;;
+    rest)
+      compset -P '@' && _files && ret=0
+      ;;
+  esac
+
+  return ret
+}
+
+_pi "$@"

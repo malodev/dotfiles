@@ -1,0 +1,162 @@
+# bash completion for pi, the pi coding agent (@earendil-works/pi-coding-agent).
+#
+# Hand-written on purpose: pi ships no `completion` command — `pi completion bash`
+# is taken as a prompt and starts a session. The specs mirror `pi --help` and
+# `pi install|remove|list|config|auth|mcp|update --help` at pi 1.4.0. Run
+# `./update.sh` next to this file after a pi upgrade: it names options the binary
+# grew that this file does not know yet.
+#
+# bash-completion loads this file lazily from its user directory
+# (~/.local/share/bash-completion/completions) on the first Tab for `pi`, so
+# nothing has to source it. On macOS the system bash is 3.2 and bash-completion
+# is not installed at all, so this file never loads there — zsh covers the Mac.
+#
+# The model list is read from the cache the zsh completion also writes
+# (~/.cache/pi/models.txt); a missing or day-old cache is refreshed behind the
+# prompt, because `pi --list-models` needs about a second.
+
+_pi_cache() {
+    printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/pi/models.txt"
+}
+
+_pi_cache_refresh() {
+    local cache tmp
+    cache=$(_pi_cache)
+    if [[ -r $cache && -z "$(find "$cache" -mmin +1440 2>/dev/null)" ]]; then
+        return 0
+    fi
+    tmp="$cache.$$"
+    (
+        mkdir -p "${cache%/*}" 2>/dev/null
+        pi --list-models >"$tmp" 2>/dev/null && mv -f "$tmp" "$cache"
+    ) >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+}
+
+_pi_models() {
+    local cache
+    cache=$(_pi_cache)
+    _pi_cache_refresh
+    [[ -r $cache ]] && awk 'NR > 1 && NF > 1 { print $1 "/" $2 }' "$cache" 2>/dev/null
+}
+
+_pi_providers() {
+    local cache
+    cache=$(_pi_cache)
+    [[ -r $cache ]] && awk 'NR > 1 && NF > 1 { print $1 }' "$cache" 2>/dev/null | sort -u
+}
+
+_pi_mcp_servers() {
+    local file
+    local -a files=() 
+    for file in "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/mcp.json" "$PWD/.pi/mcp.json"; do
+        [[ -r $file ]] && files+=("$file")
+    done
+    (( ${#files[@]} )) && command -v jq >/dev/null 2>&1 &&
+        jq -r '.mcpServers | keys[]' -- "${files[@]}" 2>/dev/null
+}
+
+_pi() {
+    local cur prev words cword
+    _init_completion -n = || return
+
+    local commands="install remove uninstall update list config auth mcp"
+    local flag_opts="--print -p --continue -c --resume -r --no-session --no-tools -nt \
+--no-builtin-tools -nbt --no-extensions -ne --no-mcp --no-skills -ns \
+--no-prompt-templates -np --no-themes --no-context-files -nc --list-models --verbose \
+--offline --help -h --version -v --approve -a --no-approve -na"
+    local value_opts="--provider --model --api-key --system-prompt --append-system-prompt \
+--mode --session --session-id --fork --session-dir --name --models --tools --exclude-tools \
+--thinking --extension --skill --prompt-template --theme --use-theme --export --tui-mode"
+
+    # Values, keyed on the option just typed.
+    case $prev in
+        --provider)
+            COMPREPLY=($(compgen -W "$(_pi_providers)" -- "$cur"))
+            return ;;
+        --model|--models)
+            # Match on the model part too, so --model claude-fa finds
+            # anthropic/claude-fable-5 (pi accepts a bare pattern as well).
+            local candidate
+            for candidate in $(_pi_models); do
+                if [[ $candidate == "$cur"* || ${candidate#*/} == "$cur"* ]]; then
+                    COMPREPLY+=("$candidate")
+                fi
+            done
+            return ;;
+        --mode)
+            COMPREPLY=($(compgen -W "text json rpc" -- "$cur"))
+            return ;;
+        --thinking)
+            COMPREPLY=($(compgen -W "off minimal low medium high xhigh max" -- "$cur"))
+            return ;;
+        --tui-mode)
+            COMPREPLY=($(compgen -W "fullscreen regular" -- "$cur"))
+            return ;;
+        --tools|--exclude-tools)
+            COMPREPLY=($(compgen -W "read bash powershell edit write grep find ls" -- "$cur"))
+            return ;;
+        --api-key|--session-id|--name|--use-theme|--system-prompt)
+            return ;;
+        --session-dir)
+            _filedir -d
+            return ;;
+        --session|--fork|--export|--extension|--skill|--prompt-template|--theme|--append-system-prompt)
+            _filedir
+            return ;;
+    esac
+
+    # The subcommand is the first non-option word after `pi`.
+    local cmd="" i
+    for (( i = 1; i < cword; i++ )); do
+        case ${words[i]} in
+            ''|'@'*|-*) continue ;;
+            *) cmd=${words[i]}; break ;;
+        esac
+    done
+
+    if [[ -z $cmd ]]; then
+        if [[ $cur == -* ]]; then
+            COMPREPLY=($(compgen -W "$flag_opts $value_opts" -- "$cur"))
+        elif [[ $cur == @* ]]; then
+            _filedir
+            COMPREPLY=("${COMPREPLY[@]/#/@}")
+        else
+            COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+        fi
+        return
+    fi
+
+    case $cmd in
+        install|remove|uninstall)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "--local -l --approve -a --no-approve -na" -- "$cur"))
+            else
+                _filedir
+            fi ;;
+        update)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "--self --extensions --models --all --extension --force --approve -a --no-approve -na" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "self pi" -- "$cur"))
+            fi ;;
+        config)
+            COMPREPLY=($(compgen -W "-l --local --approve -a --no-approve -na" -- "$cur")) ;;
+        list)
+            COMPREPLY=($(compgen -W "--approve -a --no-approve -na" -- "$cur")) ;;
+        auth)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "--provider --model --min-expiry --json --credentials --no-refresh" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "print-api-key print-bearer-token check" -- "$cur"))
+            fi ;;
+        mcp)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "-l --local --url --timeout" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "add remove list login logout $(_pi_mcp_servers)" -- "$cur"))
+            fi ;;
+    esac
+}
+
+complete -F _pi pi

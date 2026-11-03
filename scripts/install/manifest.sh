@@ -5,7 +5,7 @@
 
 declare -A INSTALL_GROUPS=(
     ["core"]=""
-    ["shell"]="bash zsh starship nushell"
+    ["shell"]="bash zsh starship nushell completions"
     ["editor"]="nvim-malo nvim-lazy"
     ["editor-alt"]="nvim-test nvim-php nvim-astro"
     ["terminal"]="tmux"
@@ -21,7 +21,7 @@ declare -A INSTALL_GROUPS=(
 
 declare -A GROUP_DESC=(
     ["core"]="Core dependencies (GNU Stow)"
-    ["shell"]="Shell configurations (Bash, Zsh, Starship, Nushell)"
+    ["shell"]="Shell configurations (Bash, Zsh, Starship, Nushell) and their completions"
     ["editor"]="Primary Neovim configurations (malo, lazy)"
     ["editor-alt"]="Alternative Neovim configurations (test, php, astro)"
     ["terminal"]="SSH-safe terminal tools (Tmux, Urlview, Kitty terminfo)"

@@ -223,8 +223,11 @@ stow_package_flags() {
         # These target directories are written to by other tools (Omarchy's
         # upgrades, editors dropping .bak files beside a live config). Folding
         # makes ~/.config/hypr and ~/.config/kitty symlinks into the checkout,
-        # so that cruft lands in the working tree.
-        pi|hyprland|kitty) echo "--no-folding" ;;
+        # so that cruft lands in the working tree. ~/.zsh/completions and the
+        # bash-completion user directory are the same kind of shared drop-off:
+        # folding would turn every later third-party completion into a file in
+        # this repo.
+        pi|hyprland|kitty|completions) echo "--no-folding" ;;
         *) ;;
     esac
 }
