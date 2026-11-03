@@ -208,6 +208,13 @@ cannot clobber what Omarchy wrote.
   carries the menu as a source (`services/OmarchyMenuSource.qml`), so nothing is lost. Nothing
   under `/usr/share/omarchy` is edited: the local file loads after the defaults, so a future
   default on either key is overridden the same way rather than fought.
+- **`ALT + SPACE` runs `voxtype-dictation-toggle`, not `omarchy-dictation toggle`.** With the
+  voxtype backend, `voxtype record toggle` (voxtype 1.1.1) only ever *stops*: from idle it
+  returns 0 and leaves the daemon idle, so Omarchy's stock binding starts nothing and the key
+  looks dead. `local-bin/.local/bin/voxtype-dictation-toggle` decides on `voxtype status` (only
+  `idle` starts; an unreadable state does nothing rather than start blind) and still calls the
+  Omarchy adapter, keeping its lock and its backend indirection. Push-to-talk on `Right Alt` was
+  never affected — it uses `start`/`stop`, which work.
 - Omarchy's migration `1793477875.sh` appends the *previous* dictation keys (`F9`,
   `SUPER + CTRL + X`) to `~/.config/hypr/bindings.lua` — the tracked file again, through the
   symlink — for users who had them before `Alt + Space` became the default. Here dictation keeps

@@ -1,0 +1,26 @@
+#!/bin/bash
+# voxtype-dictation-toggle -- start dictation when idle, stop it when recording.
+#
+# Why this exists: `voxtype record toggle` (voxtype 1.1.1) only ever *stops*. From
+# idle it returns 0 and does nothing, so Omarchy's default `Alt + Space ->
+# omarchy-dictation toggle` never starts a recording on this backend — the log shows
+# no "Recording started" at all. `start` and `stop` do work, which is what the
+# push-to-talk binding (Right Alt) uses.
+#
+# So the decision missing from voxtype is made here, and the actual work still goes
+# through Omarchy's adapter: it keeps the backend abstraction and the lock that
+# stops two presses racing. Bound in ~/.config/hypr/hyprland_local.lua.
+set -uo pipefail
+
+command -v voxtype >/dev/null 2>&1 || exit 0
+command -v omarchy-dictation >/dev/null 2>&1 || exit 0
+
+# An unreadable state (no XDG_RUNTIME_DIR, daemon down) must not be mistaken for idle:
+# starting blind would make the key do nothing at best and double-start at worst. Do
+# nothing in that case and let the next press try again.
+state="$(voxtype status 2>/dev/null || true)"
+case "$state" in
+  idle) exec omarchy-dictation start ;;
+  '')   exit 0 ;;
+  *)    exec omarchy-dictation stop ;;
+esac
