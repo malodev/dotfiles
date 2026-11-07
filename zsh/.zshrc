@@ -220,6 +220,26 @@ alias tl='tmux list-sessions'
 export EDITOR=nvim
 
 #=============================================================================
+# CLAUDE CODE - MULTI-ACCOUNT PROFILES
+#=============================================================================
+# Two Anthropic accounts on one machine: ~/.claude (default) and the second
+# config dir ~/.claude-gmail, which symlinks projects/settings/skills back to
+# the first so both profiles share one transcript history and one MCP set.
+# Set the second profile up with:
+#   mkdir -p ~/.claude-gmail && for d in projects file-history plans skills plugins; do [[ -e ~/.claude/$d ]] && ln -sfn ~/.claude/$d ~/.claude-gmail/$d; done
+#   ln -sfn ~/.claude/settings.json ~/.claude-gmail/settings.json
+#   jq '{mcpServers}' ~/.claude.json > ~/.claude-gmail/.claude.json
+#   cc-login-gmail
+# `cc-who` prints which account each profile holds (claude auth status --json).
+alias cc-oruam='CLAUDE_CONFIG_DIR="$HOME/.claude" claude --dangerously-skip-permissions'
+alias cc-gmail='CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude --dangerously-skip-permissions'
+cc-login-gmail() { CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude auth login "$@"; }
+cc-who() {
+  printf 'oruam  ~/.claude:        %s\n' "$(claude auth status 2>/dev/null | jq -r '.email // "not logged in"')"
+  printf 'gmail  ~/.claude-gmail:  %s\n' "$(CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude auth status 2>/dev/null | jq -r '.email // "not logged in"')"
+}
+
+#=============================================================================
 # PATH ADDITIONS
 #=============================================================================
 # Radicle - peer-to-peer code collaboration
