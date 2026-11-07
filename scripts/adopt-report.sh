@@ -61,7 +61,10 @@ SIGNALS = [
     ("LAN hostname", re.compile(r"[A-Za-z0-9_-]+\.(loc|lan)\b")),
     ("private address", re.compile(r"(192\.168|10\.[0-9]+|127\.0\.0\.1)[.:]")),
     ("credential reference", re.compile(r"api[-_]?key|[A-Za-z]ApiKey|bearer |\"sk-|!cat |credential")),
-    ("cache, history or backup", re.compile(r"cache|history|\.bak")),
+    # A cache means a *path*: "cache/", "usage-tracker.json", "x.bak". The bare words are
+    # ordinary prose - "one transcript history and one MCP set" is configuration, not a cache.
+    ("cache, history or backup",
+     re.compile(r"\.bak\b|usage-tracker|(?:cache|history)/|(?:cache|history)\.(?:json|log|db|txt|sqlite)")),
 ]
 # Code carries these strings legitimately - a grep pattern, a test fixture - so they are only
 # scanned for a *new* file when the extension says it is configuration, not code.
@@ -185,6 +188,10 @@ for line in git("status", "--porcelain", "--untracked-files=normal").splitlines(
         continue
     state = "untracked" if line[:2] == "??" else "tracked-changed"
     path = line[3:]
+    # The file that defines the signals necessarily contains all of them: it is not a finding,
+    # and neither is the allowlist, which quotes what it excuses.
+    if pathlib.PurePath(path).name in ("adopt-report.sh", "clean-room-allow.txt"):
+        continue
     category, reason = classify(path, state, sentinels, migrating)
     files.append({"path": path, "state": state, "category": category, "reason": reason})
 
