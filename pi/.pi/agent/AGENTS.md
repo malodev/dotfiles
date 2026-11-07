@@ -50,6 +50,4 @@ overlay yet, there are no local rules: do not invent them.
   without fetching first.
 - Do not `git add` what you did not create or change on purpose. Someone else's
   `*_local` file, plan or scratch directory is not yours to commit.
-- When a tracked file must not carry a value only one machine is true for, check for it
-  rather than remember it: `./scripts/check-clean-room.sh` in the dotfiles repository,
-  with deliberate exceptions written down next to a reason.
+- Machine-specific values: `./scripts/check-clean-room.sh` (dotfiles repository, also in the suite).
