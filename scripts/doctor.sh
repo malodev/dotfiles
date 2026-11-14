@@ -104,6 +104,22 @@ fi
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
 cmd_path() { command -v "$1" 2>/dev/null || echo ""; }
 
+# "Installed but not on PATH" is often a broken link: a tool that moved its own binary leaves the
+# old symlink behind, and `command -v` reports exactly the same nothing as a missing install. Naming
+# the link turns a mystery into a one-line fix.
+stale_path_entry() {
+  local name="$1" dir entry
+  local IFS=':'
+  for dir in $PATH; do
+    entry="$dir/$name"
+    if [[ -L "$entry" && ! -e "$entry" ]]; then
+      printf '%s → %s (target missing)' "$entry" "$(readlink "$entry")"
+      return 0
+    fi
+  done
+  return 1
+}
+
 CORE_TOOLS=(git curl stow mise nvim starship zoxide rg fd fzf jq lazygit tmux zsh bash nu)
 AGENT_TOOLS=(pi claude agy llm)
 
@@ -363,6 +379,8 @@ echo -e "\033[1;36m━━━ Agent Harnesses & Skills ━━━\033[0m"
 for t in "${AGENT_TOOLS[@]}"; do
   if has_cmd "$t"; then
     echo -e "  \033[1;32m✓\033[0m $(printf '%-8s' "$t") → $(cmd_path "$t")"
+  elif stale="$(stale_path_entry "$t")"; then
+    echo -e "  \033[1;33m⚠\033[0m $(printf '%-8s' "$t") → dangling symlink: $stale"
   else
     echo -e "  \033[1;33m•\033[0m $(printf '%-8s' "$t") → not found on PATH"
   fi
