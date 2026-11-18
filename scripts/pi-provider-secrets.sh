@@ -31,6 +31,7 @@ set -euo pipefail
 MODELS="${PI_MODELS_JSON:-$HOME/.pi/agent/models.json}"
 CHECK_ONLY=0
 ONLY=""
+ALLOW_STDIN=0
 declare -A SOURCE=()
 
 info() { printf '  \033[1;34m•\033[0m %s\n' "$1"; }
@@ -45,6 +46,9 @@ pi-provider-secrets.sh — fill the file-backed secrets models.json names
   --check                 report only, change nothing (exit 1 if incomplete)
   --provider NAME         limit to one provider
   --from-file NAME=PATH   read the secret from a private (0600) file
+  --stdin                 accept the secret from a pipe instead of a TTY
+                          (the value may land in the shell history: prefer
+                          --from-file or an interactive terminal)
   -h, --help              this text
 
 Secrets are derived from ~/.pi/agent/models.json: every provider whose apiKey
@@ -103,8 +107,13 @@ install_one() {   # install_one <provider> <path>
     fi
     value="$(tr -d '\n' <"$src")"
   else
-    if [[ ! -t 0 ]]; then
-      err "$name: nessuna --from-file e stdin non è un terminale"
+    if [[ ! -t 0 && "$ALLOW_STDIN" == "0" ]]; then
+      err "$name: stdin non è un terminale e non c'è --from-file."
+      err "  Opzioni: esegui in un terminale interattivo (foot, kitty), oppure"
+      err "    ./scripts/pi-provider-secrets.sh --provider $name --from-file $name=/percorso/key"
+      err "  Dalla clipboard (Wayland), senza scriverla nella history:"
+      err "    umask 077; wl-paste --no-newline > /tmp/k && ./scripts/pi-provider-secrets.sh --provider $name --from-file $name=/tmp/k && rm -f /tmp/k"
+      err "  Se sai cosa stai facendo, --stdin accetta un pipe."
       return 1
     fi
     value="$(read_secret "$name")"
@@ -138,6 +147,7 @@ main() {
     arg="$1"; shift
     case "$arg" in
       --check)       CHECK_ONLY=1 ;;
+      --stdin)       ALLOW_STDIN=1 ;;
       --provider)    ONLY="${1:-}"; shift || true ;;
       --provider=*)  ONLY="${arg#--provider=}" ;;
       --from-file)   pair="${1:-}"; shift || true; SOURCE["${pair%%=*}"]="${pair#*=}" ;;
