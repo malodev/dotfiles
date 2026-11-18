@@ -145,7 +145,7 @@ Secrets are **files**, never values in tracked config. `models.json` only names 
 ```
 
 - One secret per file, `chmod 600`, no trailing newline. Directories `0700`.
-- Known locations: `~/.pi-inference/credentials/{control-api-token,model-api-key}`, `~/.config/tokenator/{litellm,vllm}-api-key`, `~/.config/unsloth/pi-api-key`, `~/.config/pi-secrets/*`.
+- Known locations: `~/.pi-inference/credentials/{control-api-token,model-api-key}`, `~/.config/tokenator/litellm-api-key`, `~/.config/vllm-mlx/api-key`, `~/.config/unsloth/pi-api-key`, `~/.config/pi-secrets/*`.
 - **Fill credentials with the focused scripts, not the deploy script.** The inference pair (control plane + model endpoints) has its own installer; every other `!cat` provider is derived from `models.json`, so there is no list to maintain:
   ```bash
   ./scripts/pi-provider-secrets.sh --check          # report only, exit 1 if incomplete
