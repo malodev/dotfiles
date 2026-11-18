@@ -79,12 +79,32 @@ is_private() {
   [[ "$mode" == "600" ]]
 }
 
-read_secret() {   # read_secret <label> -> prints value on stdout
+read_secret() {   # read_secret <label> -> prints value on stdout, fails if no input source
   local label="$1" value=""
-  printf '  %s: ' "$label" >&2
-  IFS= read -rs value || true
-  printf '\n' >&2
-  printf '%s' "$value"
+  # 1. The controlling terminal, if we can really open it. A pane under a
+  #    multiplexer has stdin redirected but a usable /dev/tty, which is why
+  #    testing -t 0 alone reported "not a terminal" and refused a working run.
+  if { printf '  %s: ' "$label" >/dev/tty; } 2>/dev/null &&
+     { IFS= read -rs value </dev/tty; } 2>/dev/null; then
+    printf '\n' >/dev/tty 2>/dev/null || true
+    printf '%s' "$value"
+    return 0
+  fi
+  # 2. An ordinary interactive shell.
+  if [[ -t 0 ]]; then
+    printf '  %s: ' "$label" >&2
+    IFS= read -rs value || true
+    printf '\n' >&2
+    printf '%s' "$value"
+    return 0
+  fi
+  # 3. A pipe, only when explicitly allowed.
+  if [[ "$ALLOW_STDIN" == "1" ]]; then
+    IFS= read -rs value || true
+    printf '%s' "$value"
+    return 0
+  fi
+  return 1
 }
 
 install_one() {   # install_one <provider> <path>
@@ -107,8 +127,8 @@ install_one() {   # install_one <provider> <path>
     fi
     value="$(tr -d '\n' <"$src")"
   else
-    if [[ ! -t 0 && "$ALLOW_STDIN" == "0" ]]; then
-      err "$name: stdin non è un terminale e non c'è --from-file."
+    if ! value="$(read_secret "$name")"; then
+      err "$name: nessun terminale disponibile e nessuna --from-file."
       err "  Opzioni: esegui in un terminale interattivo (foot, kitty), oppure"
       err "    ./scripts/pi-provider-secrets.sh --provider $name --from-file $name=/percorso/key"
       err "  Dalla clipboard (Wayland), senza scriverla nella history:"
@@ -116,7 +136,6 @@ install_one() {   # install_one <provider> <path>
       err "  Se sai cosa stai facendo, --stdin accetta un pipe."
       return 1
     fi
-    value="$(read_secret "$name")"
   fi
 
   if [[ -z "$value" ]]; then

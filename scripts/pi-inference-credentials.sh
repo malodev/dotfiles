@@ -98,11 +98,21 @@ install_one() {
     return 1
   fi
 
-  if [[ ! -t 0 ]]; then
-    err "$name: nessuna --from-file e stdin non è un terminale"
-    return 1
+  # A pane under a multiplexer has stdin redirected but a usable controlling
+  # terminal, so hand that terminal to the client instead of refusing.
+  if { printf '  %s credential: ' "$name" >/dev/tty; } 2>/dev/null &&
+     "$client" credential --install "${flags[@]}" "$name" </dev/tty; then
+    ok "$name: installata dal terminale"
+    return 0
   fi
-  "$client" credential --install "${flags[@]}" "$name" && ok "$name: installata da stdin"
+  if [[ -t 0 ]]; then
+    "$client" credential --install "${flags[@]}" "$name" && ok "$name: installata da stdin"
+    return 0
+  fi
+  err "$name: nessun terminale e nessuna --from-file"
+  err "  da un terminale interattivo, oppure:"
+  err "    ./scripts/pi-inference-credentials.sh --from-file $name=/percorso/file"
+  return 1
 }
 
 report_one() {
