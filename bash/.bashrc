@@ -16,6 +16,16 @@ DOTFILES_BASHRC_LOADING=1
 export DOTFILES_HOSTNAME="${DOTFILES_HOSTNAME:-$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || echo unknown)}"
 
 #=============================================================================
+# OMARCHY ENVIRONMENT (Arch desktop; no-op elsewhere)
+#=============================================================================
+# When this file is linked as ~/.bashrc it replaces Omarchy's own file, which
+# sourced its environment first and returns early on non-interactive shells.
+# Keep that bootstrap here, guarded, or PATH loses OMARCHY_PATH and its bins.
+if [[ -r /usr/share/omarchy/default/bash/env-bootstrap ]]; then
+    source /usr/share/omarchy/default/bash/env-bootstrap
+fi
+
+#=============================================================================
 # DEBUGGING BASH STARTUP / SSH LOGIN HANGS
 #=============================================================================
 # This file has opt-in checkpoints around common hang points (starship, zoxide,
