@@ -148,15 +148,15 @@ Secrets are **files**, never values in tracked config. `models.json` only names 
 - Known locations: `~/.pi-inference/credentials/{control-api-token,model-api-key}`, `~/.config/tokenator/litellm-api-key`, `~/.config/vllm-mlx/api-key`, `~/.config/unsloth/pi-api-key`, `~/.config/pi-secrets/*`.
 - **Fill credentials with the focused scripts, not the deploy script.** The inference pair (control plane + model endpoints) has its own installer; every other `!cat` provider is derived from `models.json`, so there is no list to maintain:
   ```bash
-  ./scripts/pi-provider-secrets.sh --check          # report only, exit 1 if incomplete
-  ./scripts/pi-provider-secrets.sh                  # prompt without echo for what is missing
-  ./scripts/pi-provider-secrets.sh --provider mlx --from-file mlx=/path/key
+  ~/dotfiles/scripts/pi-provider-secrets.sh --check          # report only, exit 1 if incomplete
+  ~/dotfiles/scripts/pi-provider-secrets.sh                  # prompt without echo for what is missing
+  ~/dotfiles/scripts/pi-provider-secrets.sh --provider mlx --from-file mlx=/path/key
   ```
 - **The inference pair:**
   ```bash
-  ./scripts/pi-inference-credentials.sh --check      # report only, exit 1 if incomplete
-  ./scripts/pi-inference-credentials.sh              # install what is missing (stdin, no history)
-  ./scripts/pi-inference-credentials.sh --from-file control-api=/path/token --from-file model-api=/path/key
+  ~/dotfiles/scripts/pi-inference-credentials.sh --check      # report only, exit 1 if incomplete
+  ~/dotfiles/scripts/pi-inference-credentials.sh              # install what is missing (stdin, no history)
+  ~/dotfiles/scripts/pi-inference-credentials.sh --from-file control-api=/path/token --from-file model-api=/path/key
   ```
 - **`scripts/pi-inference-client-setup --verify` is not part of routine setup.** It flips the shared inference host between modes to smoke-test every managed model; run it deliberately, when the host is idle, never while someone else is using it.
 - Secrets are not recoverable from backups of config: if a key file is missing on a new host it must be re-issued at the source (LiteLLM, the inference host, the model service). Never invent one.

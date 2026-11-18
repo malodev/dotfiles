@@ -15,10 +15,10 @@
 # have no file to fill.
 #
 # Usage:
-#   ./scripts/pi-provider-secrets.sh --check            # report only
-#   ./scripts/pi-provider-secrets.sh                    # prompt for what is missing
-#   ./scripts/pi-provider-secrets.sh --provider tokenator
-#   ./scripts/pi-provider-secrets.sh --from-file mlx=/path/to/key
+#   ~/dotfiles/scripts/pi-provider-secrets.sh --check            # report only
+#   ~/dotfiles/scripts/pi-provider-secrets.sh                    # prompt for what is missing
+#   ~/dotfiles/scripts/pi-provider-secrets.sh --provider tokenator
+#   ~/dotfiles/scripts/pi-provider-secrets.sh --from-file mlx=/path/to/key
 #
 # Values are read without echo, written with 0600, and never printed: only
 # their length is. Nothing here talks to a provider, so an unverified key is
@@ -130,9 +130,9 @@ install_one() {   # install_one <provider> <path>
     if ! value="$(read_secret "$name")"; then
       err "$name: nessun terminale disponibile e nessuna --from-file."
       err "  Opzioni: esegui in un terminale interattivo (foot, kitty), oppure"
-      err "    ./scripts/pi-provider-secrets.sh --provider $name --from-file $name=/percorso/key"
+      err "    ~/dotfiles/scripts/pi-provider-secrets.sh --provider $name --from-file $name=/percorso/key"
       err "  Dalla clipboard (Wayland), senza scriverla nella history:"
-      err "    umask 077; wl-paste --no-newline > /tmp/k && ./scripts/pi-provider-secrets.sh --provider $name --from-file $name=/tmp/k && rm -f /tmp/k"
+      err "    umask 077; wl-paste --no-newline > /tmp/k && ~/dotfiles/scripts/pi-provider-secrets.sh --provider $name --from-file $name=/tmp/k && rm -f /tmp/k"
       err "  Se sai cosa stai facendo, --stdin accetta un pipe."
       return 1
     fi

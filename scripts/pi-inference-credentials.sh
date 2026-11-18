@@ -22,10 +22,10 @@
 # --from-file takes a private (mode 0600) file.
 #
 # Usage:
-#   ./scripts/pi-inference-credentials.sh --check          # report only
-#   ./scripts/pi-inference-credentials.sh                  # install what is missing
-#   ./scripts/pi-inference-credentials.sh --replace        # rotate both
-#   ./scripts/pi-inference-credentials.sh --from-file control-api=/p/token \
+#   ~/dotfiles/scripts/pi-inference-credentials.sh --check          # report only
+#   ~/dotfiles/scripts/pi-inference-credentials.sh                  # install what is missing
+#   ~/dotfiles/scripts/pi-inference-credentials.sh --replace        # rotate both
+#   ~/dotfiles/scripts/pi-inference-credentials.sh --from-file control-api=/p/token \
 #                                         --from-file model-api=/p/key
 #
 # Exit: 0 when every requested credential is in place, 1 otherwise.
@@ -111,7 +111,7 @@ install_one() {
   fi
   err "$name: nessun terminale e nessuna --from-file"
   err "  da un terminale interattivo, oppure:"
-  err "    ./scripts/pi-inference-credentials.sh --from-file $name=/percorso/file"
+  err "    ~/dotfiles/scripts/pi-inference-credentials.sh --from-file $name=/percorso/file"
   return 1
 }
 
