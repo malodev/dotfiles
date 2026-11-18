@@ -9,7 +9,8 @@
     "npm:@ogulcancelik/pi-herdr",
     "npm:@ifi/oh-pi-themes",
     "npm:@ifi/pi-web-remote",
-    "npm:pi-powerline-footer"
+    "npm:pi-powerline-footer",
+    "npm:pi-claude-code-provider"
   ],
   "powerlineShortcuts": {
     "jumpPreviousUserMessage": "ctrl+shift+9",

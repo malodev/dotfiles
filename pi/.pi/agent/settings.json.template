@@ -8,5 +8,24 @@
     "jumpPreviousUserMessage": "ctrl+shift+9",
     "jumpNextUserMessage": "ctrl+shift+0"
   },
-  "theme": "nord"
+  "theme": "nord",
+  "defaultModel": "deepseek-v4.1-flash",
+  "defaultProvider": "opencode-go",
+  "defaultThinkingLevel": "high",
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:@tmustier/pi-usage-extension\",\"scope\":\"user\"}": "0.10.2",
+    "{\"source\":\"npm:@marckrenn/pi-sub-bar\",\"scope\":\"user\"}": "1.5.0",
+    "{\"source\":\"npm:pi-powerline-footer\",\"scope\":\"user\"}": "0.22.0",
+    "{\"source\":\"npm:pi-claude-code-provider\",\"scope\":\"user\"}": "0.6.0",
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.48.0"
+  },
+  "extensions": [
+    "-extensions/auto-router/index.ts",
+    "-extensions/task-forge/index.ts"
+  ],
+  "lastChangelogVersion": "1.5.2",
+  "skills": [
+    "-skills/ask-matt/SKILL.md",
+    "-skills/batch-grill-me/SKILL.md"
+  ]
 }
