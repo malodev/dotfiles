@@ -8,10 +8,29 @@ hl.config({
     repeat_delay = 1100,
     numlock_by_default = true,
     touchpad = {
-      scroll_factor = 0.4,
+      -- macOS-style: scrolling moves the content with the fingers.
+      natural_scroll = true,
+      scroll_factor = 0.55,
     },
+    -- Scroll acceleration curve: precise at slow finger speed, faster on flicks,
+    -- which is the part a flat scroll_factor cannot express. An empty
+    -- scroll_points is Omarchy's flat curve. Format is "<step> <x0> <y0> ...".
+    scroll_points = "0.2 0.0 0.1 0.5 0.15 1.0 0.2 2.0 0.25",
   },
 })
+
+-- Three fingers swipe through workspaces and four fingers take the active
+-- window along, with the direction macOS uses: fingers left go forward.
+-- Hyprland rejects a second gesture on the same fingers and direction, so
+-- Omarchy's bindings are unset before they are replaced.
+hl.gesture({ fingers = 3, direction = "left", action = "unset" })
+hl.gesture({ fingers = 3, direction = "right", action = "unset" })
+hl.gesture({ fingers = 3, direction = "left", action = function() hl.dispatch(hl.dsp.focus({ workspace = "r+1" })) end })
+hl.gesture({ fingers = 3, direction = "right", action = function() hl.dispatch(hl.dsp.focus({ workspace = "r-1" })) end })
+hl.gesture({ fingers = 4, direction = "left", action = "unset" })
+hl.gesture({ fingers = 4, direction = "right", action = "unset" })
+hl.gesture({ fingers = 4, direction = "left", action = function() hl.dispatch(hl.dsp.window.move({ workspace = "r+1" })) end })
+hl.gesture({ fingers = 4, direction = "right", action = function() hl.dispatch(hl.dsp.window.move({ workspace = "r-1" })) end })
 
 -- Omarchy defaults already provide the terminal-specific touchpad scroll rules
 -- that were present in the legacy input.conf.
