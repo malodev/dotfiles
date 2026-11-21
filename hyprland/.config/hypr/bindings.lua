@@ -113,3 +113,30 @@ o.bind("SUPER + SHIFT + ALT + E", "New Gmail email", {
 
 -- T3 Code snapshots shortcut
 hl.bind("CTRL + SHIFT + 2", hl.dsp.global("com.t3tools.T3Code:capture-window"))
+
+-- Chromium's Tab Search chord is a hardcoded browser accelerator: it is not in
+-- chrome://extensions/shortcuts (that page only lists extension commands) and
+-- Chromium has no shortcut editor for its own commands, so Ctrl+Shift+A cannot
+-- be changed inside the browser. Alias it instead: Alt+E sends Ctrl+Shift+A to
+-- the focused Chromium window and is handed back to any other window, so the
+-- chord is only spent on a browser. Note that inside Chromium Alt+E is its own
+-- menu shortcut, and this replaces it there.
+local function is_chromium(window)
+	if window == nil or window.class == nil then
+		return false
+	end
+
+	-- PWAs report their own class, e.g. chrome-chatgpt.com__-Profile_3.
+	return window.class == "chromium" or window.class:sub(1, 7) == "chrome-"
+end
+
+o.bind("ALT + E", "Search browser tabs", function()
+	local window = hl.get_active_window()
+	if is_chromium(window) then
+		hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL SHIFT", key = "A", window = "address:" .. window.address }))
+	elseif window ~= nil then
+		-- Hand the chord back to whatever is focused, so binding it here does not
+		-- take Alt+E away from every other application.
+		hl.dispatch(hl.dsp.pass({ window = "address:" .. window.address }))
+	end
+end)
