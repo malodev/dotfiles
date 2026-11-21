@@ -72,7 +72,14 @@ On **Native Windows (PowerShell in Windows Terminal)**:
 - **Per-Machine Config Templates (`*.json.template`, `*.toml.template`):**
   `settings`, `keybindings`, `models`, `mcp` (native pi MCP, live file `~/.pi/agent/mcp.json`) and `herdr` ship as tracked templates; `scripts/init-pi-settings.sh` and `scripts/init-herdr-config.sh` seed the live, untracked files on first run and never overwrite an existing one. `--force` skips the host-endpoint files (`models`, `mcp`) unless `--force-host` is passed.
 - **Sentinel-Based Local Overrides (`scripts/extract-local-overrides.sh`):**
-  Managed shell/git/WM files end with `# >>> END MANAGED CONFIG <<<` and source untracked `*_local` files (`~/.zshrc_local`, `~/.gitconfig_local`, etc.).
+  Managed shell and git files end with `# >>> END MANAGED CONFIG <<<` and source untracked `*_local` files (`~/.zshrc_local`, `~/.gitconfig_local`, etc.). Hyprland is not one of them: since Omarchy 4 its config is Lua, and machine overrides arrive through the `hypr.hyprland_local` module loaded by `require_optional()`.
+- **Optional software ([`CATALOGUE.md`](CATALOGUE.md)):**
+  The offer, not a dependency list: software worth installing on some machines, each entry saying
+  what it gives you, what it requires, when to install it and when not, and how to verify, update
+  and remove it. Nothing in it is installed by `bootstrap.sh`, `install.sh` or `dot link`. An agent
+  reads the entry, checks the machine, asks (or reads the recorded decision), installs, verifies,
+  and records the decision in `~/Work/AGENTS.md`; the entry itself never carries a machine's
+  path, key or choice.
 - **Adoption ([`ADOPTION.md`](file:///Users/mauro/dotfiles/ADOPTION.md)):**
   What belongs in the repository and what stays on the machine: the criterion (*if the value would be wrong on another machine, it does not belong here*), the three categories with their precedents, the signals that identify host-specific values, and the `dot adopt` process with the clean-room check that verifies the split.
 - **Deployment Scenarios ([`DEPLOYMENT.md`](file:///Users/mauro/dotfiles/DEPLOYMENT.md)):**
