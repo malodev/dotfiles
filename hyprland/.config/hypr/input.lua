@@ -6,6 +6,10 @@ hl.config({
     -- CapsLock is disabled everywhere except as Compose (compose:caps).
     kb_options = "compose:caps",
     repeat_rate = 40,
+    -- 1100 ms, not Omarchy's 250: `compose:caps` makes CapsLock a repeating
+    -- Multi_key, so holding it while reaching for the accent fires extra
+    -- Multi_key presses that restart the compose state and produce nothing.
+    -- Measured on the keyboard itself: at 250 ms a 300 ms hold already repeats.
     repeat_delay = 1100,
     numlock_by_default = true,
     touchpad = {
