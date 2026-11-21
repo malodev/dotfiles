@@ -37,24 +37,55 @@ o.window(
   { tile = true, fullscreen = false }
 )
 
--- 1Password creates Settings as a fixed-size floating Electron window and
--- rejects compositor resize requests. Its title changes from "1Password" to
--- "Settings" after mapping, so a static title rule cannot match it reliably.
-local function tile_1password_settings(window)
+-- 1Password 8 is Electron, and its utility windows (Settings, the unlock and
+-- passkey prompts) are created with resizable = false: they declare a fixed
+-- size and ignore compositor geometry, so neither a size rule nor a manual
+-- resize can make one bigger. Omarchy tags every 1Password window
+-- floating-window and hands it 875x600 (default/hypr/apps/system.lua), which a
+-- fixed-size dialog simply discards. The main window does take a size, so it
+-- gets one chosen for a password list, and Settings -- which the app clamps --
+-- is tiled instead of being left as an immovable postage stamp.
+local ONEPASSWORD_CLASSES = { "1password", "com.onepassword.OnePassword" }
+
+local function is_1password(window)
+  for _, class in ipairs(ONEPASSWORD_CLASSES) do
+    if window.class == class then
+      return true
+    end
+  end
+  return false
+end
+
+-- Registered after Omarchy's defaults. Matching on the tag as well as the class
+-- is what makes the override stick: a rule that only matches the class loses to
+-- the tag's own size, whatever the order.
+o.window(
+  { tag = "floating-window", class = "^(1[pP]assword|com\\.onepassword\\.OnePassword)$" },
+  { size = { "(monitor_w * 0.5)", "(monitor_h * 0.7)" } }
+)
+
+-- Settings is created resizable = false: it declares a fixed size, so the size
+-- rule above is clamped away and dragging its edge does nothing. Its title only
+-- becomes "Settings" after mapping, so a static title rule cannot match it; it
+-- has to be tiled from the title event instead, which is the one lever left.
+--
+-- Quick Access is deliberately a small palette, so it is left alone: tiling it
+-- turns a search box into a full-workspace sheet.
+local function untile_1password_settings(window)
   if window ~= nil
-      and window.class == "1password"
       and window.title == "Settings"
-      and window.floating then
+      and window.floating
+      and is_1password(window) then
     hl.dispatch(hl.dsp.window.float({ action = "unset", window = window }))
   end
 end
 
-hl.on("window.open", tile_1password_settings)
-hl.on("window.title", tile_1password_settings)
+hl.on("window.open", untile_1password_settings)
+hl.on("window.title", untile_1password_settings)
 
--- Apply the correction to Settings if this config is reloaded while it is open.
-for _, window in ipairs(hl.get_windows({ class = "^1password$", title = "^Settings$" })) do
-  tile_1password_settings(window)
+-- Apply the correction if this config is reloaded while Settings is open.
+for _, window in ipairs(hl.get_windows({ class = "^(1[pP]assword|com\\.onepassword\\.OnePassword)$", title = "^Settings$" })) do
+  untile_1password_settings(window)
 end
 
 -- Window rules that were only in the working copy when my stash parked them.
