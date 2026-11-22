@@ -107,8 +107,27 @@ To keep macOS, Linux, and Windows in sync when adding a portable CLI tool:
 3. **Manifest Layer:** If adding a new dotfile config directory `<pkg>/`, register it in `scripts/install/manifest.sh` (`INSTALL_GROUPS`, `GROUP_DETAIL_LINE_*`) and `scripts/windows/link-windows.ps1` (if applicable to Windows).
 4. **Verify:** Run `./scripts/validate-install.sh` and `./scripts/test-environments.sh`.
 
+### B2. Stow conflicts (real files where the repo wants a link)
+
+`stow <pkg>` aborts with "existing target is not owned by stow" on any machine that has been
+running for a while. Do not fix it by hand and do not use `stow --adopt` (it copies the live file
+back over the repository). Run the tool that encodes the rules instead:
+
+1. `dot stow --dry-run <pkg>` — shows what would be adopted, relinked or refused.
+2. `dot stow --apply <pkg>` — backs each real file up under
+   `~/.local/state/dotfiles/adopted/<timestamp>/`, moves it aside, stows, then verifies every entry
+   resolves into the repository.
+3. It refuses OS-owned paths (`~/.config/omarchy`, `~/.config/hypr`, systemd) and refuses real
+   *directories* unless `--adopt-dirs` is given, because a directory mixes machine files with
+   dotfile ones.
+4. Record the decision in `~/Work/AGENTS.md`: which package follows the repo on this machine and
+   where the backup went.
+
+An absolute symlink into the repository (made by hand, or by a bootstrap) is not a conflict to
+adopt: it is ours and only needs relinking, which the tool does.
+
 ### C. Resolving Local Drift & Sentinel Overrides
-Managed shell/git/WM files end with `# >>> END MANAGED CONFIG <<<` and source an untracked `*_local` file for machine-specific secrets or overrides.
+Managed shell and git files end with `# >>> END MANAGED CONFIG <<<` and source an untracked `*_local` file for machine-specific secrets or overrides. Hyprland is excluded: Omarchy 4 made its config Lua, with machine overrides in the `hypr.hyprland_local` module loaded by `require_optional()`, so there is no sentinel to look for.
 - If `doctor` reports files in `drift.sentinel_missing`:
   1. Preview extraction: `./scripts/extract-local-overrides.sh --dry-run`
   2. Apply extraction: `./scripts/extract-local-overrides.sh --apply`

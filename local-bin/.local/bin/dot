@@ -51,11 +51,14 @@ Usage:
   dot doctor --host <h>         Same sensor on another machine, over SSH (--ssh-port, --dir, --json)
   dot bootstrap [--full]        Run Stage 0 seed (essential pi + nvim-lite by default; --full for all)
   dot link [--full] [args...]   Sync agent skills & seed pi templates (--full includes optional extensions)
+  dot push [args...]            Push (fetch + rebase first when clean), then fleet-sync
+  dot fleet [--apply]           Fast-forward the dotfiles checkout on every fleet machine
   dot deploy [--to HOST]        Push the repository to a target over SSH, seed it, verify it
                                 (--profile <name> reads hosts/<name>.env; --dry-run, --verify-only)
   dot nvim [lite|malo|status]   Show or switch the default Neovim configuration (lite vs malo)
   dot prompt [starship|parrot]  Show or switch the Bash prompt theme (default: starship)
   dot overrides [args...]       Inspect or extract machine-local overrides (--apply, --dry-run)
+  dot stow [--apply] PKG...     Adopt real files, then stow (dry run by default)
   dot install [args...]         Run the modular installer (./install.sh)
   dot validate                  Run installer and manifest validation suite
   dot status                    Run git status in the dotfiles repository
@@ -506,9 +509,36 @@ case "$cmd" in
   bootstrap)
     exec "$REPO/bootstrap.sh" "$@"
     ;;
+  push)
+    cd "$REPO" || exit 1
+    branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+    git fetch --quiet origin 2>/dev/null || true
+    if [[ "$branch" == "main" && -z "$(git status --porcelain 2>/dev/null)" ]]; then
+      # House rule: fetch before every push and rebase rather than force. Rebase
+      # only touches local commits, and only when the tree is clean.
+      missing="$(git rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+      if [[ "${missing:-0}" -gt 0 ]]; then
+        echo "── rebasing onto origin/$branch ($missing commit(s) to replay) ──"
+        git rebase "origin/$branch" || { echo "rebase failed: nothing was pushed" >&2; exit 1; }
+      fi
+    else
+      echo "── tree not clean or not on main: pushing as-is, no rebase ──"
+    fi
+    git push "$@" || exit $?
+    exec "$REPO/scripts/fleet-sync.sh" --apply
+    ;;
+  fleet)
+    exec "$REPO/scripts/fleet-sync.sh" "$@"
+    ;;
   link|sync)
     "$REPO/scripts/init-pi-settings.sh" "$@"
     "$REPO/scripts/link-pi-agent-entries.sh" "$@"
+    # Agent instructions: fill ~/.agents/AGENTS.md and ~/Work/AGENTS.md only when
+    # they are empty, then leave Omarchy to link the harness files. The seeder
+    # takes --dry-run only, so the rest of "$@" (--full, --unfold) is not passed.
+    seed_args=()
+    for a in "$@"; do [[ "$a" == "--dry-run" ]] && seed_args+=(--dry-run); done
+    "$REPO/scripts/seed-agent-instructions.sh" "${seed_args[@]}" || true
     ;;
   nvim)
     sub="${1:-status}"
@@ -560,6 +590,9 @@ case "$cmd" in
     ;;
   adopt)
     exec "$REPO/scripts/adopt-report.sh" "$@"
+    ;;
+  stow)
+    exec "$REPO/scripts/stow-adopt.sh" "$@"
     ;;
   overrides)
     exec "$REPO/scripts/extract-local-overrides.sh" "$@"
