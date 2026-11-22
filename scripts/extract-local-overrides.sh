@@ -59,8 +59,12 @@ MANAGED_FILES=(
   "bash/.bash_profile|$HOME/.bash_profile|$HOME/.bash_profile_local"
   "bash/.bash_aliases|$HOME/.bash_aliases|$HOME/.bash_aliases_local"
   "git/.gitconfig|$HOME/.gitconfig|$HOME/.gitconfig_local"
-  "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland_local.conf"
-  "hyprland/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors.conf|$HOME/.config/hypr/monitors_local.conf"
+  # Hyprland is deliberately absent. Since Omarchy 4 its config is Lua, it has
+  # no sentinel and no `*_local` source line: the machine layer is the
+  # `hypr.hyprland_local` module loaded by `require_optional()` from
+  # hyprland.lua, and the personal overrides are hypr/input.lua, bindings.lua
+  # and friends. The old hyprland.conf/monitors.conf entries only matched files
+  # that Omarchy 4 no longer creates.
 )
 
 #-------------------------------------------------------------------------

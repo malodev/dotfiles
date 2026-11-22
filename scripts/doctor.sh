@@ -193,12 +193,16 @@ DOT_BIN_STATE="$(check_link_state "$HOME/.local/bin/dot")"
 # 4. Sentinel Override & Git Drift
 #-----------------------------------------------------------------------------
 SENTINEL="# >>> END MANAGED CONFIG <<<"
+# Only files that really end with the sentinel and source an untracked
+# `*_local` sibling belong here. Hyprland does not: since Omarchy 4 its config
+# is Lua and the machine layer is the `hypr.hyprland_local` module loaded with
+# `require_optional()`, so there is no sentinel to check. The .conf entries
+# that used to sit here pointed at files Omarchy 4 no longer creates.
 SENTINEL_FILES=(
   "zsh/.zshenv|$HOME/.zshenv"
   "zsh/.zshrc|$HOME/.zshrc"
   "bash/.bashrc|$HOME/.bashrc"
   "git/.gitconfig|$HOME/.gitconfig"
-  "hyprland/.config/hypr/hyprland.conf|$HOME/.config/hypr/hyprland.conf"
 )
 
 DRIFTED_SENTINELS=()
