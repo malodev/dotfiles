@@ -224,6 +224,16 @@ if [[ -x "$REPO/scripts/link-pi-agent-entries.sh" ]]; then
   fi
 fi
 
+# Shared agent rules and the per-machine overlay: seeded only when empty, so a
+# machine that has never had an overlay gets one it can be told to fill in.
+if [[ -x "$REPO/scripts/seed-agent-instructions.sh" ]]; then
+  if [[ "$DRY_RUN" == "1" ]]; then
+    "$REPO/scripts/seed-agent-instructions.sh" --dry-run || warn "agent instructions seed would fail"
+  else
+    "$REPO/scripts/seed-agent-instructions.sh" || warn "agent instructions seed failed"
+  fi
+fi
+
 # 8. Link Matt Pocock skills if submodule is present (initializes submodule if git is available and empty)
 if [[ ! -f "$REPO/pi/mattpocock-skills/scripts/link-skills.sh" && -d "$REPO/.git" && "$DRY_RUN" == "0" ]]; then
   [[ "$OFFLINE" == "1" ]] || git -C "$REPO" submodule update --init --depth 1 pi/mattpocock-skills 2>/dev/null || true

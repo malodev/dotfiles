@@ -1,0 +1,31 @@
+# Machine ops — <hostname>
+
+<!--
+  This file is this machine's memory. `pi/.pi/agent/AGENTS.md` (the shared rules,
+  linked as ~/.agents/AGENTS.md) says: read ~/Work/AGENTS.md before acting on
+  this host. Nothing here is committed: it is yours, per machine.
+
+  Keep it current, and keep it facts: paths that exist only here, services,
+  endpoints, hardware quirks, what must not be touched. Preferences that are the
+  same everywhere belong in the repository instead (see ADOPTION.md).
+-->
+
+## This machine
+
+- Hostname / OS / arch:
+- What it is for (workstation, server, VM, backup):
+
+## What I want here
+
+<!-- Decisions this machine makes for itself: display, input devices, which
+     agent CLI, which model provider, which groups of the installer. -->
+
+## What must not change
+
+<!-- Things an agent should never rewrite: OS-owned paths (Omarchy's
+     ~/.agents/AGENTS.md, ~/.config/omarchy/*), hardware workarounds,
+     host-only endpoints, keys. -->
+
+## Log
+
+<!-- Running notes: what was changed, when, and why. One line per change. -->

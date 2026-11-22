@@ -23,6 +23,10 @@ _darcs
 # (scripts/link-skills.sh), never stowed into $HOME.
 mattpocock-skills
 
+# Read by scripts/seed-agent-instructions.sh to seed ~/Work/AGENTS.md; a
+# copy has no business sitting in ~/.pi/agent.
+\.pi/agent/Work-AGENTS\.md\.template
+
 # pi runtime state kept out of the repo
 .pi/agent/models.json
 .pi/agent/mcp.json
