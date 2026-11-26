@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Which Claude Code account each profile holds.
+#
+# Two profiles live side by side: ~/.claude (the main account) and
+# ~/.claude-gmail (a second subscription). CLAUDE_CONFIG_DIR selects one, and
+# `claude auth status --json` reports the address behind it. Runs in any shell,
+# on every machine, without zsh.
+set -uo pipefail
+
+command -v claude >/dev/null 2>&1 || { echo "cc-who: claude is not on PATH" >&2; exit 1; }
+
+account() {
+  local directory="$1" status
+  status="$(CLAUDE_CONFIG_DIR="$directory" claude auth status --json 2>/dev/null)" || true
+  if [[ -z "$status" ]]; then
+    echo "not logged in"
+  elif command -v jq >/dev/null 2>&1; then
+    printf '%s' "$status" | jq -r '.email // "not logged in"' 2>/dev/null || echo "unparsable status"
+  else
+    printf '%s' "$status" | tr -d '\n' | sed -n 's/.*"email"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+  fi
+}
+
+printf '%-6s %-24s %s\n' oruam "$HOME/.claude" "$(account "$HOME/.claude")"
+printf '%-6s %-24s %s\n' gmail "$HOME/.claude-gmail" "$(account "$HOME/.claude-gmail")"

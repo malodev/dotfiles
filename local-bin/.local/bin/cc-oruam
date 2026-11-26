@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Claude Code with the main profile (~/.claude), permissions skipped as before.
+exec env CLAUDE_CONFIG_DIR="$HOME/.claude" claude --dangerously-skip-permissions "$@"

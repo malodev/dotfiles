@@ -230,14 +230,9 @@ export EDITOR=nvim
 #   ln -sfn ~/.claude/settings.json ~/.claude-gmail/settings.json
 #   jq '{mcpServers}' ~/.claude.json > ~/.claude-gmail/.claude.json
 #   cc-login-gmail
-# `cc-who` prints which account each profile holds (claude auth status --json).
-alias cc-oruam='CLAUDE_CONFIG_DIR="$HOME/.claude" claude --dangerously-skip-permissions'
-alias cc-gmail='CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude --dangerously-skip-permissions'
-cc-login-gmail() { CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude auth login "$@"; }
-cc-who() {
-  printf 'oruam  ~/.claude:        %s\n' "$(claude auth status 2>/dev/null | jq -r '.email // "not logged in"')"
-  printf 'gmail  ~/.claude-gmail:  %s\n' "$(CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude auth status 2>/dev/null | jq -r '.email // "not logged in"')"
-}
+# Claude Code profiles: cc-who, cc-oruam, cc-gmail and cc-login-gmail are
+# scripts in ~/.local/bin (local-bin/ in the dotfiles), so they work in bash
+# and zsh, on every machine, instead of living only in this file.
 
 #=============================================================================
 # PATH ADDITIONS

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Sign the gmail profile in, without touching the main one.
+exec env CLAUDE_CONFIG_DIR="$HOME/.claude-gmail" claude auth login "$@"
