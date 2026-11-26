@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+"""Keep local Herdr agents across a reboot.
+
+Herdr's core never re-runs a command: after a reboot each kept terminal comes
+back as a shell in the same folder, with the same address, and the agent that
+was inside it is gone (see ~/.config/herdr-app/AGENTS.md, "A lost terminal ...
+its original command is never run again"). The TUI kept an `agent_session` per
+pane and re-ran it; Herdr Desktop has no such step, so this script adds one.
+
+  herdr-agent-sessions tick        restore once per boot, then snapshot (the timer runs this)
+  herdr-agent-sessions snapshot    record the agents running in local terminals now
+  herdr-agent-sessions restore     put the snapshot's agents back now (skips live ones)
+  herdr-agent-sessions status      show what is remembered
+
+Only local terminals, only programs that report as agents (OSL 7501) or run a
+known agent CLI. The snapshot is written every 60 s, so an agent you close
+disappears from it within a minute and is not brought back.
+
+Two rules keep the data safe, learned the hard way:
+  * right after a boot the core recreates kept terminals asynchronously and
+    `hc send` answers "lost, waiting for its new shell": that is RETRYABLE, so
+    the boot is not marked and the snapshot is left alone for the next tick;
+  * an empty snapshot never overwrites one that has agents (the last good one
+    is also kept as agent-snapshot.last-good.json and is the fallback).
+
+Remove the timer (`systemctl --user disable --now herdr-agent-sessions.timer`)
+or delete ~/.local/state/herdr/agent-snapshot.json to opt out.
+"""
+import fcntl
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+
+STATE = os.environ.get("HERDR_AGENT_STATE") or os.path.expanduser("~/.local/state/herdr")
+SNAP = os.path.join(STATE, "agent-snapshot.json")
+GOOD = os.path.join(STATE, "agent-snapshot.last-good.json")
+MARK = os.path.join(STATE, "agent-restore-boot")
+LOCK = os.path.join(STATE, "agent-sessions.lock")
+
+SHELLS = {"bash", "zsh", "fish", "sh", "dash", "ksh", "mksh", "nu", "pwsh", "elvish", "xonsh"}
+AGENT_CLIS = {
+    "pi", "claude", "claude-code", "codex", "gemini", "cursor-agent", "opencode", "aider",
+    "goose", "amp", "crush", "copilot", "qwen", "kilo", "devin", "droid", "cline",
+}
+RETRY_WORDS = ("lost", "unavailable", "restarted", "waiting for its new shell", "retry")
+SEND_DEADLINE_S = 45  # one run never chases the core for longer than this
+
+
+def hc_bin():
+    return shutil.which("hc") or os.path.expanduser("~/.local/bin/hc")
+
+
+def hc(args, timeout=30):
+    try:
+        r = subprocess.run([hc_bin(), *args], capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def terminals():
+    """Local core terminals, or None when the core is not reachable."""
+    d = hc(["ls", "--json"])
+    if d is None:
+        return None
+    ts = d.get("terminals", d) if isinstance(d, dict) else d
+    return [t for t in (ts if isinstance(ts, list) else list(ts.values()))
+            if "/" not in t.get("address", "/")]
+
+
+def get(addr):
+    return hc(["get", addr, "--json"])
+
+
+def fg_argv(t):
+    return (t.get("foreground") or {}).get("argv") or []
+
+
+def basename(argv):
+    return os.path.basename(argv[0]) if argv else ""
+
+
+def is_live(t):
+    return (t.get("state") or "live") == "live"
+
+
+def is_shell(t):
+    return is_live(t) and basename(fg_argv(t)) in SHELLS | {""}
+
+
+def is_agent(t):
+    return bool((t.get("status") or {}).get("app")) or basename(fg_argv(t)) in AGENT_CLIS
+
+
+def lock():
+    os.makedirs(STATE, exist_ok=True)
+    fh = open(LOCK, "w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    return fh
+
+
+def boot_id():
+    try:
+        with open("/proc/sys/kernel/random/boot_id") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def restored_this_boot():
+    try:
+        with open(MARK) as f:
+            return f.read().strip() == boot_id()
+    except OSError:
+        return False
+
+
+def mark_boot():
+    with open(MARK, "w") as f:
+        f.write(boot_id())
+
+
+def write(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
+
+
+def load():
+    """The best snapshot on disk: the current one, else the last good one."""
+    for path in (SNAP, GOOD):
+        try:
+            with open(path) as f:
+                d = json.load(f)
+            if d.get("agents"):
+                return d
+        except (OSError, json.JSONDecodeError):
+            continue
+    try:
+        with open(SNAP) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def snapshot():
+    ts = terminals()
+    if ts is None:
+        return "core non raggiungibile: nessuno snapshot"
+    out = []
+    for t in ts:
+        g = get(t["address"])
+        if not g or not g.get("keep") or not is_live(g):
+            continue
+        if not is_agent(g) or is_shell(g):
+            continue
+        lab = g.get("labels") or {}
+        out.append({
+            "address": t["address"],
+            "space": lab.get("herdr.space"),
+            "tab": lab.get("herdr.tab"),
+            "where": lab.get("where"),
+            "cwd": (g.get("foreground") or {}).get("cwd") or g.get("cwd"),
+            "argv": fg_argv(g),
+            "app": (g.get("status") or {}).get("app"),
+        })
+    data = {"saved_ms": int(time.time() * 1000), "agents": out}
+    if not out:
+        old = load() or {}
+        kept = len(old.get("agents") or [])
+        if kept:
+            return "nessun agente attivo: snapshot conservato (%d agenti)" % kept
+        write(SNAP, data)
+        return "snapshot: 0 agenti"
+    write(SNAP, data)
+    write(GOOD, data)
+    return "snapshot: %d agenti" % len(out)
+
+
+def restore(dry_run=False, force=False):
+    if not force and not dry_run and restored_this_boot():
+        return "già ripristinato in questo boot", False
+    snap = load()
+    if not snap or not snap.get("agents"):
+        return "nessuno snapshot: niente da ripristinare", False
+    ts = terminals()
+    if ts is None:
+        return "core non raggiungibile: riprovo", True
+    live = {t["address"]: t for t in ts}
+    entries = snap["agents"]
+    if not any(e["address"] in live for e in entries):
+        return "terminali non ancora ricreati: riprovo", True
+
+    done, skipped, retry = [], [], False
+    deadline = time.monotonic() + SEND_DEADLINE_S
+    for e in entries:
+        addr, argv = e.get("address"), e.get("argv") or []
+        if not addr or not argv:
+            continue
+        cmd = " ".join(shlex.quote(a) for a in argv)
+        attempt, verdict, why = 0, None, ""
+        while attempt < 4:
+            attempt += 1
+            g = get(addr) if addr in live else None
+            if not g:
+                verdict, why = "skip", "terminale inesistente"
+                break
+            if not is_live(g):
+                verdict, why = "retry", "terminale non ancora ricreato"
+            elif not is_shell(g):
+                verdict, why = "skip", "già occupato da %s" % (basename(fg_argv(g)) or "?")
+                break
+            elif dry_run:
+                verdict, why = "ok", cmd
+                break
+            else:
+                try:
+                    r = subprocess.run([hc_bin(), "send", addr, cmd, "--json"],
+                                       capture_output=True, text=True, timeout=90)
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    verdict, why = "retry", str(exc)[:100]
+                else:
+                    if r.returncode == 0:
+                        verdict, why = "ok", cmd
+                        break
+                    out = r.stdout + r.stderr
+                    if any(w in out.lower() for w in RETRY_WORDS):
+                        verdict, why = "retry", "core sta ricreando il terminale"
+                    else:
+                        verdict, why = "skip", out.strip()[:120]
+                        break
+            # only a retry reaches here
+            if time.monotonic() > deadline:
+                verdict, why = "retry", "tempo esaurito, riprovo al prossimo giro"
+                break
+            time.sleep(2.5)
+
+        if verdict == "ok":
+            done.append((addr, why))
+        elif verdict == "retry":
+            retry = True
+            skipped.append((addr, "RIPROVO: " + why))
+        else:
+            skipped.append((addr, why))
+
+    if not dry_run and not retry:
+        mark_boot()
+    lines = ["  + %-6s %s" % (a, c) for a, c in done]
+    lines += ["  %s %-6s %s" % ("⟳" if c.startswith("RIPROVO") else "-", a, c) for a, c in skipped]
+    return "%sripristinati: %d | saltati: %d%s\n%s" % (
+        "(dry-run) " if dry_run else "", len(done), len(skipped),
+        " | riprovo al prossimo giro" if retry else "", "\n".join(lines)), retry
+
+
+def status():
+    snap = load()
+    if not snap:
+        return "nessuno snapshot in %s" % STATE
+    when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(snap.get("saved_ms", 0) / 1000))
+    rows = ["snapshot: %s (%d agenti)" % (when, len(snap.get("agents") or [])),
+            "ripristinato in questo boot: %s" % ("sì" if restored_this_boot() else "no")]
+    for e in snap.get("agents") or []:
+        rows.append("  %-6s %-14s %-22s %s" % (
+            e["address"], (e.get("app") or "?"), (e.get("where") or "")[:22], basename(e.get("argv"))))
+    return "\n".join(rows)
+
+
+def tick():
+    if terminals() is None:
+        return ""
+    out = []
+    if not restored_this_boot():
+        msg, retry = restore()
+        out.append(msg)
+        if retry:
+            return "\n".join(out)  # keep the snapshot: try again next minute
+    out.append(snapshot())
+    return "\n".join(x for x in out if x)
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = {a for a in sys.argv[1:] if a.startswith("--")}
+    cmd = args[0] if args else "status"
+    fh = lock()
+    if fh is None:
+        print("un'altra esecuzione è in corso")
+        return 1
+    try:
+        if cmd == "tick":
+            out = tick()
+        elif cmd == "snapshot":
+            out = snapshot()
+        elif cmd == "restore":
+            out, retry = restore(dry_run="--dry-run" in flags, force="--force" in flags)
+            fh.close()
+            print(out)
+            return 3 if retry else 0
+        elif cmd == "status":
+            out = status()
+        else:
+            print(__doc__)
+            return 2
+        if out:
+            print(out)
+        return 0
+    finally:
+        try:
+            fh.close()
+        except Exception:
+            pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())
